@@ -12,6 +12,9 @@ export const Dice: React.FC<DiceProps> = ({ onRollComplete, autoRoll = true }) =
   const [displayDie1, setDisplayDie1] = React.useState(1);
   const [displayDie2, setDisplayDie2] = React.useState(1);
   const [finalRoll, setFinalRoll] = React.useState<{ die1: number; die2: number; total: number; isDoubles: boolean } | null>(null);
+  
+  const currentRoll = useGameStore((s) => s.diceRoll);
+  const rollDiceAction = useGameStore((s) => s.rollDice);
 
   // Auto-roll on mount if autoRoll is true
   React.useEffect(() => {
@@ -19,6 +22,21 @@ export const Dice: React.FC<DiceProps> = ({ onRollComplete, autoRoll = true }) =
       startRoll();
     }
   }, []);
+
+  // React to server roll update
+  React.useEffect(() => {
+    if (rolling && currentRoll) {
+      // Server responded!
+      setDisplayDie1(currentRoll.die1);
+      setDisplayDie2(currentRoll.die2);
+      setFinalRoll(currentRoll);
+      setRolling(false);
+      
+      setTimeout(() => {
+        onRollComplete?.();
+      }, 500);
+    }
+  }, [currentRoll, rolling]);
 
   // Animate through random values during roll
   React.useEffect(() => {
@@ -35,20 +53,7 @@ export const Dice: React.FC<DiceProps> = ({ onRollComplete, autoRoll = true }) =
   const startRoll = () => {
     setRolling(true);
     setFinalRoll(null);
-    
-    // Roll after animation
-    setTimeout(() => {
-      const roll = useGameStore.getState().rollDice();
-      setDisplayDie1(roll.die1);
-      setDisplayDie2(roll.die2);
-      setFinalRoll(roll);
-      setRolling(false);
-      
-      // Small delay before completing
-      setTimeout(() => {
-        onRollComplete?.();
-      }, 500);
-    }, 800);
+    rollDiceAction();
   };
 
   const dieFaces: Record<number, string> = {

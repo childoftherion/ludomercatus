@@ -27,7 +27,29 @@ export default function App() {
     auction,
     trade,
     lastCardDrawn,
+    connect,
+    connected,
   } = useGameStore();
+  
+  React.useEffect(() => {
+    connect();
+  }, []);
+
+  if (!connected) {
+    return (
+      <div style={{ 
+        display: "flex", 
+        justifyContent: "center", 
+        alignItems: "center", 
+        height: "100vh", 
+        background: "#1a1a2a", 
+        color: "#fff",
+        fontSize: "24px"
+      }}>
+        Connecting to server...
+      </div>
+    );
+  }
   
   const currentPlayer = currentPlayerIndex !== undefined && currentPlayerIndex < players.length 
     ? players[currentPlayerIndex] 
