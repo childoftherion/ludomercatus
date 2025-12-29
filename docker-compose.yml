@@ -1,0 +1,13 @@
+services:
+  monopoly:
+    build: .
+    ports:
+      - "3000:3000"
+    volumes:
+      - ./src:/app/src
+      - ./index.ts:/app/index.ts
+      - ./index.html:/app/index.html
+      - ./frontend.tsx:/app/frontend.tsx
+    environment:
+      - NODE_ENV=development
+    restart: unless-stopped
