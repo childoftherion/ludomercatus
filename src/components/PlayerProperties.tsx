@@ -1,6 +1,7 @@
 import React, { useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { useGameStore } from "../store/gameStore";
+import { useLocalStore } from "../store/localStore";
 import type { Player, Property, TradeOffer } from "../types/game";
 
 const COLOR_MAP: Record<string, string> = {
@@ -33,11 +34,12 @@ export const PlayerPropertiesPanel = ({ playerIndex }: PlayerPropertiesPanelProp
     hasMonopoly
   } = useGameStore();
   
+  const { myPlayerIndex } = useLocalStore();
   const [selectedPropertyId, setSelectedPropertyId] = useState<number | null>(null);
   
   const player = players[playerIndex];
   const isYourTurn = currentPlayerIndex === playerIndex;
-  const isYou = !players[currentPlayerIndex]?.isAI && isYourTurn;
+  const isYou = myPlayerIndex === playerIndex;
 
   if (!player) return null;
 
@@ -64,10 +66,8 @@ export const PlayerPropertiesPanel = ({ playerIndex }: PlayerPropertiesPanelProp
   };
 
   const handleTradeClick = () => {
-    const you = players.findIndex(p => !p.isAI);
-    if (you === -1 || you === playerIndex) return;
-    
-    startTrade(you, playerIndex);
+    if (myPlayerIndex === null || myPlayerIndex === playerIndex) return;
+    startTrade(myPlayerIndex, playerIndex);
   };
 
   const selectedProperty = selectedPropertyId !== null 
@@ -140,8 +140,8 @@ export const PlayerPropertiesPanel = ({ playerIndex }: PlayerPropertiesPanelProp
           </div>
         </div>
         
-        {/* Trade Button - Only show if not your panel and you are human */}
-        {!isYou && !player.bankrupt && players[currentPlayerIndex] && !players[currentPlayerIndex].isAI && (
+        {/* Trade Button - Only show if not your panel and you are logged in */}
+        {!isYou && !player.bankrupt && myPlayerIndex !== null && (
           <motion.button
             onClick={handleTradeClick}
             whileHover={{ scale: 1.1 }}

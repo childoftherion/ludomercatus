@@ -9,6 +9,7 @@ const isProperty = (space: any): space is Property => {
 
 type GameStore = GameState & {
   connected: boolean;
+  inRoom: boolean;
   connect: () => void;
 
   // Actions (send to server)
@@ -45,6 +46,19 @@ type GameStore = GameState & {
   executeAITurn: () => void;
   executeAITradeResponse: () => void;
   
+  // Room actions
+  createRoom: (mode?: "single" | "multi") => void;
+  joinRoom: (roomId: string) => void;
+  leaveRoom: () => void;
+  listRooms: () => void;
+  
+  // Lobby actions
+  addPlayer: (name: string, token: string, clientId: string) => void;
+  updatePlayer: (index: number, name: string, token: string) => void;
+  startGame: () => void;
+
+  rooms: { id: string; players: number }[];
+  
   // Helpers (local read-only)
   getPlayerProperties: (playerIndex: number) => Property[];
   getPropertyById: (propertyId: number) => Property | undefined;
@@ -70,6 +84,8 @@ export const useGameStore = create<GameStore>((set, get) => ({
   gameLog: [],
   turn: 1,
   connected: false,
+  inRoom: false,
+  rooms: [],
 
   connect: () => {
     if (socket && (socket.readyState === WebSocket.OPEN || socket.readyState === WebSocket.CONNECTING)) return;
@@ -81,6 +97,8 @@ export const useGameStore = create<GameStore>((set, get) => ({
     socket.onopen = () => {
       console.log("Connected to game server");
       set({ connected: true });
+      // Ask for room list immediately
+      socket?.send(JSON.stringify({ type: "LIST_ROOMS" }));
     };
 
     socket.onmessage = (event) => {
@@ -88,7 +106,13 @@ export const useGameStore = create<GameStore>((set, get) => ({
         const data = JSON.parse(event.data);
         if (data.type === "STATE_UPDATE") {
           console.log("Received state update", data.state);
-          set({ ...data.state });
+          set({ ...data.state, inRoom: true });
+        } else if (data.type === "ROOM_LIST") {
+          set({ rooms: data.rooms });
+        } else if (data.type === "ROOM_CREATED") {
+          // Auto-join the created room
+          console.log("Room created, joining:", data.roomId);
+          get().joinRoom(data.roomId);
         }
       } catch (e) {
         console.error("Failed to parse server message", e);
@@ -101,6 +125,28 @@ export const useGameStore = create<GameStore>((set, get) => ({
       // Retry connection?
       setTimeout(() => get().connect(), 3000);
     };
+  },
+
+  createRoom: (mode = "single") => {
+    socket?.send(JSON.stringify({ type: "CREATE_ROOM", mode }));
+  },
+  joinRoom: (roomId: string) => {
+    socket?.send(JSON.stringify({ type: "JOIN_ROOM", roomId }));
+  },
+  leaveRoom: () => {
+    set({ inRoom: false });
+  },
+  listRooms: () => {
+    socket?.send(JSON.stringify({ type: "LIST_ROOMS" }));
+  },
+  addPlayer: (name, token, clientId) => {
+    socket?.send(JSON.stringify({ type: "ACTION", action: "addPlayer", payload: [name, token, clientId] }));
+  },
+  updatePlayer: (index, name, token) => {
+    socket?.send(JSON.stringify({ type: "ACTION", action: "updatePlayer", payload: [index, name, token] }));
+  },
+  startGame: () => {
+    socket?.send(JSON.stringify({ type: "ACTION", action: "startGame", payload: [] }));
   },
 
   // Generic action sender

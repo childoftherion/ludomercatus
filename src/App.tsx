@@ -2,6 +2,8 @@ import React from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { useGameStore } from "./store/gameStore";
 import { Board } from "./components/Board";
+import { MultiplayerLobby } from "./components/MultiplayerLobby";
+import { ServerBrowser } from "./components/ServerBrowser";
 import { PlayerTokens } from "./components/PlayerToken";
 import PlayerSetup from "./components/PlayerSetup";
 import { AuctionModal } from "./components/AuctionModal";
@@ -9,6 +11,8 @@ import { TradeModal } from "./components/TradeModal";
 import { Dice, DiceDisplay } from "./components/Dice";
 import { GameLog } from "./components/GameLog";
 import { PlayerPropertiesPanel } from "./components/PlayerProperties";
+import { PlayerSelectionModal } from "./components/PlayerSelectionModal";
+import { useLocalStore } from "./store/localStore";
 import type { Property } from "./types/game";
 
 const isProperty = (space: { type: string }): space is Property => {
@@ -29,31 +33,20 @@ export default function App() {
     lastCardDrawn,
     connect,
     connected,
+    inRoom,
+    leaveRoom,
   } = useGameStore();
+  const { myPlayerIndex } = useLocalStore();
   
   React.useEffect(() => {
     connect();
   }, []);
 
-  if (!connected) {
-    return (
-      <div style={{ 
-        display: "flex", 
-        justifyContent: "center", 
-        alignItems: "center", 
-        height: "100vh", 
-        background: "#1a1a2a", 
-        color: "#fff",
-        fontSize: "24px"
-      }}>
-        Connecting to server...
-      </div>
-    );
-  }
-  
   const currentPlayer = currentPlayerIndex !== undefined && currentPlayerIndex < players.length 
     ? players[currentPlayerIndex] 
     : null;
+  
+  const isMyTurn = currentPlayerIndex === myPlayerIndex;
   
   const currentSpace = currentPlayer ? spaces[currentPlayer.position] : null;
 
@@ -71,6 +64,7 @@ export default function App() {
 
   // AI turn execution
   React.useEffect(() => {
+    if (!connected) return; // Wait for connection
     if (!currentPlayer || !currentPlayer.isAI || currentPlayer.bankrupt) return;
     if (phase === "setup" || phase === "game_over") return;
 
@@ -80,10 +74,11 @@ export default function App() {
     }, 1200);
 
     return () => clearTimeout(aiDelay);
-  }, [currentPlayer, phase, auction?.activePlayerIndex]);
+  }, [currentPlayer, phase, auction?.activePlayerIndex, connected]);
 
   // AI trade response
   React.useEffect(() => {
+    if (!connected) return;
     if (phase === "trading" && trade?.status === "pending") {
       const receiver = players[trade.offer.toPlayer];
       if (receiver?.isAI) {
@@ -93,7 +88,7 @@ export default function App() {
         return () => clearTimeout(aiDelay);
       }
     }
-  }, [phase, trade?.status]);
+  }, [phase, trade?.status, connected]);
 
   const handleRollDice = () => {
     if (isRolling) return;
@@ -146,6 +141,26 @@ export default function App() {
     }
   };
 
+  if (!connected) {
+    return (
+      <div style={{ 
+        display: "flex", 
+        justifyContent: "center", 
+        alignItems: "center", 
+        height: "100vh", 
+        background: "#1a1a2a", 
+        color: "#fff",
+        fontSize: "24px"
+      }}>
+        Connecting to server...
+      </div>
+    );
+  }
+
+  if (!inRoom) {
+    return <ServerBrowser />;
+  }
+
   // Winner screen
   if (winner !== undefined) {
     const winnerPlayer = players.find(p => p.id === winner);
@@ -193,6 +208,11 @@ export default function App() {
     return <PlayerSetup />;
   }
 
+  // Lobby screen
+  if (phase === "lobby") {
+    return <MultiplayerLobby />;
+  }
+
   // Split players into left and right side panels
   const leftPlayers = players.filter((_, i) => i % 2 === 0);
   const rightPlayers = players.filter((_, i) => i % 2 === 1);
@@ -208,6 +228,33 @@ export default function App() {
         padding: "20px",
       }}
     >
+      <motion.button
+        whileHover={{ scale: 1.1 }}
+        whileTap={{ scale: 0.9 }}
+        onClick={leaveRoom}
+        style={{
+          position: "fixed",
+          top: "20px",
+          left: "20px",
+          zIndex: 1000,
+          background: "#FF4757",
+          color: "white",
+          border: "none",
+          borderRadius: "50%",
+          width: "48px",
+          height: "48px",
+          fontSize: "24px",
+          cursor: "pointer",
+          boxShadow: "0 4px 12px rgba(0,0,0,0.3)",
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "center",
+        }}
+        title="Exit Game"
+      >
+        ✕
+      </motion.button>
+
       {/* Left Side Panel - Players 1 & 3 */}
       <div
         style={{
@@ -326,7 +373,7 @@ export default function App() {
               )}
 
               {/* Rolling phase - not in jail */}
-              {phase === "rolling" && !currentPlayer.inJail && !currentPlayer.isAI && (
+              {phase === "rolling" && !currentPlayer.inJail && !currentPlayer.isAI && isMyTurn && (
                 <div>
                   {!diceRoll && !isRolling && (
                     <motion.button
@@ -362,7 +409,7 @@ export default function App() {
                   </p>
                   
                   {/* Hide interactive buttons for AI */}
-                  {!currentPlayer.isAI && (
+                  {!currentPlayer.isAI && isMyTurn && (
                     <div style={{ display: "flex", gap: "8px", justifyContent: "center", flexWrap: "wrap" }}>
                       {currentPlayer.jailFreeCards > 0 && (
                         <motion.button
@@ -430,7 +477,7 @@ export default function App() {
                   </p>
                   
                   {/* Hide interactive buttons for AI */}
-                  {!currentPlayer.isAI && (
+                  {!currentPlayer.isAI && isMyTurn && (
                     <div style={{ display: "flex", gap: "12px", justifyContent: "center" }}>
                       {currentPlayer.cash >= currentSpace.price ? (
                         <>
@@ -526,7 +573,7 @@ export default function App() {
                         <p style={{ fontSize: "16px", marginBottom: "12px", color: "#ff6b6b" }}>
                           Paid £{currentSpace.name.includes("Income") ? 200 : 100} tax automatically
                         </p>
-                        {!currentPlayer.isAI && (
+                        {!currentPlayer.isAI && isMyTurn && (
                           <motion.button
                             onClick={handleEndTurn}
                             whileHover={{ scale: 1.05 }}
@@ -550,7 +597,7 @@ export default function App() {
                     {/* Card spaces */}
                     {(currentSpace.type === "chance" || currentSpace.type === "community_chest") && !lastCardDrawn && (
                       <div>
-                        {!currentPlayer.isAI && (
+                        {!currentPlayer.isAI && isMyTurn && (
                           <motion.button
                             onClick={() => handleDrawCard(currentSpace.type as "chance" | "community_chest")}
                             whileHover={{ scale: 1.05 }}
@@ -573,7 +620,7 @@ export default function App() {
                   </div>
 
                   {/* End turn button */}
-                  {diceRoll && !currentPlayer.inJail && !currentPlayer.isAI && (
+                  {diceRoll && !currentPlayer.inJail && !currentPlayer.isAI && isMyTurn && (
                     <motion.button
                       onClick={handleEndTurn}
                       whileHover={{ scale: 1.05 }}
@@ -670,6 +717,8 @@ export default function App() {
         ))}
         <GameLog />
       </div>
+      
+      <PlayerSelectionModal />
     </div>
   );
 }

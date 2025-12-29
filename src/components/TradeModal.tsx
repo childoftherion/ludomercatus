@@ -1,6 +1,7 @@
 import React from "react";
 import { motion } from "framer-motion";
 import { useGameStore } from "../store/gameStore";
+import { useLocalStore } from "../store/localStore";
 import type { TradeState, Player, Space, Property, TradeOffer } from "../types/game";
 
 interface Props {
@@ -10,6 +11,7 @@ interface Props {
 }
 
 export const TradeModal: React.FC<Props> = ({ trade, players, spaces }) => {
+  const { myPlayerIndex } = useLocalStore();
   const { 
     updateTradeOffer, 
     proposeTrade, 
@@ -24,9 +26,8 @@ export const TradeModal: React.FC<Props> = ({ trade, players, spaces }) => {
   const toPlayer = players[offer.toPlayer]!;
   
   // Who is viewing the modal?
-  const humanPlayerIndex = players.findIndex((p: Player) => !p.isAI);
-  const isInitiator = humanPlayerIndex === offer.fromPlayer;
-  const isReceiver = humanPlayerIndex === offer.toPlayer;
+  const isInitiator = myPlayerIndex === offer.fromPlayer;
+  const isReceiver = myPlayerIndex === offer.toPlayer;
   
   const fromPlayerOwnedProps = getPlayerProperties(offer.fromPlayer).filter(p => p.houses === 0 && !p.hotel);
   const toPlayerOwnedProps = getPlayerProperties(offer.toPlayer).filter(p => p.houses === 0 && !p.hotel);

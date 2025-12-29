@@ -47,8 +47,9 @@ const createPlayer = (
 export class GameRoom implements GameActions {
   public state: GameState;
   private logIdCounter = 0;
+  private listeners = new Set<(state: GameState) => void>();
 
-  constructor() {
+  constructor(initialPhase: "setup" | "lobby" = "setup") {
     this.state = {
       players: [],
       currentPlayerIndex: 0,
@@ -57,7 +58,7 @@ export class GameRoom implements GameActions {
       communityChestDeck: shuffleDeck(createCommunityChestDeck()),
       diceRoll: undefined,
       consecutiveDoubles: 0,
-      phase: "setup",
+      phase: initialPhase,
       passedGo: false,
       auction: undefined,
       trade: undefined,
@@ -67,10 +68,63 @@ export class GameRoom implements GameActions {
     };
   }
 
+  public subscribe(listener: (state: GameState) => void) {
+    this.listeners.add(listener);
+    return () => this.listeners.delete(listener);
+  }
+
+  private notify() {
+    this.listeners.forEach(listener => listener(this.state));
+  }
+
   // --- State Updates ---
   // Helper to replicate Zustand's partial update behavior
   private setState(partial: Partial<GameState>) {
     this.state = { ...this.state, ...partial };
+    this.notify();
+  }
+
+  // --- Lobby Actions ---
+
+  public addPlayer(name: string, token: string, clientId: string) {
+    if (this.state.phase !== "lobby") return;
+    
+    const existingIndex = this.state.players.findIndex(p => p.clientId === clientId);
+    if (existingIndex !== -1) {
+      this.updatePlayer(existingIndex, name, token);
+      return;
+    }
+
+    const index = this.state.players.length;
+    if (index >= 8) return;
+
+    const newPlayer = createPlayer(
+      index,
+      name,
+      token,
+      PLAYER_COLORS[index] ?? "#999999",
+      false
+    );
+    newPlayer.clientId = clientId;
+
+    this.setState({
+      players: [...this.state.players, newPlayer]
+    });
+    this.addLogEntry(`${name} joined the lobby!`, "system");
+  }
+
+  public updatePlayer(index: number, name: string, token: string) {
+    this.setState({
+      players: this.state.players.map((p, i) => 
+        i === index ? { ...p, name, token } : p
+      )
+    });
+  }
+
+  public startGame() {
+    if (this.state.players.length < 2) return;
+    this.setState({ phase: "rolling" });
+    this.addLogEntry("Game Started!", "system");
   }
 
   // --- GameActions Implementation ---

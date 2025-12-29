@@ -56,6 +56,7 @@ export interface Player {
   bankrupt: boolean;
   color: string;
   isAI: boolean;
+  clientId?: string; // Unique ID for multiplayer identity
   lastTradeTurn?: number; // Turn number when they last proposed a trade
   tradeHistory?: Record<string, { attempts: number; lastOffer: number }>; // Key: "playerId-propertyId"
 }
@@ -91,6 +92,7 @@ export type DiceRoll = {
 
 export type GamePhase =
   | "setup"
+  | "lobby"
   | "rolling"
   | "moving"
   | "resolving_space"
