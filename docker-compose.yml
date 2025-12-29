@@ -8,6 +8,8 @@ services:
       - ./index.ts:/app/index.ts
       - ./index.html:/app/index.html
       - ./frontend.tsx:/app/frontend.tsx
+      - ./tsconfig.json:/app/tsconfig.json
     environment:
       - NODE_ENV=development
+    command: bun --hot run ./index.ts
     restart: unless-stopped
