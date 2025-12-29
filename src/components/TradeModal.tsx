@@ -59,6 +59,21 @@ export const TradeModal: React.FC<Props> = ({ trade, players, spaces }) => {
     return spaces.find(s => s.id === id)?.name ?? `Prop #${id}`;
   };
 
+  const handlePropose = () => {
+    // Safety check for gifting
+    const isGift = 
+      offer.cashRequested === 0 && 
+      offer.propertiesRequested.length === 0 && 
+      offer.jailCardsRequested === 0;
+
+    if (isGift) {
+      if (!confirm("⚠️ You are offering a gift (receiving nothing in return).\n\nAre you sure you want to proceed?")) {
+        return;
+      }
+    }
+    proposeTrade(offer);
+  };
+
   return (
     <motion.div
       initial={{ opacity: 0, scale: 0.9, x: "-50%", y: "-50%" }}
@@ -199,7 +214,7 @@ export const TradeModal: React.FC<Props> = ({ trade, players, spaces }) => {
           <>
             <motion.button 
               whileHover={{ scale: 1.05 }} whileTap={{ scale: 0.95 }}
-              onClick={() => proposeTrade(offer)}
+              onClick={handlePropose}
               style={{ padding: "12px 40px", background: "#4CAF50", border: "none", color: "#fff", borderRadius: "8px", cursor: "pointer", fontWeight: "bold" }}
             >
               Propose Trade

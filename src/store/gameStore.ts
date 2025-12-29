@@ -3,6 +3,9 @@ import type { GameState, Player, Property, Space, Card, DiceRoll, CardEffect, Au
 import { boardSpaces } from "../data/board";
 import { createChanceDeck, createCommunityChestDeck } from "../data/cards";
 import type { ColorGroup } from "../types/game";
+import { calculateRent } from "../logic/rules/rent";
+import { hasMonopoly, getPlayerProperties } from "../logic/rules/monopoly";
+import { executeAITurn, executeAITradeResponse } from "../logic/ai";
 
 // Log entry ID counter
 let logIdCounter = 0;
@@ -99,6 +102,7 @@ const createPlayer = (
   jailFreeCards: 0,
   bankrupt: false,
   isAI,
+  lastTradeTurn: -10, // Allow trading early
 });
 
 const PLAYER_COLORS = ["#FF6B6B", "#4ECDC4", "#45B7D1", "#96CEB4", "#FFEAA7", "#DDA0DD", "#98D8C8", "#F7DC6F"];
@@ -122,14 +126,12 @@ export const useGameStore = create<GameStore>((set, get) => ({
   trade: undefined,
   lastCardDrawn: undefined,
   gameLog: [],
+  turn: 1,
 
   // ============ HELPER FUNCTIONS ============
   
   getPlayerProperties: (playerIndex: number): Property[] => {
-    const state = get();
-    return state.spaces.filter(
-      (s): s is Property => isProperty(s) && s.owner === playerIndex
-    );
+    return getPlayerProperties(get(), playerIndex);
   },
 
   getPropertyById: (propertyId: number): Property | undefined => {
@@ -139,12 +141,7 @@ export const useGameStore = create<GameStore>((set, get) => ({
   },
 
   hasMonopoly: (playerIndex: number, colorGroup: ColorGroup): boolean => {
-    if (!colorGroup) return false;
-    const state = get();
-    const groupProperties = state.spaces.filter(
-      (s): s is Property => isProperty(s) && s.type === "property" && s.colorGroup === colorGroup
-    );
-    return groupProperties.every(p => p.owner === playerIndex);
+    return hasMonopoly(get(), playerIndex, colorGroup);
   },
 
   // ============ CORE GAME ACTIONS ============
@@ -174,6 +171,7 @@ export const useGameStore = create<GameStore>((set, get) => ({
       trade: undefined,
       lastCardDrawn: undefined,
       gameLog: [],
+      turn: 1,
     });
 
     get().addLogEntry(`Game started with ${players.length} players!`, "system");
@@ -309,26 +307,11 @@ export const useGameStore = create<GameStore>((set, get) => ({
     const payer = state.players[playerIndex];
     const property = state.spaces.find((s) => s.id === propertyId) as Property;
     
-    if (!payer || !property || property.owner === undefined || property.mortgaged) return;
+    if (!payer || !property) return;
 
-    let rent = 0;
-    if (property.type === "property") {
-      if (property.hotel) rent = property.rents[5]!;
-      else if (property.houses > 0) rent = property.rents[property.houses]!;
-      else {
-        rent = property.baseRent;
-        if (property.colorGroup && get().hasMonopoly(property.owner, property.colorGroup)) {
-          rent *= 2;
-        }
-      }
-    } else if (property.type === "railroad") {
-      const railroadsOwned = get().getPlayerProperties(property.owner).filter(p => p.type === "railroad").length;
-      rent = property.baseRent * Math.pow(2, railroadsOwned - 1);
-    } else if (property.type === "utility") {
-      const utilitiesOwned = get().getPlayerProperties(property.owner).filter(p => p.type === "utility").length;
-      const multiplier = utilitiesOwned === 2 ? 10 : 4;
-      rent = diceTotal * multiplier;
-    }
+    const rent = calculateRent(state, property, diceTotal);
+
+    if (rent <= 0) return;
 
     if (payer.cash >= rent) {
       set({
@@ -339,7 +322,7 @@ export const useGameStore = create<GameStore>((set, get) => ({
         }),
       });
 
-      const owner = state.players[property.owner];
+      const owner = state.players[property.owner!];
       get().addLogEntry(`${payer.name} paid £${rent} rent to ${owner?.name}`, "rent", playerIndex);
     } else {
       get().declareBankruptcy(playerIndex, property.owner);
@@ -366,8 +349,9 @@ export const useGameStore = create<GameStore>((set, get) => ({
   endTurn: () => {
     const state = get();
     const roll = state.diceRoll;
+    const currentPlayer = state.players[state.currentPlayerIndex];
 
-    if (roll?.isDoubles && !state.players[state.currentPlayerIndex]?.inJail) {
+    if (roll?.isDoubles && !currentPlayer?.inJail && !currentPlayer?.bankrupt) {
       if (state.consecutiveDoubles >= 2) {
         get().goToJail(state.currentPlayerIndex);
         return;
@@ -396,6 +380,7 @@ export const useGameStore = create<GameStore>((set, get) => ({
       consecutiveDoubles: 0,
       passedGo: false,
       lastCardDrawn: undefined,
+      turn: state.turn + 1,
     });
   },
 
@@ -621,7 +606,8 @@ export const useGameStore = create<GameStore>((set, get) => ({
         return;
       } else {
         newPosition = effect.positionChange;
-        if (effect.passGoBonus && newPosition < player.position) cashChange += 200;
+        // Trust the card effect logic for the bonus
+        if (effect.passGoBonus) cashChange += 200;
       }
     }
 
@@ -696,6 +682,14 @@ export const useGameStore = create<GameStore>((set, get) => ({
       spaces: state.spaces.map(s => (isProperty(s) && s.owner === playerIndex) ? { ...s, owner: creditorIndex, houses: 0, hotel: false, mortgaged: false } : s)
     });
     get().addLogEntry(`${player.name} went bankrupt!`, "bankrupt", playerIndex);
+    
+    // Check if game over
+    get().checkWinCondition();
+
+    // If current player went bankrupt, end their turn immediately
+    if (state.currentPlayerIndex === playerIndex) {
+      get().endTurn();
+    }
   },
 
   checkWinCondition: () => {
@@ -749,7 +743,12 @@ export const useGameStore = create<GameStore>((set, get) => ({
   },
 
   startTrade: (fromPlayer, toPlayer) => {
-    set({ trade: { offer: { fromPlayer, toPlayer, cashOffered: 0, propertiesOffered: [], jailCardsOffered: 0, cashRequested: 0, propertiesRequested: [], jailCardsRequested: 0 }, status: "draft" }, phase: "trading" });
+    const state = get();
+    set({ 
+      trade: { offer: { fromPlayer, toPlayer, cashOffered: 0, propertiesOffered: [], jailCardsOffered: 0, cashRequested: 0, propertiesRequested: [], jailCardsRequested: 0 }, status: "draft" }, 
+      phase: "trading",
+      previousPhase: state.phase, // Save current phase
+    });
   },
 
   updateTradeOffer: (offer) => {
@@ -797,78 +796,64 @@ export const useGameStore = create<GameStore>((set, get) => ({
         if (offer.propertiesRequested.includes(s.id)) return { ...s, owner: offer.fromPlayer };
         return s;
       }),
-      trade: undefined, phase: "resolving_space"
+      trade: undefined, 
+      phase: state.previousPhase ?? "resolving_space", // Restore phase
+      previousPhase: undefined,
     });
     get().addLogEntry(`Trade completed!`, "trade");
   },
 
-  rejectTrade: () => set({ trade: undefined, phase: "resolving_space" }),
-  cancelTrade: () => set({ trade: undefined, phase: "resolving_space" }),
-
-  executeAITurn: () => {
+  rejectTrade: () => {
     const state = get();
-    const playerIndex = state.currentPlayerIndex;
-    const player = state.players[playerIndex];
-    if (!player || !player.isAI || player.bankrupt) return;
+    const trade = state.trade;
     
-    if (player.cash < 0) {
-      const mortgageable = state.spaces.filter((s): s is Property => isProperty(s) && s.owner === playerIndex && !s.mortgaged && s.houses === 0);
-      if (mortgageable.length > 0) { get().mortgageProperty(mortgageable[0]!.id); return; }
-    }
-
-    if (player.cash > 500 && state.phase === "rolling") {
-      const monopolies = state.spaces.filter(
-        (s): s is Property => 
-          isProperty(s) &&
-          s.type === "property" && 
-          s.owner === playerIndex && 
-          !!s.colorGroup && 
-          get().hasMonopoly(playerIndex, s.colorGroup) &&
-          !s.hotel &&
-          !s.mortgaged
-      );
-
-      if (monopolies.length > 0) {
-        monopolies.sort((a, b) => a.houses - b.houses);
-        const propToBuild = monopolies[0]!;
-        if (player.cash > (propToBuild.buildingCost ?? 0) + 500) {
-          if (propToBuild.houses === 4) get().buildHotel(propToBuild.id);
-          else get().buildHouse(propToBuild.id);
-        }
+    if (trade) {
+      const initiator = state.players[trade.offer.fromPlayer];
+      
+      // If AI was initiator, update memory
+      if (initiator && initiator.isAI) {
+        // Record rejection for each requested property
+        const newHistory = { ...(initiator.tradeHistory || {}) };
+        
+        trade.offer.propertiesRequested.forEach(propId => {
+          const key = `${trade.offer.toPlayer}-${propId}`;
+          const current = newHistory[key] || { attempts: 0, lastOffer: 0 };
+          newHistory[key] = {
+            attempts: current.attempts + 1,
+            lastOffer: trade.offer.cashOffered
+          };
+        });
+        
+        // Update player
+        set({
+          players: state.players.map((p, i) => 
+            i === trade.offer.fromPlayer ? { ...p, tradeHistory: newHistory } : p
+          )
+        });
       }
     }
 
-    if (state.phase === "rolling") {
-      const roll = get().rollDice();
-      setTimeout(() => get().movePlayer(playerIndex, roll.total), 1000);
-    } else if (state.phase === "awaiting_buy_decision") {
-      const prop = state.spaces[player.position] as Property;
-      if (player.cash >= prop.price + 100) get().buyProperty(prop.id);
-      else get().declineProperty(prop.id);
-    } else if (state.phase === "resolving_space") {
-      get().endTurn();
-    }
+    set({ 
+      trade: undefined, 
+      phase: state.previousPhase ?? "resolving_space",
+      previousPhase: undefined,
+    });
+  },
+
+  cancelTrade: () => {
+    const state = get();
+    set({ 
+      trade: undefined, 
+      phase: state.previousPhase ?? "resolving_space",
+      previousPhase: undefined,
+    });
+  },
+
+  executeAITurn: () => {
+    executeAITurn(get(), get());
   },
 
   executeAITradeResponse: () => {
-    const { trade, spaces } = get();
-    if (!trade || trade.status !== "pending") return;
-    
-    const { offer } = trade;
-    
-    const calculateValue = (cash: number, propertyIds: number[], jailCards: number) => {
-      let value = cash + (jailCards * 50);
-      propertyIds.forEach(id => {
-        const p = spaces.find(s => s.id === id);
-        if (p && isProperty(p)) value += (p as Property).price;
-      });
-      return value;
-    };
-
-    const offerValue = calculateValue(offer.cashOffered, offer.propertiesOffered, offer.jailCardsOffered);
-    const requestValue = calculateValue(offer.cashRequested, offer.propertiesRequested, offer.jailCardsRequested);
-    
-    if (offerValue >= requestValue * 0.95) get().acceptTrade();
-    else get().rejectTrade();
+    executeAITradeResponse(get(), get());
   }
 }));

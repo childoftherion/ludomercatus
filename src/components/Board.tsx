@@ -103,8 +103,32 @@ const Space = ({ space }: { space: { id: number; name: string; type: string; col
             backgroundColor: color,
             borderBottom: "1px solid #333",
             marginBottom: "4px",
+            position: "relative",
           }}
-        />
+        >
+          {/* Houses / Hotel */}
+          {property && (property.houses > 0 || property.hotel) && (
+            <div style={{
+              position: "absolute",
+              top: "50%",
+              left: "50%",
+              transform: "translate(-50%, -50%)",
+              width: "100%",
+              display: "flex",
+              justifyContent: "center",
+              gap: "2px",
+              zIndex: 5
+            }}>
+              {property.hotel ? (
+                <span style={{ fontSize: "10px", filter: "drop-shadow(0 1px 1px rgba(0,0,0,0.5))" }}>🏨</span>
+              ) : (
+                Array.from({ length: property.houses }).map((_, i) => (
+                  <span key={i} style={{ fontSize: "8px", filter: "drop-shadow(0 1px 1px rgba(0,0,0,0.5))" }}>🏠</span>
+                ))
+              )}
+            </div>
+          )}
+        </div>
       )}
 
       {/* Content */}
