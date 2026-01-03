@@ -125,6 +125,8 @@ export const useGameStore = create<GameStore>((set, get) => ({
   availableHotels: 12,
   // Phase 2: Economic Events
   activeEconomicEvents: [],
+  // Jackpot system
+  jackpot: 0,
 
   connect: () => {
     if (socket && (socket.readyState === WebSocket.OPEN || socket.readyState === WebSocket.CONNECTING)) return;

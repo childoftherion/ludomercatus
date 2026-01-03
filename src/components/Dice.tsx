@@ -78,15 +78,15 @@ export const Dice: React.FC<DiceProps> = ({ onRollComplete, autoRoll = true }) =
         ease: "easeOut",
       }}
       style={{
-        width: "70px",
-        height: "70px",
+        width: "45px",
+        height: "45px",
         backgroundColor: "#fff",
         border: "3px solid #333",
         borderRadius: "12px",
         display: "flex",
         alignItems: "center",
-        justifyContent: "center",
-        fontSize: "52px",
+        justifyContent: "center-top",
+        fontSize: "55px",
         color: "#333",
         boxShadow: rolling 
           ? "0 8px 20px rgba(0,0,0,0.4)" 

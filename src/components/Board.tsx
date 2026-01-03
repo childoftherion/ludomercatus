@@ -136,10 +136,10 @@ const Space = ({ space, spaceSize }: { space: { id: number; name: string; type: 
   const color = getColorForSpace(space);
 
   // Calculate font sizes based on space size - scale proportionally for larger boards
-  // These scale dynamically as the board expands, ensuring property cards remain readable
-  const fontSize = Math.max(9, Math.floor(spaceSize * 0.20)); // Increased from 0.18 for better readability on larger boards
-  const priceFontSize = Math.max(8, Math.floor(spaceSize * 0.18)); // Increased from 0.16
-  const iconSize = Math.max(16, Math.floor(spaceSize * 0.40)); // Increased from 0.35 for better visibility
+  // Optimized for better text fitting and readability
+  const fontSize = Math.max(8, Math.floor(spaceSize * 0.16)); // Reduced to fit more text
+  const priceFontSize = Math.max(7, Math.floor(spaceSize * 0.14)); // Reduced for better fit
+  const iconSize = Math.max(14, Math.floor(spaceSize * 0.30)); // Reduced to make room for text
 
   return (
     <motion.div
@@ -150,8 +150,8 @@ const Space = ({ space, spaceSize }: { space: { id: number; name: string; type: 
         height: spaceSize,
         left: pos.col * (spaceSize + SPACE_GAP) + BOARD_PADDING,
         top: pos.row * (spaceSize + SPACE_GAP) + BOARD_PADDING,
-        backgroundColor: isPropertyType ? "#E8F5E9" : color,
-        border: "1px solid #333",
+        backgroundColor: isPropertyType ? "#FFFFFF" : color,
+        border: "2px solid #333",
         display: "flex",
         flexDirection: "column",
         alignItems: "center",
@@ -159,7 +159,7 @@ const Space = ({ space, spaceSize }: { space: { id: number; name: string; type: 
         fontSize: `${fontSize}px`,
         fontWeight: "bold",
         color: "#333",
-        borderRadius: "3px",
+        borderRadius: "4px",
         textAlign: "center",
         overflow: "hidden",
         boxShadow: "0 2px 4px rgba(0,0,0,0.2)",
@@ -167,16 +167,16 @@ const Space = ({ space, spaceSize }: { space: { id: number; name: string; type: 
       whileHover={{ scale: 1.08, zIndex: 10 }}
       transition={{ type: "spring", stiffness: 300, damping: 20 }}
     >
-      {/* Property Color Bar */}
+      {/* Property Color Bar - Increased visibility */}
       {isPropertyType && (
         <div
           style={{
             width: "100%",
-            height: "25%",
+            height: "30%",
             backgroundColor: color,
-            borderBottom: "2px solid #333",
-            marginBottom: "3px",
+            borderBottom: "3px solid #333",
             position: "relative",
+            minHeight: "20px",
           }}
         >
           {/* Houses / Hotel */}
@@ -211,24 +211,54 @@ const Space = ({ space, spaceSize }: { space: { id: number; name: string; type: 
         flexDirection: "column", 
         alignItems: "center", 
         justifyContent: "center",
-        padding: "2px",
-        width: "100%"
+        padding: "3px 2px",
+        width: "100%",
+        overflow: "hidden",
       }}>
         {/* Icon for non-properties */}
         {icon && !isPropertyType && (
-          <div style={{ fontSize: `${iconSize}px`, marginBottom: "2px" }}>{icon}</div>
+          <div style={{ fontSize: `${iconSize}px`, marginBottom: "2px", flexShrink: 0 }}>{icon}</div>
         )}
         
-        <div style={{ lineHeight: 1.2, fontSize: `${fontSize}px`, padding: "2px 3px", fontWeight: "bold" }}>{space.name}</div>
+        {/* Property name with word wrapping */}
+        <div style={{ 
+          lineHeight: 1.1, 
+          fontSize: `${fontSize}px`, 
+          padding: "1px 2px", 
+          fontWeight: "bold",
+          textAlign: "center",
+          wordBreak: "break-word",
+          overflow: "hidden",
+          display: "-webkit-box",
+          WebkitLineClamp: isPropertyType ? 2 : 3,
+          WebkitBoxOrient: "vertical",
+          maxHeight: isPropertyType ? `${fontSize * 2.2}px` : `${fontSize * 3.3}px`,
+          width: "100%",
+        }}>
+          {space.name}
+        </div>
         
         {/* Price or Icon for properties */}
         {property && (property.type === "property" || property.type === "railroad" || property.type === "utility") && (
-          <div style={{ fontSize: `${priceFontSize}px`, marginTop: "1px", fontWeight: "normal" }}>£{property.price}</div>
+          <div style={{ 
+            fontSize: `${priceFontSize}px`, 
+            marginTop: "1px", 
+            fontWeight: "normal",
+            flexShrink: 0,
+          }}>
+            £{property.price}
+          </div>
         )}
         
         {/* Icon for properties (railroads/utilities) */}
         {icon && isPropertyType && (
-           <div style={{ fontSize: `${Math.floor(iconSize * 0.7)}px`, marginTop: "1px" }}>{icon}</div>
+           <div style={{ 
+             fontSize: `${Math.floor(iconSize * 0.6)}px`, 
+             marginTop: "1px",
+             flexShrink: 0,
+           }}>
+             {icon}
+           </div>
         )}
       </div>
     </motion.div>
@@ -237,6 +267,7 @@ const Space = ({ space, spaceSize }: { space: { id: number; name: string; type: 
 
 export const Board = () => {
   const spaces = useGameStore((s) => s.spaces);
+  const jackpot = useGameStore((s) => s.jackpot);
   const boardRef = React.useRef<HTMLDivElement>(null);
   const containerRef = React.useRef<HTMLDivElement>(null);
   const [spaceSize, setSpaceSize] = React.useState(getSpaceSize());
@@ -336,6 +367,27 @@ export const Board = () => {
         position: "relative",
       }}
     >
+      {/* LUDOMERCATUS Title at Top Center - Above Board */}
+      <div
+        style={{
+          position: "absolute",
+          top: "-45px",
+          left: "50%",
+          transform: "translateX(-50%)",
+          fontSize: `${Math.max(20, Math.floor(spaceSize * 0.35))}px`,
+          fontWeight: "900",
+          color: "#2E8B57",
+          letterSpacing: "3px",
+          textShadow: "2px 2px 4px rgba(0,0,0,0.3)",
+          pointerEvents: "none",
+          userSelect: "none",
+          zIndex: 10,
+          whiteSpace: "nowrap",
+        }}
+      >
+        LUDOMERCATUS
+      </div>
+
       <div
         ref={boardRef}
         id="game-board"
@@ -345,7 +397,7 @@ export const Board = () => {
           left: 0,
           width: boardWidth + 12, // Add border width
           height: boardHeight + 12,
-          backgroundColor: "#CDEAC0", 
+          backgroundColor: "#E8F5E9", 
           borderRadius: "8px",
           boxShadow: "0 4px 12px rgba(0, 0, 0, 0.3)",
           border: "6px solid #2E8B57",
@@ -353,6 +405,7 @@ export const Board = () => {
           zIndex: 1, // Low z-index - board is behind modals and UserPanel
         }}
       >
+
       {/* Render spaces */}
       {spaces.map((space) => (
         <Space
@@ -370,7 +423,7 @@ export const Board = () => {
           left: centerLeft,
           width: centerSize,
           height: centerSize,
-          backgroundColor: "#B8E6B8",
+          backgroundColor: "#F0F8F0",
           borderRadius: "8px",
           border: "3px solid #2E8B57",
           display: "flex",
@@ -380,22 +433,174 @@ export const Board = () => {
           boxShadow: "inset 0 2px 8px rgba(0,0,0,0.1)",
         }}
       >
-        {/* Ludomercatus Logo - Smaller */}
-        <div
-          style={{
-            fontSize: `${Math.floor(centerSize * 0.15)}px`,
-            fontWeight: "900",
-            color: "rgba(0,0,0,0.15)",
-            letterSpacing: "2px",
-            pointerEvents: "none",
-            userSelect: "none",
-            textAlign: "center",
-            rotate: "-45deg",
-            position: "absolute",
-          }}
-        >
-          LUDOMERCATUS
+        {/* Card Stacks - Chance and Community Chest with dashed borders */}
+        <div style={{
+          position: "absolute",
+          display: "flex",
+          gap: `${centerSize * 0.2}px`,
+          alignItems: "center",
+          justifyContent: "center",
+          width: "100%",
+          height: "100%",
+          zIndex: 2,
+        }}>
+          {/* Community Chest Card Stack - Top Left */}
+          <motion.div
+            initial={{ scale: 0.8, opacity: 0 }}
+            animate={{ scale: 1, opacity: 1 }}
+            transition={{ delay: 0.3, type: "spring", stiffness: 200 }}
+            style={{
+              position: "relative",
+              width: `${centerSize * 0.28}px`,
+              height: `${centerSize * 0.28}px`,
+              display: "flex",
+              flexDirection: "column",
+              alignItems: "center",
+              justifyContent: "center",
+              border: "3px dashed #4169E1",
+              borderRadius: "8px",
+              backgroundColor: "rgba(65, 105, 225, 0.05)",
+              padding: "4px",
+            }}
+          >
+            {/* Stack effect - multiple cards */}
+            {[0, 1, 2].map((offset) => (
+              <div
+                key={offset}
+                style={{
+                  position: "absolute",
+                  width: `${centerSize * 0.22}px`,
+                  height: `${centerSize * 0.30}px`,
+                  backgroundColor: "#4169E1",
+                  borderRadius: "6px",
+                  border: "2px solid rgba(255,255,255,0.3)",
+                  boxShadow: "0 4px 8px rgba(0,0,0,0.3)",
+                  transform: `translate(${offset * 2}px, ${offset * 2}px) rotate(${offset * -1.5}deg)`,
+                  display: "flex",
+                  flexDirection: "column",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  zIndex: 3 - offset,
+                }}
+              >
+                {offset === 0 && (
+                  <>
+                    <div style={{ fontSize: `${Math.floor(centerSize * 0.10)}px`, marginBottom: "4px" }}>📦</div>
+                    <div style={{ 
+                      fontSize: `${Math.floor(centerSize * 0.055)}px`, 
+                      fontWeight: "bold",
+                      color: "#fff",
+                      textAlign: "center",
+                      padding: "0 4px",
+                      lineHeight: 1.1,
+                    }}>
+                      COMMUNITY<br/>CHEST
+                    </div>
+                  </>
+                )}
+              </div>
+            ))}
+          </motion.div>
+
+          {/* Chance Card Stack - Bottom Right */}
+          <motion.div
+            initial={{ scale: 0.8, opacity: 0 }}
+            animate={{ scale: 1, opacity: 1 }}
+            transition={{ delay: 0.5, type: "spring", stiffness: 200 }}
+            style={{
+              position: "relative",
+              width: `${centerSize * 0.28}px`,
+              height: `${centerSize * 0.28}px`,
+              display: "flex",
+              flexDirection: "column",
+              alignItems: "center",
+              justifyContent: "center",
+              border: "3px dashed #FF8C00",
+              borderRadius: "8px",
+              backgroundColor: "rgba(255, 140, 0, 0.05)",
+              padding: "4px",
+            }}
+          >
+            {/* Stack effect - multiple cards */}
+            {[0, 1, 2].map((offset) => (
+              <div
+                key={offset}
+                style={{
+                  position: "absolute",
+                  width: `${centerSize * 0.22}px`,
+                  height: `${centerSize * 0.30}px`,
+                  backgroundColor: "#FF8C00",
+                  borderRadius: "6px",
+                  border: "2px solid rgba(255,255,255,0.3)",
+                  boxShadow: "0 4px 8px rgba(0,0,0,0.3)",
+                  transform: `translate(${offset * 2}px, ${offset * 2}px) rotate(${offset * 1.5}deg)`,
+                  display: "flex",
+                  flexDirection: "column",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  zIndex: 3 - offset,
+                }}
+              >
+                {offset === 0 && (
+                  <>
+                    <div style={{ fontSize: `${Math.floor(centerSize * 0.10)}px`, marginBottom: "4px" }}>❓</div>
+                    <div style={{ 
+                      fontSize: `${Math.floor(centerSize * 0.055)}px`, 
+                      fontWeight: "bold",
+                      color: "#fff",
+                      textAlign: "center",
+                      padding: "0 4px",
+                      lineHeight: 1.1,
+                    }}>
+                      CHANCE
+                    </div>
+                  </>
+                )}
+              </div>
+            ))}
+          </motion.div>
         </div>
+        
+        {/* Jackpot Display */}
+        {jackpot > 0 && (
+          <motion.div
+            initial={{ scale: 0, opacity: 0 }}
+            animate={{ scale: 1, opacity: 1 }}
+            style={{
+              position: "absolute",
+              bottom: `${centerSize * 0.08}px`,
+              left: "50%",
+              transform: "translateX(-50%)",
+              backgroundColor: "#FFD700",
+              borderRadius: "8px",
+              padding: `${Math.floor(centerSize * 0.04)}px ${Math.floor(centerSize * 0.06)}px`,
+              border: "2px solid #FFA500",
+              boxShadow: "0 4px 12px rgba(0,0,0,0.3)",
+              zIndex: 4,
+              display: "flex",
+              flexDirection: "column",
+              alignItems: "center",
+              gap: "2px",
+            }}
+          >
+            <div style={{
+              fontSize: `${Math.floor(centerSize * 0.05)}px`,
+              fontWeight: "bold",
+              color: "#8B4513",
+              textTransform: "uppercase",
+              letterSpacing: "1px",
+            }}>
+              🎰 Free Parking Jackpot
+            </div>
+            <div style={{
+              fontSize: `${Math.floor(centerSize * 0.08)}px`,
+              fontWeight: "900",
+              color: "#8B4513",
+            }}>
+              £{jackpot.toLocaleString()}
+            </div>
+          </motion.div>
+        )}
         
         {/* Card display area will be rendered here by App.tsx */}
         <div id="board-center-card-area" style={{ 

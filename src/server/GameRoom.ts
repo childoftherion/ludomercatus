@@ -88,6 +88,8 @@ export class GameRoom implements GameActions {
       availableHotels: 12,
       // Phase 2: Economic Events
       activeEconomicEvents: [],
+      // Jackpot system
+      jackpot: 0,
     };
   }
 
@@ -189,6 +191,8 @@ export class GameRoom implements GameActions {
       availableHotels: 12,
       // Phase 2: Economic Events
       activeEconomicEvents: [],
+      // Jackpot system
+      jackpot: 0,
     });
 
     this.addLogEntry(`Game started with ${players.length} players!`, "system");
@@ -334,6 +338,17 @@ export class GameRoom implements GameActions {
         // Trigger economic event if enabled
         if (this.state.settings.enableEconomicEvents) {
           this.triggerEconomicEvent(playerIndex);
+        }
+        // Check for jackpot win (30% chance if jackpot > 0)
+        if (this.state.jackpot > 0 && Math.random() < 0.30) {
+          const jackpotAmount = this.state.jackpot;
+          this.setState({
+            players: this.state.players.map((p, i) => 
+              i === playerIndex ? { ...p, cash: p.cash + jackpotAmount } : p
+            ),
+            jackpot: 0,
+          });
+          this.addLogEntry(`🎉 ${player.name} won the Free Parking jackpot of £${jackpotAmount}!`, "system", playerIndex);
         }
         // Free Parking is otherwise a safe space - nothing happens
         break;
@@ -1172,12 +1187,19 @@ export class GameRoom implements GameActions {
     const space = this.state.spaces.find(s => s.id === propertyId) as Property;
     if (!space || space.owner === undefined || space.mortgaged || space.houses > 0 || space.hotel) return;
 
+    // Calculate jackpot contribution (15% of mortgage value)
+    const jackpotContribution = Math.floor(space.mortgageValue * 0.15);
+    const playerReceives = space.mortgageValue - jackpotContribution;
+
     this.setState({
       spaces: this.state.spaces.map(s => s.id === propertyId ? { ...s, mortgaged: true } : s),
-      players: this.state.players.map((p, i) => i === space.owner ? { ...p, cash: p.cash + space.mortgageValue } : p)
+      players: this.state.players.map((p, i) => i === space.owner ? { ...p, cash: p.cash + playerReceives } : p),
+      jackpot: this.state.jackpot + jackpotContribution,
     });
     const owner = this.state.players[space.owner];
-    if (owner) this.addLogEntry(`${owner.name} mortgaged ${space.name}`, "system", space.owner);
+    if (owner) {
+      this.addLogEntry(`${owner.name} mortgaged ${space.name} (received £${playerReceives}, £${jackpotContribution} added to jackpot)`, "system", space.owner);
+    }
   }
 
   public unmortgageProperty(propertyId: number) {

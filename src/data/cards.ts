@@ -14,7 +14,7 @@ export const createChanceDeck = (): Card[] => {
     {
       id: 2,
       type: "chance",
-      text: "Advance to Illinois Avenue",
+      text: "Advance to Multnomah Falls",
       getEffect: (state, playerIndex) => {
         const currentPos = state.players[playerIndex]?.position ?? 0;
         const newPos = 24;
@@ -28,7 +28,7 @@ export const createChanceDeck = (): Card[] => {
     {
       id: 3,
       type: "chance",
-      text: "Advance to St. Charles Place",
+      text: "Advance to Eugene",
       getEffect: (state, playerIndex) => {
         const currentPos = state.players[playerIndex]?.position ?? 0;
         const newPos = 11;
@@ -46,7 +46,7 @@ export const createChanceDeck = (): Card[] => {
       getEffect: (state, playerIndex) => {
         const pos = state.players[playerIndex]?.position ?? 0;
         let newPos: number;
-        // Electric Company is at 12, Water Works is at 28
+        // Portland General Electric is at 12, Pacific Power is at 28
         if (pos >= 1 && pos <= 11) newPos = 12;
         else if (pos >= 13 && pos <= 28) newPos = 28;
         else newPos = 12;
@@ -133,7 +133,7 @@ export const createChanceDeck = (): Card[] => {
     {
       id: 12,
       type: "chance",
-      text: "Take a trip to Reading Railroad",
+      text: "Take a trip to Union Pacific Railroad",
       getEffect: (state, playerIndex) => {
         const currentPos = state.players[playerIndex]?.position ?? 0;
         const newPos = 5;
@@ -147,7 +147,7 @@ export const createChanceDeck = (): Card[] => {
     {
       id: 13,
       type: "chance",
-      text: "Take a walk on Boardwalk",
+      text: "Take a hike on Mount Hood",
       getEffect: () => ({
         positionChange: 39,
         triggerSpaceResolution: true,

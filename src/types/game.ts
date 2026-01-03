@@ -325,4 +325,7 @@ export interface GameState {
     creditorIndex?: number;
     debtAmount: number;
   };
+  
+  // Jackpot system
+  jackpot: number; // Accumulated jackpot from mortgage contributions
 }
