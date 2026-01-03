@@ -1,4 +1,4 @@
-# monoply
+# Ludomercatus
 
 To install dependencies:
 
