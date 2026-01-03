@@ -3,13 +3,20 @@ import { motion, AnimatePresence } from "framer-motion"
 import { PlayerPropertiesPanel } from "./PlayerProperties"
 import { useGameStore } from "../store/gameStore"
 import { useLocalStore } from "../store/localStore"
+import { calculateNetWorth } from "../logic/rules/economics"
 
 export const UserPanel: React.FC = () => {
-  const { players, currentPlayerIndex, settings } = useGameStore()
+  const { players, currentPlayerIndex, settings, spaces } = useGameStore()
   const { myPlayerIndex } = useLocalStore()
   const [expandedPlayerIndex, setExpandedPlayerIndex] = useState<number | null>(
     null
   )
+  
+  // Calculate net worth for each player
+  const getNetWorth = (playerIndex: number) => {
+    const state = useGameStore.getState()
+    return calculateNetWorth(state, playerIndex)
+  }
 
   if (!players || players.length === 0) return null
 
@@ -67,9 +74,12 @@ export const UserPanel: React.FC = () => {
                 background: "rgba(30, 30, 30, 0.95)",
                 borderRadius: "10px",
                 border: isCurrentPlayer
-                  ? `2px solid ${player.color}`
+                  ? `3px solid ${player.color}`
                   : "2px solid transparent",
-                boxShadow: "0 4px 20px rgba(0,0,0,0.3)",
+                boxShadow: isCurrentPlayer
+                  ? `0 0 20px ${player.color}40, 0 4px 20px rgba(0,0,0,0.3)`
+                  : "0 4px 20px rgba(0,0,0,0.3)",
+                // boxShadow: "0 4px 20px rgba(0,0,0,0.3)",
                 transition: "border-color 0.3s",
                 position: "relative",
                 zIndex: isExpanded ? 20001 : 20000, // Ensure expanded content is on top
@@ -130,16 +140,28 @@ export const UserPanel: React.FC = () => {
                     )}
                   </div>
                   {!isExpanded && !shouldHideCash && (
-                    <div
-                      style={{
-                        color: "#4ECDC4",
-                        fontSize: "11px",
-                        fontWeight: 600,
-                        marginTop: "2px",
-                      }}
-                    >
-                      £{player.cash.toLocaleString()}
-                    </div>
+                    <>
+                      <div
+                        style={{
+                          color: "#4ECDC4",
+                          fontSize: "11px",
+                          fontWeight: 600,
+                          marginTop: "2px",
+                        }}
+                      >
+                        £{player.cash.toLocaleString()}
+                      </div>
+                      <div
+                        style={{
+                          color: "#22c55e",
+                          fontSize: "10px",
+                          fontWeight: 500,
+                          marginTop: "1px",
+                        }}
+                      >
+                        Net: £{getNetWorth(index).toLocaleString()}
+                      </div>
+                    </>
                   )}
                   {!isExpanded && shouldHideCash && (
                     <div

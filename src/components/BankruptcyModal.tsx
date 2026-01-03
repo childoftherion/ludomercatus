@@ -239,7 +239,10 @@ export const BankruptcyModal: React.FC<Props> = ({
             <li>This action cannot be undone</li>
           </ul>
           <button
-            onClick={() => declineRestructuring()}
+            onClick={() => {
+              console.log("[BankruptcyModal] Declaring bankruptcy via declineRestructuring");
+              declineRestructuring();
+            }}
             style={{
               width: "100%",
               padding: "14px",

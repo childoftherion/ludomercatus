@@ -24,8 +24,8 @@ export const CardDisplay: React.FC<CardDisplayProps> = ({ card, onClose }) => {
         transition={{ type: "spring", stiffness: 200, damping: 20, duration: 0.6 }}
         style={{
           position: "fixed",
-          top: "50%",
-          left: "50%",
+          top: "15%",
+          left: "35%",
           transform: "translate(-50%, -50%)",
           width: "280px",
           maxWidth: "90vw",
@@ -40,8 +40,11 @@ export const CardDisplay: React.FC<CardDisplayProps> = ({ card, onClose }) => {
           padding: "20px",
           color: "#fff",
           border: "3px solid rgba(255,255,255,0.3)",
-          zIndex: 300,
+          zIndex: 10000,
           cursor: onClose ? "pointer" : "default",
+          pointerEvents: "auto",
+          // Ensure card is always on top
+          isolation: "isolate",
         }}
         onClick={onClose}
         whileHover={onClose ? { scale: 1.05 } : {}}

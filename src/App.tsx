@@ -280,7 +280,7 @@ export default function App() {
   const [isNewTurn, setIsNewTurn] = React.useState(false);
   const [isMuted, setIsMuted] = React.useState(false);
 
-  // Auto-hide card after 5 seconds
+  // Auto-hide card after 8 seconds
   React.useEffect(() => {
     if (lastCardDrawn) {
       // Only show if this is a new card (different from last shown)
@@ -292,7 +292,7 @@ export default function App() {
           setShowCard(false);
           // Mark as shown so it doesn't reappear
           setLastShownCardId(lastCardDrawn.id);
-        }, 5000); // Show for 5 seconds
+        }, 8000); // Show for 8 seconds (increased from 5 for better visibility)
         return () => clearTimeout(timer);
       }
     } else {
@@ -301,9 +301,18 @@ export default function App() {
     }
   }, [lastCardDrawn, lastShownCardId]);
 
-  // Clear card display when turn changes
+  // Track previous player index to detect player changes
+  const prevPlayerIndexRef = React.useRef(currentPlayerIndex);
+  
+  // Clear card display when player changes (but NOT when phase changes during card display)
   React.useEffect(() => {
-    setShowCard(false);
+    // Only clear card display when player changes, not when phase changes
+    // Phase changes can happen due to card effects (e.g., moving to property triggers awaiting_buy_decision)
+    // We want to keep the card visible even if phase changes due to the card's effect
+    if (prevPlayerIndexRef.current !== currentPlayerIndex) {
+      setShowCard(false);
+      prevPlayerIndexRef.current = currentPlayerIndex;
+    }
   }, [currentPlayerIndex, phase]);
 
   // Detect new turns and handle stale diceRoll
@@ -482,6 +491,37 @@ export default function App() {
     }
   }, [phase, trade?.status, connected, players]);
 
+  // AI rent negotiation response
+  React.useEffect(() => {
+    if (!connected) return;
+    if (phase === "awaiting_rent_negotiation" && pendingRentNegotiation) {
+      const creditor = players[pendingRentNegotiation.creditorIndex];
+      if (creditor?.isAI && !creditor.bankrupt) {
+        const aiDelay = setTimeout(() => {
+          useGameStore.getState().executeAITurn();
+        }, 2000);
+        return () => clearTimeout(aiDelay);
+      }
+    }
+  }, [phase, pendingRentNegotiation, connected, players]);
+
+  // AI bankruptcy decision
+  React.useEffect(() => {
+    if (!connected) return;
+    if (phase === "awaiting_bankruptcy_decision") {
+      const pending = (useGameStore.getState() as any).pendingBankruptcy;
+      if (pending) {
+        const bankruptPlayer = players[pending.playerIndex];
+        if (bankruptPlayer?.isAI && !bankruptPlayer.bankrupt) {
+          const aiDelay = setTimeout(() => {
+            useGameStore.getState().executeAITurn();
+          }, 2000);
+          return () => clearTimeout(aiDelay);
+        }
+      }
+    }
+  }, [phase, connected, players]);
+
   const handleRollDice = () => {
     if (isRolling) return;
     setIsRolling(true);
@@ -532,6 +572,70 @@ export default function App() {
     if (!currentSpace) return;
     useGameStore.getState().declineProperty(currentSpace.id);
   };
+
+  // Keyboard shortcuts
+  React.useEffect(() => {
+    const handleKeyPress = (e: KeyboardEvent) => {
+      // Don't handle shortcuts if user is typing in an input
+      if (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement) {
+        return;
+      }
+
+      // Only handle shortcuts when it's the player's turn (unless it's a global shortcut)
+      const playerCanAct = isMyTurn && phase !== "setup" && phase !== "game_over";
+
+      switch (e.key) {
+        case " ": // Spacebar - Roll dice
+          if (playerCanAct && phase === "rolling" && !diceRoll && !isRolling) {
+            e.preventDefault();
+            handleRollDice();
+          }
+          break;
+        case "Enter": // Enter - Confirm action (buy property, end turn, etc.)
+          if (playerCanAct) {
+            e.preventDefault();
+            if (phase === "awaiting_buy_decision" && currentSpace && isProperty(currentSpace)) {
+              handleBuyProperty();
+            } else if (phase === "resolving_space" || phase === "rolling") {
+              handleEndTurn();
+            }
+          }
+          break;
+        case "Escape": // Escape - Cancel/decline
+          if (playerCanAct) {
+            e.preventDefault();
+            if (phase === "awaiting_buy_decision" && currentSpace) {
+              handleDeclineProperty();
+            }
+          }
+          break;
+        case "b": // B - Buy property
+        case "B":
+          if (playerCanAct && phase === "awaiting_buy_decision" && currentSpace && isProperty(currentSpace)) {
+            e.preventDefault();
+            handleBuyProperty();
+          }
+          break;
+        case "d": // D - Decline property
+        case "D":
+          if (playerCanAct && phase === "awaiting_buy_decision" && currentSpace) {
+            e.preventDefault();
+            handleDeclineProperty();
+          }
+          break;
+        case "e": // E - End turn
+        case "E":
+          if (playerCanAct && (phase === "resolving_space" || phase === "rolling")) {
+            e.preventDefault();
+            handleEndTurn();
+          }
+          break;
+      }
+    };
+
+    window.addEventListener("keydown", handleKeyPress);
+    return () => window.removeEventListener("keydown", handleKeyPress);
+  }, [phase, diceRoll, isRolling, currentSpace, isMyTurn, currentPlayerIndex, myPlayerIndex]);
 
   const handlePayTax = () => {
     if (!currentSpace || currentSpace.type !== "tax" || !currentPlayer) return;
@@ -715,7 +819,7 @@ export default function App() {
                 width: "100vw",
                 height: "100vh",
                 pointerEvents: "none",
-                zIndex: 1000,
+                zIndex: 10000,
                 display: "flex",
                 alignItems: "center",
                 justifyContent: "center",
@@ -764,6 +868,35 @@ export default function App() {
           </AnimatePresence>
         </div>
       </div>
+
+      {/* Connection Status Indicator */}
+      {!connected && inRoom && (
+        <motion.div
+          initial={{ opacity: 0, y: -20 }}
+          animate={{ opacity: 1, y: 0 }}
+          exit={{ opacity: 0, y: -20 }}
+          style={{
+            position: "fixed",
+            top: "60px",
+            left: "50%",
+            transform: "translateX(-50%)",
+            backgroundColor: "rgba(239, 68, 68, 0.95)",
+            color: "#fff",
+            padding: "12px 24px",
+            borderRadius: "8px",
+            boxShadow: "0 4px 16px rgba(0, 0, 0, 0.3)",
+            zIndex: 10000,
+            display: "flex",
+            alignItems: "center",
+            gap: "8px",
+            fontSize: "14px",
+            fontWeight: "bold",
+          }}
+        >
+          <span>⚠️</span>
+          <span>Disconnected. Reconnecting...</span>
+        </motion.div>
+      )}
 
       {/* All Modals - Rendered outside board container for proper fixed positioning */}
       {/* Auction Modal */}

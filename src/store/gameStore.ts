@@ -138,6 +138,8 @@ export const useGameStore = create<GameStore>((set, get) => ({
     socket.onopen = () => {
       console.log("Connected to game server");
       set({ connected: true });
+      // Reset reconnect attempts on successful connection
+      (get() as any).reconnectAttempts = 0;
       // Ask for room list immediately
       socket?.send(JSON.stringify({ type: "LIST_ROOMS" }));
     };
@@ -160,11 +162,34 @@ export const useGameStore = create<GameStore>((set, get) => ({
       }
     };
 
-    socket.onclose = () => {
-      console.log("Disconnected from game server");
+    socket.onerror = (error) => {
+      console.error("WebSocket error:", error);
       set({ connected: false });
-      // Retry connection?
-      setTimeout(() => get().connect(), 3000);
+    };
+
+    socket.onclose = (event) => {
+      console.log("Disconnected from game server", event.code, event.reason);
+      set({ connected: false });
+      
+      // Only retry if it wasn't a clean close and we're in a room
+      if (event.code !== 1000 && get().inRoom) {
+        // Exponential backoff: 1s, 2s, 4s, 8s, max 30s
+        const retryCount = (get() as any).reconnectAttempts || 0;
+        const maxRetries = 5;
+        
+        if (retryCount < maxRetries) {
+          const delay = Math.min(1000 * Math.pow(2, retryCount), 30000);
+          console.log(`Reconnecting in ${delay}ms (attempt ${retryCount + 1}/${maxRetries})...`);
+          
+          setTimeout(() => {
+            (get() as any).reconnectAttempts = retryCount + 1;
+            get().connect();
+          }, delay);
+        } else {
+          console.error("Max reconnection attempts reached. Please refresh the page.");
+          set({ connected: false, inRoom: false });
+        }
+      }
     };
   },
 

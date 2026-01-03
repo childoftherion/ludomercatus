@@ -6,6 +6,7 @@ import { calculateRent } from "../logic/rules/rent";
 import { hasMonopoly, getPlayerProperties } from "../logic/rules/monopoly";
 import { calculateGoSalary, calculateTenPercentTax, getOptimalTaxChoice } from "../logic/rules/economics";
 import { executeAITurn, executeAITradeResponse, type GameActions } from "../logic/ai";
+import { validatePlayerTurn, validateCash, validatePropertyOwnership, validateBuilding, validateTradeOffer, validateMortgage } from "../utils/validation";
 
 const PLAYER_COLORS = ["#FF6B6B", "#4ECDC4", "#45B7D1", "#96CEB4", "#FFEAA7", "#DDA0DD", "#98D8C8", "#F7DC6F"];
 
@@ -475,10 +476,33 @@ export class GameRoom implements GameActions {
 
   public buyProperty(propertyId: number) {
     const playerIndex = this.state.currentPlayerIndex;
+    
+    // Validate turn order
+    const turnValidation = validatePlayerTurn(this.state, playerIndex, ["awaiting_buy_decision"]);
+    if (!turnValidation.valid) {
+      this.addLogEntry(turnValidation.error || "Invalid action", "system", playerIndex);
+      return;
+    }
+    
     const player = this.state.players[playerIndex];
     const property = this.state.spaces.find((s) => s.id === propertyId) as Property;
 
-    if (!player || !property || property.owner !== undefined || player.cash < property.price) return;
+    if (!player || !property) {
+      this.addLogEntry("Property or player not found", "system", playerIndex);
+      return;
+    }
+    
+    if (property.owner !== undefined) {
+      this.addLogEntry("This property is already owned", "system", playerIndex);
+      return;
+    }
+    
+    // Validate cash
+    const cashValidation = validateCash(player, property.price, "buy property");
+    if (!cashValidation.valid) {
+      this.addLogEntry(cashValidation.error || "Insufficient funds", "system", playerIndex);
+      return;
+    }
 
     this.setState({
       spaces: this.state.spaces.map((s) =>
@@ -1034,10 +1058,32 @@ export class GameRoom implements GameActions {
 
   public buildHouse(propertyId: number) {
     const playerIndex = this.state.currentPlayerIndex;
+    
+    // Validate turn order
+    const turnValidation = validatePlayerTurn(this.state, playerIndex, ["rolling", "resolving_space"]);
+    if (!turnValidation.valid) {
+      this.addLogEntry(turnValidation.error || "Invalid action", "system", playerIndex);
+      return;
+    }
+    
     const player = this.state.players[playerIndex];
-    if (!player) return;
+    if (!player) {
+      this.addLogEntry("Player not found", "system", playerIndex);
+      return;
+    }
+    
+    // Validate building rules
+    const buildingValidation = validateBuilding(this.state, propertyId, playerIndex);
+    if (!buildingValidation.valid) {
+      this.addLogEntry(buildingValidation.error || "Cannot build house", "system", playerIndex);
+      return;
+    }
+    
     const property = this.state.spaces.find(s => s.id === propertyId) as Property;
-    if (!property || property.owner !== playerIndex || property.houses >= 4 || !property.buildingCost || !property.colorGroup) return;
+    if (!property || property.houses >= 4 || !property.buildingCost) {
+      this.addLogEntry("Cannot build more houses on this property", "system", playerIndex);
+      return;
+    }
 
     // Calculate actual building cost (may be modified by economic events)
     let buildingCost = property.buildingCost;
@@ -1045,8 +1091,10 @@ export class GameRoom implements GameActions {
       buildingCost = Math.floor(buildingCost * 1.5); // 50% increase during housing boom
     }
 
-    if (player.cash < buildingCost) {
-      this.addLogEntry(`Cannot afford £${buildingCost} to build house${this.isEconomicEventActive("housing_boom") ? " (Housing Boom prices!)" : ""}`, "system", playerIndex);
+    // Validate cash
+    const cashValidation = validateCash(player, buildingCost, "build house");
+    if (!cashValidation.valid) {
+      this.addLogEntry(cashValidation.error || "Insufficient funds", "system", playerIndex);
       return;
     }
 
@@ -1055,12 +1103,6 @@ export class GameRoom implements GameActions {
       this.addLogEntry(`🏠 Housing shortage! No houses available to build.`, "system", playerIndex);
       return;
     }
-
-    if (!hasMonopoly(this.state, playerIndex, property.colorGroup)) return;
-
-    const groupProperties = this.state.spaces.filter((s): s is Property => isProperty(s) && s.colorGroup === property.colorGroup);
-    const minHouses = Math.min(...groupProperties.map(p => p.houses));
-    if (property.houses > minHouses) return;
 
     this.setState({
       spaces: this.state.spaces.map(s => s.id === propertyId ? { ...s, houses: (s as Property).houses + 1 } : s),
@@ -1184,8 +1226,24 @@ export class GameRoom implements GameActions {
   }
 
   public mortgageProperty(propertyId: number) {
+    const playerIndex = this.state.currentPlayerIndex;
+    
+    // Validate turn order
+    const turnValidation = validatePlayerTurn(this.state, playerIndex, ["rolling", "resolving_space"]);
+    if (!turnValidation.valid) {
+      this.addLogEntry(turnValidation.error || "Invalid action", "system", playerIndex);
+      return;
+    }
+    
+    // Validate mortgage
+    const mortgageValidation = validateMortgage(this.state, propertyId, playerIndex, false);
+    if (!mortgageValidation.valid) {
+      this.addLogEntry(mortgageValidation.error || "Cannot mortgage property", "system", playerIndex);
+      return;
+    }
+    
     const space = this.state.spaces.find(s => s.id === propertyId) as Property;
-    if (!space || space.owner === undefined || space.mortgaged || space.houses > 0 || space.hotel) return;
+    if (!space) return;
 
     // Calculate jackpot contribution (15% of mortgage value)
     const jackpotContribution = Math.floor(space.mortgageValue * 0.15);
@@ -1193,28 +1251,44 @@ export class GameRoom implements GameActions {
 
     this.setState({
       spaces: this.state.spaces.map(s => s.id === propertyId ? { ...s, mortgaged: true } : s),
-      players: this.state.players.map((p, i) => i === space.owner ? { ...p, cash: p.cash + playerReceives } : p),
+      players: this.state.players.map((p, i) => i === playerIndex ? { ...p, cash: p.cash + playerReceives } : p),
       jackpot: this.state.jackpot + jackpotContribution,
     });
-    const owner = this.state.players[space.owner];
+    const owner = this.state.players[playerIndex];
     if (owner) {
-      this.addLogEntry(`${owner.name} mortgaged ${space.name} (received £${playerReceives}, £${jackpotContribution} added to jackpot)`, "system", space.owner);
+      this.addLogEntry(`${owner.name} mortgaged ${space.name} (received £${playerReceives}, £${jackpotContribution} added to jackpot)`, "system", playerIndex);
     }
   }
 
   public unmortgageProperty(propertyId: number) {
+    const playerIndex = this.state.currentPlayerIndex;
+    
+    // Validate turn order
+    const turnValidation = validatePlayerTurn(this.state, playerIndex, ["rolling", "resolving_space"]);
+    if (!turnValidation.valid) {
+      this.addLogEntry(turnValidation.error || "Invalid action", "system", playerIndex);
+      return;
+    }
+    
+    // Validate unmortgage
+    const mortgageValidation = validateMortgage(this.state, propertyId, playerIndex, true);
+    if (!mortgageValidation.valid) {
+      this.addLogEntry(mortgageValidation.error || "Cannot unmortgage property", "system", playerIndex);
+      return;
+    }
+    
     const space = this.state.spaces.find(s => s.id === propertyId) as Property;
-    if (!space || space.owner === undefined || !space.mortgaged) return;
+    if (!space) return;
 
     const unmortgageCost = Math.floor(space.mortgageValue * 1.1);
-    const player = this.state.players[space.owner];
-    if (!player || player.cash < unmortgageCost) return;
+    const player = this.state.players[playerIndex];
+    if (!player) return;
 
     this.setState({
       spaces: this.state.spaces.map(s => s.id === propertyId ? { ...s, mortgaged: false } : s),
-      players: this.state.players.map((p, i) => i === space.owner ? { ...p, cash: p.cash - unmortgageCost } : p)
+      players: this.state.players.map((p, i) => i === playerIndex ? { ...p, cash: p.cash - unmortgageCost } : p)
     });
-    this.addLogEntry(`${player.name} unmortgaged ${space.name}`, "system", space.owner);
+    this.addLogEntry(`${player.name} unmortgaged ${space.name} for £${unmortgageCost}`, "system", playerIndex);
   }
 
   // ============ PROPERTY INSURANCE SYSTEM (Phase 3) ============
@@ -1774,11 +1848,19 @@ export class GameRoom implements GameActions {
   // Player chooses full bankruptcy instead of restructuring
   public declineRestructuring() {
     const pending = (this.state as any).pendingBankruptcy;
-    if (!pending) return;
+    if (!pending) {
+      console.warn("[GameRoom] declineRestructuring called but no pending bankruptcy");
+      return;
+    }
     
     const { playerIndex, creditorIndex } = pending;
     
-    this.setState({ pendingBankruptcy: undefined });
+    console.log(`[GameRoom] Player ${playerIndex} declining restructuring, declaring bankruptcy`);
+    
+    this.setState({ 
+      pendingBankruptcy: undefined,
+      phase: this.state.phase === "awaiting_bankruptcy_decision" ? "resolving_space" : this.state.phase
+    });
     this.declareBankruptcy(playerIndex, creditorIndex);
   }
   

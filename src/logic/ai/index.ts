@@ -114,9 +114,37 @@ export const executeAITurn = (state: GameState, actions: GameActions) => {
 
   // --- Phase 3: Handle Bankruptcy Decision ---
   if (state.phase === "awaiting_bankruptcy_decision") {
-    // AI always chooses Chapter 11 if available (try to survive)
-    if (actions.enterChapter11) {
+    const pending = (state as any).pendingBankruptcy;
+    if (!pending) return;
+    
+    const { playerIndex: bankruptPlayerIndex, debtAmount } = pending;
+    const bankruptPlayer = state.players[bankruptPlayerIndex];
+    
+    // Only handle if this AI player is the one facing bankruptcy
+    if (bankruptPlayerIndex !== playerIndex || !bankruptPlayer) return;
+    
+    // Calculate player's assets
+    const playerProperties = state.spaces.filter(
+      (s): s is Property => 
+        isProperty(s) && s.owner === playerIndex
+    );
+    
+    const totalAssetValue = playerProperties.reduce((sum, prop) => {
+      if (prop.mortgaged) return sum + prop.mortgageValue;
+      return sum + prop.price + (prop.houses * (prop.buildingCost ?? 0));
+    }, 0);
+    
+    // Strategy: Choose Chapter 11 if we have assets worth more than the debt
+    // Otherwise, declare full bankruptcy (no point in restructuring if we can't pay)
+    const canRealisticallyPay = totalAssetValue >= debtAmount * 0.8; // Need 80% of debt in assets
+    
+    if (canRealisticallyPay && actions.enterChapter11) {
+      // Try to survive with Chapter 11
       actions.enterChapter11();
+      return;
+    } else if (actions.declineRestructuring) {
+      // Not enough assets - declare full bankruptcy
+      actions.declineRestructuring();
       return;
     }
   }
@@ -132,27 +160,56 @@ export const executeAITurn = (state: GameState, actions: GameActions) => {
     }
   }
 
-  // --- Phase 3: Handle Rent Negotiation (as creditor) ---
+  // --- Phase 3: Handle Rent Negotiation (as creditor or debtor) ---
   if (state.phase === "awaiting_rent_negotiation" && state.pendingRentNegotiation) {
-    const { creditorIndex, rentAmount, debtorCanAfford } = state.pendingRentNegotiation;
+    const { creditorIndex, debtorIndex, rentAmount, debtorCanAfford } = state.pendingRentNegotiation;
     
+    // AI is the creditor - decide what to do
     if (creditorIndex === playerIndex) {
-      // AI is the creditor - decide what to do
-      if (debtorCanAfford >= rentAmount * 0.5) {
-        // Debtor can pay at least half - accept IOU
+      const debtor = state.players[debtorIndex];
+      if (!debtor) return;
+      
+      // Check if debtor has valuable properties
+      const debtorProperties = state.spaces.filter(
+        (s): s is Property => 
+          isProperty(s) && 
+          s.owner === debtorIndex && 
+          !s.mortgaged &&
+          s.houses === 0 && 
+          !s.hotel
+      );
+      
+      // Calculate total property value
+      const totalPropertyValue = debtorProperties.reduce((sum, prop) => sum + prop.price, 0);
+      
+      // Strategy: If debtor can pay at least 50% OR has properties worth more than the debt, accept IOU
+      // Otherwise, demand property transfer or force bankruptcy
+      if (debtorCanAfford >= rentAmount * 0.5 || totalPropertyValue >= rentAmount) {
+        // Debtor can pay at least half OR has valuable properties - accept IOU
         if (actions.createRentIOU) {
           actions.createRentIOU(debtorCanAfford);
           return;
         }
+      } else if (debtorProperties.length > 0) {
+        // Debtor has properties but can't pay much - demand best property
+        // Find the most valuable property
+        const bestProperty = debtorProperties.reduce((best, prop) => 
+          prop.price > (best?.price ?? 0) ? prop : best
+        );
+        
+        if (bestProperty && actions.demandImmediatePaymentOrProperty) {
+          actions.demandImmediatePaymentOrProperty(bestProperty.id);
+          return;
+        }
       } else {
-        // Debtor can't pay much - demand bankruptcy or property
+        // Debtor can't pay much and has no properties - force bankruptcy
         if (actions.demandImmediatePaymentOrProperty) {
-          // For now, just force bankruptcy (could be smarter about property selection)
           actions.demandImmediatePaymentOrProperty(undefined);
           return;
         }
       }
     }
+    // Note: When AI is the debtor, they don't need to do anything - the creditor makes all decisions
   }
 
   // --- Phase 2: Smart Loan Management ---
