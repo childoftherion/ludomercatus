@@ -1,7 +1,10 @@
 body {
   font-family: Arial, sans-serif;
-  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  background: #1a1a2a; /* Solid dark background instead of gradient */
   min-height: 100vh;
+  margin: 0;
+  padding: 0;
+  overflow: hidden; /* Prevent body scrollbars */
 }
 
 #root {

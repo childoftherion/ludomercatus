@@ -1,6 +1,9 @@
 import React from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { useGameStore } from "../store/gameStore";
+import { useLocalStore } from "../store/localStore";
+import type { GameSettings } from "../types/game";
+import { DEFAULT_GAME_SETTINGS } from "../types/game";
 
 const TOKENS = ["🚗", "🚙", "🚕", "🏎", "🚁", "✈️", "⛵", "🎭"];
 const AI_NAMES = ["Bot Alpha", "Bot Beta", "Bot Gamma", "Bot Delta", "Bot Epsilon", "Bot Zeta", "Bot Eta"];
@@ -9,6 +12,55 @@ type GameMode = "select" | "single" | "multiplayer";
 
 const PlayerSetup = () => {
   const [gameMode, setGameMode] = React.useState<GameMode>("select");
+  
+  // Game settings
+  const [gameSettings, setGameSettings] = React.useState<GameSettings>({
+    ...DEFAULT_GAME_SETTINGS,
+  });
+  const [showAdvancedSettings, setShowAdvancedSettings] = React.useState(false);
+  
+  // Refs for container sizing (must be at top level for React Hooks rules)
+  const singlePlayerContainerRef = React.useRef<HTMLDivElement>(null);
+  const selectContainerRef = React.useRef<HTMLDivElement>(null);
+  const multiplayerContainerRef = React.useRef<HTMLDivElement>(null);
+  
+  // #region agent log
+  React.useEffect(() => {
+    const containerRef = gameMode === "single" ? singlePlayerContainerRef : 
+                        gameMode === "multiplayer" ? multiplayerContainerRef : 
+                        selectContainerRef;
+    if (containerRef.current) {
+      const el = containerRef.current;
+      const viewport = { width: window.innerWidth, height: window.innerHeight };
+      const rect = el.getBoundingClientRect();
+      const computedStyle = window.getComputedStyle(el);
+      const bodyStyle = window.getComputedStyle(document.body);
+      const logData = {
+        location: 'PlayerSetup.tsx:442',
+        message: 'Setup container sizing check',
+        data: {
+          gameMode,
+          viewport,
+          rect: { top: rect.top, left: rect.left, width: rect.width, height: rect.height },
+          computedStyle: { overflowY: computedStyle.overflowY, overflowX: computedStyle.overflowX, height: computedStyle.height },
+          scrollHeight: el.scrollHeight,
+          clientHeight: el.clientHeight,
+          needsScrollbar: el.scrollHeight > el.clientHeight,
+          bodyOverflow: bodyStyle.overflow
+        },
+        timestamp: Date.now(),
+        sessionId: 'debug-session',
+        runId: 'scrollbar-fix-v1',
+        hypothesisId: 'A'
+      };
+      fetch('http://127.0.0.1:7242/ingest/624eb4a4-a4cd-4fc4-9b95-f587dccf83e6', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(logData)
+      }).catch(() => {});
+    }
+  }, [gameMode]);
+  // #endregion
   
   // Single player state
   const [playerName, setPlayerName] = React.useState("");
@@ -110,7 +162,17 @@ const PlayerSetup = () => {
     const tokens = [playerToken, ...aiTokens];
     const isAIFlags = [false, ...aiTokens.map(() => true)];
 
+    // Apply game settings first
+    useGameStore.getState().updateSettings(gameSettings);
     useGameStore.getState().initGame(names, tokens, isAIFlags);
+    
+    // Set the human player as player 0 in single-player mode
+    useLocalStore.getState().setMyPlayerIndex(0);
+    console.log("[PlayerSetup] Single-player game started, set myPlayerIndex to 0", {
+      playerName: names[0],
+      totalPlayers: names.length,
+      myPlayerIndex: useLocalStore.getState().myPlayerIndex,
+    });
   };
 
   const startMultiplayerGame = () => {
@@ -121,22 +183,221 @@ const PlayerSetup = () => {
     const tokens = [...humanTokens, ...mpAiTokens];
     const isAIFlags = [...humanTokens.map(() => false), ...mpAiTokens.map(() => true)];
 
+    // Apply game settings first
+    useGameStore.getState().updateSettings(gameSettings);
     useGameStore.getState().initGame(names, tokens, isAIFlags);
   };
+
+  // Game Settings Panel Component
+  const GameSettingsPanel = () => (
+    <div
+      style={{
+        marginBottom: "24px",
+        padding: "20px",
+        backgroundColor: "#f0f4f8",
+        borderRadius: "12px",
+        border: "2px solid #6366F1",
+      }}
+    >
+      <div 
+        onClick={() => setShowAdvancedSettings(!showAdvancedSettings)}
+        style={{ 
+          display: "flex", 
+          alignItems: "center", 
+          justifyContent: "space-between",
+          cursor: "pointer",
+          marginBottom: showAdvancedSettings ? "16px" : 0,
+        }}
+      >
+        <h3 style={{ margin: 0, color: "#6366F1", display: "flex", alignItems: "center", gap: "8px" }}>
+          <span>⚙️</span> Game Settings
+        </h3>
+        <span style={{ fontSize: "20px", color: "#6366F1" }}>
+          {showAdvancedSettings ? "▼" : "▶"}
+        </span>
+      </div>
+      
+      <AnimatePresence>
+        {showAdvancedSettings && (
+          <motion.div
+            initial={{ opacity: 0, height: 0 }}
+            animate={{ opacity: 1, height: "auto" }}
+            exit={{ opacity: 0, height: 0 }}
+            style={{ overflow: "hidden" }}
+          >
+            {/* Privacy Settings */}
+            <div style={{ marginBottom: "16px" }}>
+              <h4 style={{ fontSize: "12px", color: "#666", marginBottom: "8px", textTransform: "uppercase" }}>
+                🔒 Privacy (Economic Realism)
+              </h4>
+              
+              <label style={{ display: "flex", alignItems: "center", gap: "8px", marginBottom: "8px", cursor: "pointer" }}>
+                <input
+                  type="checkbox"
+                  checked={gameSettings.hideOpponentWealth}
+                  onChange={(e) => setGameSettings(s => ({ ...s, hideOpponentWealth: e.target.checked }))}
+                  style={{ width: "18px", height: "18px" }}
+                />
+                <span style={{ fontSize: "14px" }}>
+                  Hide opponent's cash & net worth
+                </span>
+              </label>
+              
+              <label style={{ display: "flex", alignItems: "center", gap: "8px", cursor: "pointer" }}>
+                <input
+                  type="checkbox"
+                  checked={gameSettings.hideOpponentProperties}
+                  onChange={(e) => setGameSettings(s => ({ ...s, hideOpponentProperties: e.target.checked }))}
+                  style={{ width: "18px", height: "18px" }}
+                />
+                <span style={{ fontSize: "14px" }}>
+                  Hide opponent's property details
+                </span>
+              </label>
+              
+              <p style={{ fontSize: "11px", color: "#888", marginTop: "8px", marginBottom: 0 }}>
+                💡 Like real markets, you won't know competitors' exact financial positions!
+              </p>
+            </div>
+
+            {/* Economic Features */}
+            <div style={{ marginBottom: "16px" }}>
+              <h4 style={{ fontSize: "12px", color: "#666", marginBottom: "8px", textTransform: "uppercase" }}>
+                📈 Economic Features
+              </h4>
+              
+              <label style={{ display: "flex", alignItems: "center", gap: "8px", marginBottom: "8px", cursor: "pointer" }}>
+                <input
+                  type="checkbox"
+                  checked={gameSettings.enableHousingScarcity}
+                  onChange={(e) => setGameSettings(s => ({ ...s, enableHousingScarcity: e.target.checked }))}
+                  style={{ width: "18px", height: "18px" }}
+                />
+                <span style={{ fontSize: "14px" }}>
+                  🏠 Housing scarcity (32 houses, 12 hotels max)
+                </span>
+              </label>
+              
+              <label style={{ display: "flex", alignItems: "center", gap: "8px", marginBottom: "8px", cursor: "pointer" }}>
+                <input
+                  type="checkbox"
+                  checked={gameSettings.enableInflation}
+                  onChange={(e) => setGameSettings(s => ({ ...s, enableInflation: e.target.checked }))}
+                  style={{ width: "18px", height: "18px" }}
+                />
+                <span style={{ fontSize: "14px" }}>
+                  💹 Inflation (GO salary increases over time)
+                </span>
+              </label>
+              
+              <label style={{ display: "flex", alignItems: "center", gap: "8px", marginBottom: "8px", cursor: "pointer" }}>
+                <input
+                  type="checkbox"
+                  checked={gameSettings.enableProgressiveTax}
+                  onChange={(e) => setGameSettings(s => ({ ...s, enableProgressiveTax: e.target.checked }))}
+                  style={{ width: "18px", height: "18px" }}
+                />
+                <span style={{ fontSize: "14px" }}>
+                  💰 Progressive tax (choose 10% or flat £200)
+                </span>
+              </label>
+              
+              <label style={{ display: "flex", alignItems: "center", gap: "8px", marginBottom: "8px", cursor: "pointer" }}>
+                <input
+                  type="checkbox"
+                  checked={gameSettings.enableBankLoans}
+                  onChange={(e) => setGameSettings(s => ({ ...s, enableBankLoans: e.target.checked }))}
+                  style={{ width: "18px", height: "18px" }}
+                />
+                <span style={{ fontSize: "14px" }}>
+                  🏦 Bank loans ({Math.round(gameSettings.loanInterestRate * 100)}% interest/turn)
+                </span>
+              </label>
+              
+              <label style={{ display: "flex", alignItems: "center", gap: "8px", marginBottom: "8px", cursor: "pointer" }}>
+                <input
+                  type="checkbox"
+                  checked={gameSettings.enableEconomicEvents}
+                  onChange={(e) => setGameSettings(s => ({ ...s, enableEconomicEvents: e.target.checked }))}
+                  style={{ width: "18px", height: "18px" }}
+                />
+                <span style={{ fontSize: "14px" }}>
+                  📊 Economic events (Free Parking triggers market events)
+                </span>
+              </label>
+              
+              <label style={{ display: "flex", alignItems: "center", gap: "8px", marginBottom: "8px", cursor: "pointer" }}>
+                <input
+                  type="checkbox"
+                  checked={gameSettings.enableRentNegotiation}
+                  onChange={(e) => setGameSettings(s => ({ ...s, enableRentNegotiation: e.target.checked }))}
+                  style={{ width: "18px", height: "18px" }}
+                />
+                <span style={{ fontSize: "14px" }}>
+                  🤝 Rent negotiation (IOUs, payment plans, property transfers)
+                </span>
+              </label>
+              
+              <label style={{ display: "flex", alignItems: "center", gap: "8px", marginBottom: "8px", cursor: "pointer" }}>
+                <input
+                  type="checkbox"
+                  checked={gameSettings.enablePropertyInsurance}
+                  onChange={(e) => setGameSettings(s => ({ ...s, enablePropertyInsurance: e.target.checked }))}
+                  style={{ width: "18px", height: "18px" }}
+                />
+                <span style={{ fontSize: "14px" }}>
+                  🛡️ Property insurance (protects against repair cards)
+                </span>
+              </label>
+              
+              <label style={{ display: "flex", alignItems: "center", gap: "8px", marginBottom: "8px", cursor: "pointer" }}>
+                <input
+                  type="checkbox"
+                  checked={gameSettings.enablePropertyValueFluctuation}
+                  onChange={(e) => setGameSettings(s => ({ ...s, enablePropertyValueFluctuation: e.target.checked }))}
+                  style={{ width: "18px", height: "18px" }}
+                />
+                <span style={{ fontSize: "14px" }}>
+                  📈 Property value fluctuation (development affects property values)
+                </span>
+              </label>
+              
+              <label style={{ display: "flex", alignItems: "center", gap: "8px", cursor: "pointer" }}>
+                <input
+                  type="checkbox"
+                  checked={gameSettings.enableBankruptcyRestructuring}
+                  onChange={(e) => setGameSettings(s => ({ ...s, enableBankruptcyRestructuring: e.target.checked }))}
+                  style={{ width: "18px", height: "18px" }}
+                />
+                <span style={{ fontSize: "14px" }}>
+                  📋 Chapter 11 restructuring (avoid instant elimination)
+                </span>
+              </label>
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+    </div>
+  );
 
   // Game mode selection screen
   if (gameMode === "select") {
     return (
       <div
+        ref={selectContainerRef}
         style={{
           display: "flex",
           flexDirection: "column",
           alignItems: "center",
-          justifyContent: "center",
-          minHeight: "100vh",
+          justifyContent: "flex-start",
+          height: "100vh", // Fixed height instead of minHeight to enable scrolling
           backgroundColor: "#1a1a2a",
           padding: "40px",
           gap: "24px",
+          overflowY: "auto", // Enable vertical scrolling
+          overflowX: "hidden", // Prevent horizontal scrolling
+          width: "100%",
+          boxSizing: "border-box", // Include padding in height calculation
         }}
       >
         <motion.div
@@ -160,7 +421,7 @@ const PlayerSetup = () => {
               fontWeight: 700,
             }}
           >
-            Monopoly
+            Ludomercatus
           </h1>
           <p style={{ color: "#666", marginBottom: "32px", fontSize: "16px" }}>
             Choose your game mode
@@ -224,15 +485,20 @@ const PlayerSetup = () => {
   if (gameMode === "single") {
     return (
       <div
+        ref={singlePlayerContainerRef}
         style={{
           display: "flex",
           flexDirection: "column",
           alignItems: "center",
-          justifyContent: "center",
-          minHeight: "100vh",
+          justifyContent: "flex-start",
+          height: "100vh", // Fixed height instead of minHeight to enable scrolling
           backgroundColor: "#1a1a2a",
           padding: "40px",
           gap: "24px",
+          overflowY: "auto", // Enable vertical scrolling
+          overflowX: "hidden", // Prevent horizontal scrolling
+          width: "100%",
+          boxSizing: "border-box", // Include padding in height calculation
         }}
       >
         <motion.div
@@ -461,6 +727,9 @@ const PlayerSetup = () => {
             </AnimatePresence>
           </div>
 
+          {/* Game Settings */}
+          <GameSettingsPanel />
+
           <motion.button
             onClick={startSinglePlayerGame}
             disabled={!playerToken || aiTokens.some((t) => !t)}
@@ -489,15 +758,20 @@ const PlayerSetup = () => {
   if (gameMode === "multiplayer") {
     return (
       <div
+        ref={multiplayerContainerRef}
         style={{
           display: "flex",
           flexDirection: "column",
           alignItems: "center",
-          justifyContent: "center",
-          minHeight: "100vh",
+          justifyContent: "flex-start",
+          height: "100vh", // Fixed height instead of minHeight to enable scrolling
           backgroundColor: "#1a1a2a",
           padding: "40px",
           gap: "24px",
+          overflowY: "auto", // Enable vertical scrolling
+          overflowX: "hidden", // Prevent horizontal scrolling
+          width: "100%",
+          boxSizing: "border-box", // Include padding in height calculation
         }}
       >
         <motion.div
@@ -670,6 +944,9 @@ const PlayerSetup = () => {
               ))}
             </AnimatePresence>
           </div>
+
+          {/* Game Settings */}
+          <GameSettingsPanel />
 
           <motion.button
             onClick={startMultiplayerGame}

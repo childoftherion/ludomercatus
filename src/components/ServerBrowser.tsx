@@ -40,7 +40,7 @@ export const ServerBrowser = () => {
         }}
       >
         <h1 style={{ fontSize: "42px", color: "#2E8B57", marginBottom: "8px", fontWeight: 700 }}>
-          Monopoly
+          Ludomercatus
         </h1>
         <p style={{ color: "#aaa", marginBottom: "32px", fontSize: "16px" }}>
           Choose your game mode

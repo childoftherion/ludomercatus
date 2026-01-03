@@ -87,6 +87,7 @@ export const Dice: React.FC<DiceProps> = ({ onRollComplete, autoRoll = true }) =
         alignItems: "center",
         justifyContent: "center",
         fontSize: "52px",
+        color: "#333",
         boxShadow: rolling 
           ? "0 8px 20px rgba(0,0,0,0.4)" 
           : "0 4px 12px rgba(0,0,0,0.2)",

@@ -41,10 +41,10 @@ export const GameLog = () => {
   const { gameLog, players } = useGameStore();
   const logContainerRef = useRef<HTMLDivElement>(null);
 
-  // Auto-scroll to bottom when new entries are added
+  // Auto-scroll to top when new entries are added (newest at top)
   useEffect(() => {
     if (logContainerRef.current) {
-      logContainerRef.current.scrollTop = logContainerRef.current.scrollHeight;
+      logContainerRef.current.scrollTop = 0;
     }
   }, [gameLog.length]);
 
@@ -57,22 +57,23 @@ export const GameLog = () => {
     <div
       style={{
         background: "rgba(30, 30, 30, 0.95)",
-        borderRadius: "12px",
-        padding: "16px",
-        height: "300px",
+        borderRadius: "10px",
+        padding: "12px",
+        height: "100%", // Use full height of parent container
         display: "flex",
         flexDirection: "column",
         boxShadow: "0 4px 20px rgba(0,0,0,0.3)",
+        overflow: "hidden", // Prevent scrollbars
       }}
     >
       <h3
         style={{
-          margin: "0 0 12px 0",
+          margin: "0 0 8px 0",
           color: "#fff",
-          fontSize: "14px",
+          fontSize: "12px",
           fontWeight: 600,
           borderBottom: "1px solid rgba(255,255,255,0.1)",
-          paddingBottom: "8px",
+          paddingBottom: "6px",
         }}
       >
         Game Log
@@ -82,9 +83,11 @@ export const GameLog = () => {
         style={{
           flex: 1,
           overflowY: "auto",
+          overflowX: "hidden", // Prevent horizontal scrollbars
           display: "flex",
           flexDirection: "column",
-          gap: "6px",
+          gap: "4px",
+          minHeight: 0, // Allow flex shrinking
         }}
       >
         <AnimatePresence>
@@ -100,32 +103,32 @@ export const GameLog = () => {
               Game events will appear here...
             </div>
           ) : (
-            gameLog.map((entry) => {
+            [...gameLog].reverse().map((entry) => {
               const player = entry.playerIndex !== undefined ? players[entry.playerIndex] : undefined;
               return (
                 <motion.div
                   key={entry.id}
-                  initial={{ opacity: 0, x: -20 }}
+                  initial={{ opacity: 0, x: 20 }}
                   animate={{ opacity: 1, x: 0 }}
-                  exit={{ opacity: 0 }}
+                  exit={{ opacity: 0, x: -20 }}
                   transition={{ duration: 0.2 }}
                   style={{
                     display: "flex",
                     alignItems: "flex-start",
-                    gap: "8px",
-                    padding: "6px 8px",
-                    borderRadius: "6px",
+                    gap: "6px",
+                    padding: "4px 6px",
+                    borderRadius: "4px",
                     background: "rgba(255,255,255,0.05)",
-                    borderLeft: `3px solid ${getLogColor(entry.type)}`,
+                    borderLeft: `2px solid ${getLogColor(entry.type)}`,
                   }}
                 >
-                  <span style={{ fontSize: "14px" }}>{getLogIcon(entry.type)}</span>
+                  <span style={{ fontSize: "12px" }}>{getLogIcon(entry.type)}</span>
                   <div style={{ flex: 1, minWidth: 0 }}>
                     <div
                       style={{
                         color: "#fff",
-                        fontSize: "12px",
-                        lineHeight: 1.4,
+                        fontSize: "11px",
+                        lineHeight: 1.3,
                         wordBreak: "break-word",
                       }}
                     >
@@ -135,15 +138,15 @@ export const GameLog = () => {
                       style={{
                         display: "flex",
                         alignItems: "center",
-                        gap: "8px",
-                        marginTop: "2px",
+                        gap: "4px",
+                        marginTop: "1px",
                       }}
                     >
                       {player && (
                         <span
                           style={{
-                            width: "8px",
-                            height: "8px",
+                            width: "6px",
+                            height: "6px",
                             borderRadius: "50%",
                             background: player.color,
                           }}
@@ -152,7 +155,7 @@ export const GameLog = () => {
                       <span
                         style={{
                           color: "rgba(255,255,255,0.4)",
-                          fontSize: "10px",
+                          fontSize: "9px",
                         }}
                       >
                         {formatTime(entry.timestamp)}

@@ -1,5 +1,6 @@
 import { create } from "zustand";
-import type { GameState, Property, ColorGroup, GameLogEntry, TradeOffer } from "../types/game";
+import type { GameState, Property, ColorGroup, GameLogEntry, TradeOffer, GameSettings } from "../types/game";
+import { DEFAULT_GAME_SETTINGS } from "../types/game";
 import { boardSpaces } from "../data/board";
 import { getPlayerProperties, hasMonopoly } from "../logic/rules/monopoly";
 
@@ -43,8 +44,35 @@ type GameStore = GameState & {
   acceptTrade: () => void;
   rejectTrade: () => void;
   cancelTrade: () => void;
+  counterOffer: (counterOffer: TradeOffer) => void;
+  acceptCounterOffer: () => void;
   executeAITurn: () => void;
   executeAITradeResponse: () => void;
+  chooseTaxOption: (playerIndex: number, choice: "flat" | "percentage") => void;
+  updateSettings: (settings: Partial<GameSettings>) => void;
+  
+  // Bank Loans (Phase 2)
+  takeLoan: (playerIndex: number, amount: number) => void;
+  repayLoan: (playerIndex: number, loanId: number, amount: number) => void;
+  getMaxLoanAmount: (playerIndex: number) => number;
+  
+  // Phase 3: Rent Negotiation
+  forgiveRent: () => void;
+  createRentIOU: (partialPayment: number) => void;
+  payIOU: (debtorIndex: number, iouId: number, amount?: number) => void;
+  demandImmediatePaymentOrProperty: (propertyIdToTransfer?: number) => void;
+  
+  // Phase 3: Property Value Fluctuation
+  appreciateColorGroup: (colorGroup: ColorGroup, multiplier?: number) => void;
+  depreciateColorGroup: (colorGroup: ColorGroup, rate?: number) => void;
+  
+  // Phase 3: Property Insurance
+  buyPropertyInsurance: (propertyId: number, playerIndex: number) => void;
+  getInsuranceCost: (propertyId: number) => number;
+  
+  // Phase 3: Bankruptcy Restructuring
+  enterChapter11: () => void;
+  declineRestructuring: () => void;
   
   // Room actions
   createRoom: (mode?: "single" | "multi") => void;
@@ -86,6 +114,17 @@ export const useGameStore = create<GameStore>((set, get) => ({
   connected: false,
   inRoom: false,
   rooms: [],
+  // Game settings
+  settings: DEFAULT_GAME_SETTINGS,
+  // Phase 1: Economic Realism
+  roundsCompleted: 0,
+  currentGoSalary: 200,
+  awaitingTaxDecision: undefined,
+  // Phase 2: Housing Scarcity
+  availableHouses: 32,
+  availableHotels: 12,
+  // Phase 2: Economic Events
+  activeEconomicEvents: [],
 
   connect: () => {
     if (socket && (socket.readyState === WebSocket.OPEN || socket.readyState === WebSocket.CONNECTING)) return;
@@ -158,11 +197,95 @@ export const useGameStore = create<GameStore>((set, get) => ({
     "checkBankruptcy", "declareBankruptcy", "checkWinCondition", 
     "startAuction", "placeBid", "passAuction", "endAuction", 
     "startTrade", "updateTradeOffer", "proposeTrade", "acceptTrade", 
-    "rejectTrade", "cancelTrade", "executeAITurn", "executeAITradeResponse"
+    "rejectTrade", "cancelTrade", "counterOffer", "acceptCounterOffer",
+    "executeAITurn", "executeAITradeResponse",
+    "chooseTaxOption", "updateSettings", "takeLoan", "repayLoan", "getMaxLoanAmount",
+    "forgiveRent", "createRentIOU", "payIOU", "demandImmediatePaymentOrProperty",
+    "buyPropertyInsurance", "getInsuranceCost",
+    "enterChapter11", "declineRestructuring",
+    "appreciateColorGroup", "depreciateColorGroup"
   ].reduce((acc, action) => {
     acc[action] = (...args: any[]) => {
       if (socket && socket.readyState === WebSocket.OPEN) {
-        socket.send(JSON.stringify({ type: "ACTION", action, payload: args }));
+        try {
+          // Safe serialization: handle cyclic references and non-serializable values
+          const seen = new WeakSet();
+          const replacer = (key: string, val: any): any => {
+            // Skip functions, undefined, and symbols
+            if (typeof val === "function" || val === undefined || typeof val === "symbol") {
+              return null;
+            }
+            // Handle cyclic references
+            if (typeof val === "object" && val !== null) {
+              if (seen.has(val)) {
+                return "[Circular]";
+              }
+              seen.add(val);
+            }
+            return val;
+          };
+          
+          // Clean each argument
+          const cleanedPayload = args.map((arg, idx) => {
+            if (typeof arg === "object" && arg !== null) {
+              try {
+                // Use the replacer to clean the object
+                const cleaned = JSON.parse(JSON.stringify(arg, replacer));
+                return cleaned;
+              } catch (e) {
+                console.warn(`Failed to clean arg for action ${action}:`, e);
+                // Return a safe fallback
+                try {
+                  // Try a simpler approach: just stringify with basic replacer
+                  return JSON.parse(JSON.stringify(arg, (k, v) => {
+                    if (typeof v === "function" || v === undefined || typeof v === "symbol") return null;
+                    return v;
+                  }));
+                } catch (e2) {
+                  console.error(`Failed to serialize arg for action ${action}, using null:`, e2);
+                  return null;
+                }
+              }
+            }
+            return arg;
+          });
+          
+          // Now stringify the entire payload with the same replacer approach
+          const seen2 = new WeakSet();
+          const finalReplacer = (key: string, val: any): any => {
+            if (typeof val === "function" || val === undefined || typeof val === "symbol") {
+              return null;
+            }
+            if (typeof val === "object" && val !== null) {
+              if (seen2.has(val)) {
+                return "[Circular]";
+              }
+              seen2.add(val);
+            }
+            return val;
+          };
+          
+          const message = JSON.stringify({ type: "ACTION", action, payload: cleanedPayload }, finalReplacer);
+          socket.send(message);
+        } catch (e) {
+          console.error(`Failed to send action ${action}:`, e);
+          // Last resort: try to send with minimal payload
+          try {
+            const minimalPayload = args.map(arg => {
+              if (typeof arg === "object" && arg !== null) {
+                try {
+                  return JSON.parse(JSON.stringify(arg));
+                } catch {
+                  return null;
+                }
+              }
+              return arg;
+            });
+            socket.send(JSON.stringify({ type: "ACTION", action, payload: minimalPayload }));
+          } catch (e2) {
+            console.error(`Completely failed to send action ${action}:`, e2);
+          }
+        }
       } else {
         console.warn("Socket not connected, action ignored:", action);
       }

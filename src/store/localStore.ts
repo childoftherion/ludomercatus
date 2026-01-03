@@ -12,10 +12,22 @@ export const useLocalStore = create<LocalState>()(
     (set) => ({
       myPlayerIndex: null,
       clientId: typeof crypto !== "undefined" && crypto.randomUUID ? crypto.randomUUID() : Math.random().toString(36).slice(2),
-      setMyPlayerIndex: (index) => set({ myPlayerIndex: index }),
+      setMyPlayerIndex: (index) => {
+        console.log("[LocalStore] Setting myPlayerIndex:", index, {
+          previousValue: useLocalStore.getState().myPlayerIndex,
+          stackTrace: new Error().stack,
+        });
+        set({ myPlayerIndex: index });
+      },
     }),
     {
-      name: "monopoly-client-storage",
+      name: "ludomercatus-client-storage",
+      onRehydrateStorage: () => (state) => {
+        console.log("[LocalStore] Rehydrated from storage:", {
+          myPlayerIndex: state?.myPlayerIndex,
+          clientId: state?.clientId,
+        });
+      },
     }
   )
 );

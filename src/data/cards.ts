@@ -42,10 +42,11 @@ export const createChanceDeck = (): Card[] => {
     {
       id: 4,
       type: "chance",
-      text: "Advance token to nearest Utility",
+      text: "Advance token to nearest Utility. If unowned, you may buy it from the Bank. If owned, pay owner 10x the dice roll.",
       getEffect: (state, playerIndex) => {
         const pos = state.players[playerIndex]?.position ?? 0;
         let newPos: number;
+        // Electric Company is at 12, Water Works is at 28
         if (pos >= 1 && pos <= 11) newPos = 12;
         else if (pos >= 13 && pos <= 28) newPos = 28;
         else newPos = 12;
@@ -53,6 +54,7 @@ export const createChanceDeck = (): Card[] => {
           positionChange: newPos,
           passGoBonus: newPos < pos,
           triggerSpaceResolution: true,
+          utilityMultiplier: 10, // Per official rules: 10x dice roll when sent by card
         };
       },
     },

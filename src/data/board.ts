@@ -24,6 +24,11 @@ const createProperty = (
   houses: 0,
   hotel: false,
   mortgaged: false,
+  // Phase 3: Property Insurance
+  isInsured: false,
+  insurancePaidUntilRound: 0,
+  // Phase 3: Property Value Fluctuation
+  valueMultiplier: 1.0,
 });
 
 const createRailroad = (
@@ -44,6 +49,11 @@ const createRailroad = (
   houses: 0,
   hotel: false,
   mortgaged: false,
+  // Phase 3: Property Insurance
+  isInsured: false,
+  insurancePaidUntilRound: 0,
+  // Phase 3: Property Value Fluctuation
+  valueMultiplier: 1.0,
 });
 
 const createUtility = (
@@ -64,6 +74,11 @@ const createUtility = (
   houses: 0,
   hotel: false,
   mortgaged: false,
+  // Phase 3: Property Insurance
+  isInsured: false,
+  insurancePaidUntilRound: 0,
+  // Phase 3: Property Value Fluctuation
+  valueMultiplier: 1.0,
 });
 
 const createSpace = (

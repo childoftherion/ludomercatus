@@ -1,8 +1,8 @@
-# Monopoly Game - Agent Guidelines
+# Ludomercatus Game - Agent Guidelines
 
 ## Project Overview
 
-A browser-based Monopoly game built with React, TypeScript, Zustand for state management, and Framer Motion for animations. Uses Bun as the runtime and bundler.
+A browser-based Ludomercatus game built with React, TypeScript, Zustand for state management, and Framer Motion for animations. Uses Bun as the runtime and bundler.
 
 ## Build & Run Commands
 
@@ -75,12 +75,12 @@ index.html             # HTML entry with React mount point
 
 ```typescript
 // Use type imports for type-only imports
-import type { GameState, Player, Property } from "../types/game";
+import type { GameState, Player, Property } from "../types/game"
 
 // Regular imports for values
-import { create } from "zustand";
-import { motion, AnimatePresence } from "framer-motion";
-import { useGameStore } from "../store/gameStore";
+import { create } from "zustand"
+import { motion, AnimatePresence } from "framer-motion"
+import { useGameStore } from "../store/gameStore"
 ```
 
 ### Naming Conventions
@@ -144,21 +144,21 @@ export const useGameStore = create<GameStore>((set, get) => ({
 
 ```typescript
 // Union types for enums
-export type SpaceType = "go" | "property" | "railroad" | "utility" | "tax";
-export type GamePhase = "setup" | "rolling" | "moving" | "game_over";
+export type SpaceType = "go" | "property" | "railroad" | "utility" | "tax"
+export type GamePhase = "setup" | "rolling" | "moving" | "game_over"
 
 // Interfaces for object shapes
 export interface Player {
-  id: number;
-  name: string;
-  cash: number;
+  id: number
+  name: string
+  cash: number
   // ...
 }
 
 // Type guards for narrowing
 const isProperty = (space: Space): space is Property => {
-  return space.type === "property" || space.type === "railroad";
-};
+  return space.type === "property" || space.type === "railroad"
+}
 ```
 
 ### Error Handling
@@ -168,11 +168,11 @@ const isProperty = (space: Space): space is Property => {
 - Handle undefined from array access due to `noUncheckedIndexedAccess`
 
 ```typescript
-const player = state.players[playerIndex];
-if (!player || player.bankrupt) return;  // Guard against undefined
+const player = state.players[playerIndex]
+if (!player || player.bankrupt) return // Guard against undefined
 
 // After guard, safe to use
-player.cash += 200;
+player.cash += 200
 ```
 
 ### Animation Patterns (Framer Motion)
@@ -209,7 +209,12 @@ player.cash += 200;
 
 ```typescript
 // Factory functions for creating objects
-const createPlayer = (id: number, name: string, token: string, color: string): Player => ({
+const createPlayer = (
+  id: number,
+  name: string,
+  token: string,
+  color: string
+): Player => ({
   id,
   name,
   token,
@@ -219,7 +224,7 @@ const createPlayer = (id: number, name: string, token: string, color: string): P
   properties: [],
   inJail: false,
   // ...
-});
+})
 ```
 
 ### Array Immutability
@@ -230,5 +235,5 @@ set({
   players: state.players.map((p, i) =>
     i === playerIndex ? { ...p, cash: p.cash + 200 } : p
   ),
-});
+})
 ```
