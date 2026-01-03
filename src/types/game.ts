@@ -69,6 +69,8 @@ export interface IOU {
   reason: string; // e.g., "Rent for Boardwalk"
 }
 
+export type AIDifficulty = "easy" | "medium" | "hard";
+
 export interface Player {
   id: number;
   name: string;
@@ -82,6 +84,7 @@ export interface Player {
   bankrupt: boolean;
   color: string;
   isAI: boolean;
+  aiDifficulty?: AIDifficulty; // Difficulty level for AI players
   clientId?: string; // Unique ID for multiplayer identity
   lastTradeTurn?: number; // Turn number when they last proposed a trade
   tradeHistory?: Record<string, { attempts: number; lastOffer: number }>; // Key: "playerId-propertyId"

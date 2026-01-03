@@ -1,4 +1,4 @@
-import type { GameState, Property, TradeOffer, ColorGroup } from "../../types/game";
+import type { GameState, Property, TradeOffer, ColorGroup, AIDifficulty } from "../../types/game";
 import { hasMonopoly } from "../rules/monopoly";
 import { calculateNetWorth } from "../rules/economics";
 
@@ -42,6 +42,40 @@ export interface GameActions {
 
 const isProperty = (space: any): space is Property => {
   return space.type === "property" || space.type === "railroad" || space.type === "utility";
+};
+
+// Difficulty-based modifiers for AI decision-making
+const getDifficultyModifiers = (difficulty: AIDifficulty = "medium") => {
+  switch (difficulty) {
+    case "easy":
+      return {
+        cashReserveMultiplier: 0.25, // Keep more cash (25% of net worth)
+        roiThreshold: 0.15, // Higher ROI threshold (more conservative)
+        auctionAggressiveness: 0.7, // Less aggressive in auctions (70% of max)
+        buildingThreshold: 0.4, // Build only if cash > 40% of net worth
+        loanThreshold: 0.2, // Only take loans if debt < 20% of net worth
+        tradeAcceptanceThreshold: 1.2, // Only accept trades if 20% better value
+      };
+    case "hard":
+      return {
+        cashReserveMultiplier: 0.08, // Keep less cash (8% of net worth)
+        roiThreshold: 0.08, // Lower ROI threshold (more aggressive)
+        auctionAggressiveness: 1.1, // More aggressive in auctions (110% of max)
+        buildingThreshold: 0.15, // Build if cash > 15% of net worth
+        loanThreshold: 0.5, // Take loans up to 50% of net worth
+        tradeAcceptanceThreshold: 0.95, // Accept trades if 5% better value
+      };
+    case "medium":
+    default:
+      return {
+        cashReserveMultiplier: 0.15, // Keep 15% of net worth
+        roiThreshold: 0.1, // Standard ROI threshold
+        auctionAggressiveness: 1.0, // Standard auction aggressiveness
+        buildingThreshold: 0.25, // Build if cash > 25% of net worth
+        loanThreshold: 0.3, // Take loans up to 30% of net worth
+        tradeAcceptanceThreshold: 1.05, // Accept trades if 5% better value
+      };
+  }
 };
 
 // Helper: Calculate ROI for a property
@@ -108,9 +142,13 @@ export const executeAITurn = (state: GameState, actions: GameActions) => {
 
   const currentSpace = state.spaces[player.position];
   
+  // Get difficulty-based modifiers
+  const difficulty = player.aiDifficulty || "medium";
+  const modifiers = getDifficultyModifiers(difficulty);
+  
   // Calculate AI's net worth for economic decisions
   const netWorth = calculateNetWorth(state, playerIndex);
-  const cashReserve = Math.max(200, netWorth * 0.15); // Keep 15% of net worth or £200 as reserve
+  const cashReserve = Math.max(200, netWorth * modifiers.cashReserveMultiplier);
 
   // --- Phase 3: Handle Bankruptcy Decision ---
   if (state.phase === "awaiting_bankruptcy_decision") {
@@ -215,7 +253,7 @@ export const executeAITurn = (state: GameState, actions: GameActions) => {
   // --- Phase 2: Smart Loan Management ---
   if (state.settings?.enableBankLoans && actions.takeLoan && actions.getMaxLoanAmount) {
     // Consider taking a loan if we're low on cash but have a good opportunity
-    if (player.cash < 200 && player.totalDebt < netWorth * 0.3) {
+    if (player.cash < 200 && player.totalDebt < netWorth * modifiers.loanThreshold) {
       // Calculate desired loan amount
       const desiredLoan = Math.min(200, Math.floor(netWorth * 0.2));
       // Check maximum available loan amount to prevent infinite loops
@@ -503,10 +541,10 @@ export const executeAITurn = (state: GameState, actions: GameActions) => {
         else if (wouldBlockOpponent(state, playerIndex, property)) {
           shouldBuy = true;
         }
-        // Buy if ROI is good enough
+        // Buy if ROI is good enough (based on difficulty)
         else {
           const roi = calculatePropertyROI(state, property, playerIndex);
-          shouldBuy = roi > 0.08; // 8% return threshold
+          shouldBuy = roi >= modifiers.roiThreshold;
         }
       } else if (player.cash >= property.price) {
         // Low on cash but still can afford - only buy if completing/blocking monopoly
@@ -565,7 +603,7 @@ export const executeAITurn = (state: GameState, actions: GameActions) => {
         
         const maxBid = Math.min(
           player.cash - cashReserve,
-          prop ? prop.price * maxBidMultiplier : player.cash
+          prop ? prop.price * maxBidMultiplier * modifiers.auctionAggressiveness : player.cash
         );
         
         // Calculate minimum bid increment (10% or £10)

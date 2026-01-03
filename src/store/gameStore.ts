@@ -14,7 +14,7 @@ type GameStore = GameState & {
   connect: () => void;
 
   // Actions (send to server)
-  initGame: (playerNames: string[], tokens: string[], isAIFlags?: boolean[]) => void;
+  initGame: (playerNames: string[], tokens: string[], isAIFlags?: boolean[], aiDifficulties?: AIDifficulty[]) => void;
   rollDice: () => void;
   movePlayer: (playerIndex: number, steps: number) => void;
   buyProperty: (propertyId: number) => void;

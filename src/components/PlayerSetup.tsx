@@ -2,7 +2,7 @@ import React from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { useGameStore } from "../store/gameStore";
 import { useLocalStore } from "../store/localStore";
-import type { GameSettings } from "../types/game";
+import type { GameSettings, AIDifficulty } from "../types/game";
 import { DEFAULT_GAME_SETTINGS } from "../types/game";
 
 const TOKENS = ["🚗", "🚙", "🚕", "🏎", "🚁", "✈️", "⛵", "🎭"];
@@ -67,6 +67,7 @@ const PlayerSetup = () => {
   const [playerToken, setPlayerToken] = React.useState("");
   const [aiCount, setAiCount] = React.useState(1);
   const [aiTokens, setAiTokens] = React.useState<string[]>([""]);
+  const [aiDifficulties, setAiDifficulties] = React.useState<AIDifficulty[]>(["medium"]);
 
   // Multiplayer state
   const [humanCount, setHumanCount] = React.useState(2);
@@ -76,12 +77,14 @@ const PlayerSetup = () => {
   // AI state for multiplayer
   const [mpAiCount, setMpAiCount] = React.useState(0);
   const [mpAiTokens, setMpAiTokens] = React.useState<string[]>([]);
+  const [mpAiDifficulties, setMpAiDifficulties] = React.useState<AIDifficulty[]>([]);
 
   // Single Player Handlers
   const handleAiCountChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
     const count = parseInt(e.target.value);
     setAiCount(count);
     setAiTokens(Array.from({ length: count }, () => ""));
+    setAiDifficulties(Array.from({ length: count }, () => "medium"));
   };
 
   const handleAiTokenSelect = (index: number, token: string) => {
@@ -112,6 +115,7 @@ const PlayerSetup = () => {
     const count = parseInt(e.target.value);
     setMpAiCount(count);
     setMpAiTokens(Array.from({ length: count }, () => ""));
+    setMpAiDifficulties(Array.from({ length: count }, () => "medium"));
   };
 
   const handleHumanNameChange = (index: number, name: string) => {
@@ -134,6 +138,22 @@ const PlayerSetup = () => {
     setMpAiTokens(prev => {
       const next = [...prev];
       next[index] = token;
+      return next;
+    });
+  };
+
+  const handleAiDifficultyChange = (index: number, difficulty: AIDifficulty) => {
+    setAiDifficulties(prev => {
+      const next = [...prev];
+      next[index] = difficulty;
+      return next;
+    });
+  };
+
+  const handleMpAiDifficultyChange = (index: number, difficulty: AIDifficulty) => {
+    setMpAiDifficulties(prev => {
+      const next = [...prev];
+      next[index] = difficulty;
       return next;
     });
   };
@@ -161,10 +181,11 @@ const PlayerSetup = () => {
     const names = [playerName || "You", ...aiTokens.map((_, i) => AI_NAMES[i] ?? `Bot ${i + 1}`)];
     const tokens = [playerToken, ...aiTokens];
     const isAIFlags = [false, ...aiTokens.map(() => true)];
+    const difficulties: AIDifficulty[] = [undefined as any, ...aiDifficulties]; // undefined for human player
 
     // Apply game settings first
     useGameStore.getState().updateSettings(gameSettings);
-    useGameStore.getState().initGame(names, tokens, isAIFlags);
+    useGameStore.getState().initGame(names, tokens, isAIFlags, difficulties);
     
     // Set the human player as player 0 in single-player mode
     useLocalStore.getState().setMyPlayerIndex(0);
@@ -182,10 +203,11 @@ const PlayerSetup = () => {
     const names = [...humanNames, ...mpAiTokens.map((_, i) => AI_NAMES[i] ?? `Bot ${i + 1}`)];
     const tokens = [...humanTokens, ...mpAiTokens];
     const isAIFlags = [...humanTokens.map(() => false), ...mpAiTokens.map(() => true)];
+    const difficulties: AIDifficulty[] = [...humanTokens.map(() => undefined as any), ...mpAiDifficulties]; // undefined for human players
 
     // Apply game settings first
     useGameStore.getState().updateSettings(gameSettings);
-    useGameStore.getState().initGame(names, tokens, isAIFlags);
+    useGameStore.getState().initGame(names, tokens, isAIFlags, difficulties);
   };
 
   // Game Settings Panel Component
@@ -685,41 +707,63 @@ const PlayerSetup = () => {
                     border: "1px solid #ddd",
                   }}
                 >
-                  <div
-                    style={{
-                      display: "flex",
-                      alignItems: "center",
-                      gap: "12px",
-                    }}
-                  >
-                    <span style={{ fontWeight: "bold", fontSize: "14px", minWidth: "80px" }}>
-                      {AI_NAMES[index] ?? `Bot ${index + 1}`}:
-                    </span>
-                    <div style={{ display: "flex", gap: "6px", flexWrap: "wrap" }}>
-                      {TOKENS.map((token) => {
-                        const isUsedByPlayer = playerToken === token;
-                        const isUsedByOtherAI = aiTokens.some((t, i) => t === token && i !== index);
-                        const isDisabled = isUsedByPlayer || isUsedByOtherAI;
-                        return (
-                          <motion.button
-                            key={token}
-                            onClick={() => !isDisabled && handleAiTokenSelect(index, token)}
-                            whileHover={{ scale: isDisabled ? 1 : 1.1 }}
-                            whileTap={{ scale: isDisabled ? 1 : 0.95 }}
-                            style={{
-                              fontSize: "20px",
-                              padding: "6px",
-                              borderRadius: "6px",
-                              border: aiTokens[index] === token ? "2px solid #FF9800" : "1px solid #ddd",
-                              backgroundColor: aiTokens[index] === token ? "#ffe0b2" : isDisabled ? "#f5f5f5" : "#fff",
-                              cursor: isDisabled ? "not-allowed" : "pointer",
-                              opacity: isDisabled ? 0.3 : 1,
-                            }}
-                          >
-                            {token}
-                          </motion.button>
-                        );
-                      })}
+                  <div style={{ display: "flex", flexDirection: "column", gap: "8px" }}>
+                    <div
+                      style={{
+                        display: "flex",
+                        alignItems: "center",
+                        gap: "12px",
+                      }}
+                    >
+                      <span style={{ fontWeight: "bold", fontSize: "14px", minWidth: "80px" }}>
+                        {AI_NAMES[index] ?? `Bot ${index + 1}`}:
+                      </span>
+                      <div style={{ display: "flex", gap: "6px", flexWrap: "wrap" }}>
+                        {TOKENS.map((token) => {
+                          const isUsedByPlayer = playerToken === token;
+                          const isUsedByOtherAI = aiTokens.some((t, i) => t === token && i !== index);
+                          const isDisabled = isUsedByPlayer || isUsedByOtherAI;
+                          return (
+                            <motion.button
+                              key={token}
+                              onClick={() => !isDisabled && handleAiTokenSelect(index, token)}
+                              whileHover={{ scale: isDisabled ? 1 : 1.1 }}
+                              whileTap={{ scale: isDisabled ? 1 : 0.95 }}
+                              style={{
+                                fontSize: "20px",
+                                padding: "6px",
+                                borderRadius: "6px",
+                                border: aiTokens[index] === token ? "2px solid #FF9800" : "1px solid #ddd",
+                                backgroundColor: aiTokens[index] === token ? "#ffe0b2" : isDisabled ? "#f5f5f5" : "#fff",
+                                cursor: isDisabled ? "not-allowed" : "pointer",
+                                opacity: isDisabled ? 0.3 : 1,
+                              }}
+                            >
+                              {token}
+                            </motion.button>
+                          );
+                        })}
+                      </div>
+                    </div>
+                    <div style={{ display: "flex", alignItems: "center", gap: "8px", marginLeft: "92px" }}>
+                      <label style={{ fontSize: "12px", fontWeight: "bold", color: "#666" }}>
+                        Difficulty:
+                      </label>
+                      <select
+                        value={aiDifficulties[index] || "medium"}
+                        onChange={(e) => handleAiDifficultyChange(index, e.target.value as AIDifficulty)}
+                        style={{
+                          padding: "4px 8px",
+                          fontSize: "12px",
+                          borderRadius: "4px",
+                          border: "1px solid #ddd",
+                          backgroundColor: "#fff",
+                        }}
+                      >
+                        <option value="easy">Easy</option>
+                        <option value="medium">Medium</option>
+                        <option value="hard">Hard</option>
+                      </select>
                     </div>
                   </div>
                 </motion.div>
@@ -917,27 +961,49 @@ const PlayerSetup = () => {
                   exit={{ opacity: 0, height: 0 }}
                   style={{ marginBottom: "12px", padding: "12px", backgroundColor: "#fff", borderRadius: "8px", border: "1px solid #ddd" }}
                 >
-                  <div style={{ display: "flex", alignItems: "center", gap: "12px" }}>
-                    <span style={{ fontWeight: "bold", fontSize: "14px", minWidth: "80px" }}>
-                      {AI_NAMES[index] ?? `Bot ${index + 1}`}:
-                    </span>
-                    <div style={{ display: "flex", gap: "6px", flexWrap: "wrap" }}>
-                      {getMultiplayerAvailableTokens("ai", index).map(token => (
-                        <button
-                          key={token}
-                          onClick={() => handleMpAiTokenSelect(index, token)}
-                          style={{
-                            fontSize: "20px",
-                            padding: "6px",
-                            borderRadius: "6px",
-                            border: mpAiTokens[index] === token ? "2px solid #FF9800" : "1px solid #ddd",
-                            backgroundColor: mpAiTokens[index] === token ? "#ffe0b2" : "#fff",
-                            cursor: "pointer",
-                          }}
-                        >
-                          {token}
-                        </button>
-                      ))}
+                  <div style={{ display: "flex", flexDirection: "column", gap: "8px" }}>
+                    <div style={{ display: "flex", alignItems: "center", gap: "12px" }}>
+                      <span style={{ fontWeight: "bold", fontSize: "14px", minWidth: "80px" }}>
+                        {AI_NAMES[index] ?? `Bot ${index + 1}`}:
+                      </span>
+                      <div style={{ display: "flex", gap: "6px", flexWrap: "wrap" }}>
+                        {getMultiplayerAvailableTokens("ai", index).map(token => (
+                          <button
+                            key={token}
+                            onClick={() => handleMpAiTokenSelect(index, token)}
+                            style={{
+                              fontSize: "20px",
+                              padding: "6px",
+                              borderRadius: "6px",
+                              border: mpAiTokens[index] === token ? "2px solid #FF9800" : "1px solid #ddd",
+                              backgroundColor: mpAiTokens[index] === token ? "#ffe0b2" : "#fff",
+                              cursor: "pointer",
+                            }}
+                          >
+                            {token}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                    <div style={{ display: "flex", alignItems: "center", gap: "8px", marginLeft: "92px" }}>
+                      <label style={{ fontSize: "12px", fontWeight: "bold", color: "#666" }}>
+                        Difficulty:
+                      </label>
+                      <select
+                        value={mpAiDifficulties[index] || "medium"}
+                        onChange={(e) => handleMpAiDifficultyChange(index, e.target.value as AIDifficulty)}
+                        style={{
+                          padding: "4px 8px",
+                          fontSize: "12px",
+                          borderRadius: "4px",
+                          border: "1px solid #ddd",
+                          backgroundColor: "#fff",
+                        }}
+                      >
+                        <option value="easy">Easy</option>
+                        <option value="medium">Medium</option>
+                        <option value="hard">Hard</option>
+                      </select>
                     </div>
                   </div>
                 </motion.div>

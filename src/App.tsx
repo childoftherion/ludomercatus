@@ -16,6 +16,7 @@ import { GameLog } from "./components/GameLog";
 import { PlayerPropertiesPanel } from "./components/PlayerProperties";
 import { PlayerSelectionModal } from "./components/PlayerSelectionModal";
 import { CardDisplay } from "./components/CardDisplay";
+import { PropertyDetailsModal } from "./components/PropertyDetailsModal";
 import { DraggableModal } from "./components/DraggableModal";
 import { UserPanel } from "./components/UserPanel";
 import { useLocalStore } from "./store/localStore";
@@ -279,6 +280,7 @@ export default function App() {
   const lastPlayerIndexRef = React.useRef<number | undefined>(undefined);
   const [isNewTurn, setIsNewTurn] = React.useState(false);
   const [isMuted, setIsMuted] = React.useState(false);
+  const [selectedProperty, setSelectedProperty] = React.useState<Property | null>(null);
 
   // Auto-hide card after 8 seconds
   React.useEffect(() => {
@@ -832,6 +834,32 @@ export default function App() {
                   // Mark this card as shown so it doesn't reappear
                   setLastShownCardId(lastCardDrawn.id);
                 }}
+              />
+            </div>
+          )}
+
+          {/* Property Details Modal in Center of Screen */}
+          {selectedProperty && (
+            <div
+              id="screen-center-property-container"
+              style={{
+                position: "fixed",
+                top: "50%",
+                left: "50%",
+                transform: "translate(-50%, -50%)",
+                width: "100vw",
+                height: "100vh",
+                pointerEvents: "none",
+                zIndex: 10000,
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+              }}
+            >
+              <PropertyDetailsModal
+                property={selectedProperty}
+                ownerName={selectedProperty.owner !== undefined ? players[selectedProperty.owner]?.name : undefined}
+                onClose={() => setSelectedProperty(null)}
               />
             </div>
           )}

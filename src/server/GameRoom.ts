@@ -1,4 +1,4 @@
-import type { GameState, Player, Property, Space, Card, DiceRoll, TradeOffer, GameLogEntry, ColorGroup, GameSettings, ActiveEconomicEvent, EconomicEventType, IOU } from "../types/game";
+import type { GameState, Player, Property, Space, Card, DiceRoll, TradeOffer, GameLogEntry, ColorGroup, GameSettings, ActiveEconomicEvent, EconomicEventType, IOU, AIDifficulty } from "../types/game";
 import { DEFAULT_GAME_SETTINGS } from "../types/game";
 import { boardSpaces } from "../data/board";
 import { createChanceDeck, createCommunityChestDeck } from "../data/cards";
@@ -30,7 +30,8 @@ const createPlayer = (
   name: string,
   token: string,
   color: string,
-  isAI: boolean = false
+  isAI: boolean = false,
+  aiDifficulty?: AIDifficulty
 ): Player => ({
   id,
   name,
@@ -44,6 +45,7 @@ const createPlayer = (
   jailFreeCards: 0,
   bankrupt: false,
   isAI,
+  aiDifficulty: isAI ? (aiDifficulty ?? "medium") : undefined,
   lastTradeTurn: -10,
   // Bank Loans (Phase 2)
   bankLoans: [],
@@ -155,14 +157,15 @@ export class GameRoom implements GameActions {
 
   // --- GameActions Implementation ---
 
-  public initGame(playerNames: string[], tokens: string[], isAIFlags: boolean[] = []) {
+  public initGame(playerNames: string[], tokens: string[], isAIFlags: boolean[] = [], aiDifficulties: AIDifficulty[] = []) {
     const players = playerNames.map((name, index) =>
       createPlayer(
         index, 
         name, 
         tokens[index] ?? name, 
         PLAYER_COLORS[index] ?? "#999999",
-        isAIFlags[index] ?? false
+        isAIFlags[index] ?? false,
+        aiDifficulties[index]
       )
     );
 

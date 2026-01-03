@@ -126,20 +126,25 @@ const getSpaceIcon = (space: { type: string; name: string }) => {
   return null;
 };
 
-const Space = ({ space, spaceSize }: { space: { id: number; name: string; type: string; colorGroup?: string | null }; spaceSize: number }) => {
+const Space = ({ space, spaceSize, onPropertyClick }: { space: { id: number; name: string; type: string; colorGroup?: string | null }; spaceSize: number; onPropertyClick?: (property: Property) => void }) => {
   const pos = getSpacePosition(space.id, spaceSize);
   const spaces = useGameStore((s) => s.spaces);
+  const players = useGameStore((s) => s.players);
   const property = spaces.find((s) => s.id === space.id) as Property | undefined;
   
   const icon = getSpaceIcon(space);
   const isPropertyType = space.type === "property";
   const color = getColorForSpace(space);
+  const [isHovered, setIsHovered] = React.useState(false);
 
   // Calculate font sizes based on space size - scale proportionally for larger boards
   // Optimized for better text fitting and readability
   const fontSize = Math.max(8, Math.floor(spaceSize * 0.16)); // Reduced to fit more text
   const priceFontSize = Math.max(7, Math.floor(spaceSize * 0.14)); // Reduced for better fit
   const iconSize = Math.max(14, Math.floor(spaceSize * 0.30)); // Reduced to make room for text
+
+  // Get owner name if property is owned
+  const ownerName = property?.owner !== undefined ? players[property.owner]?.name : undefined;
 
   return (
     <motion.div
@@ -161,11 +166,20 @@ const Space = ({ space, spaceSize }: { space: { id: number; name: string; type: 
         color: "#333",
         borderRadius: "4px",
         textAlign: "center",
-        overflow: "hidden",
+        overflow: isHovered ? "visible" : "hidden",
         boxShadow: "0 2px 4px rgba(0,0,0,0.2)",
+        cursor: property && isPropertyType ? "pointer" : "default",
       }}
-      whileHover={{ scale: 1.08, zIndex: 10 }}
+      whileHover={{ scale: 2.08, zIndex: 1000 }}
       transition={{ type: "spring", stiffness: 300, damping: 20 }}
+      onMouseEnter={() => setIsHovered(true)}
+      onMouseLeave={() => setIsHovered(false)}
+      onClick={(e) => {
+        e.stopPropagation();
+        if (property && isPropertyType && onPropertyClick) {
+          onPropertyClick(property);
+        }
+      }}
     >
       {/* Property Color Bar - Increased visibility */}
       {isPropertyType && (
@@ -213,7 +227,7 @@ const Space = ({ space, spaceSize }: { space: { id: number; name: string; type: 
         justifyContent: "center",
         padding: "3px 2px",
         width: "100%",
-        overflow: "hidden",
+        overflow: isHovered ? "visible" : "hidden",
       }}>
         {/* Icon for non-properties */}
         {icon && !isPropertyType && (
@@ -228,11 +242,11 @@ const Space = ({ space, spaceSize }: { space: { id: number; name: string; type: 
           fontWeight: "bold",
           textAlign: "center",
           wordBreak: "break-word",
-          overflow: "hidden",
-          display: "-webkit-box",
-          WebkitLineClamp: isPropertyType ? 2 : 3,
-          WebkitBoxOrient: "vertical",
-          maxHeight: isPropertyType ? `${fontSize * 2.2}px` : `${fontSize * 3.3}px`,
+          overflow: isHovered ? "visible" : "hidden",
+          display: isHovered ? "block" : "-webkit-box",
+          WebkitLineClamp: isHovered ? undefined : (isPropertyType ? 2 : 3),
+          WebkitBoxOrient: isHovered ? undefined : "vertical",
+          maxHeight: isHovered ? "none" : (isPropertyType ? `${fontSize * 2.2}px` : `${fontSize * 3.3}px`),
           width: "100%",
         }}>
           {space.name}
@@ -261,11 +275,92 @@ const Space = ({ space, spaceSize }: { space: { id: number; name: string; type: 
            </div>
         )}
       </div>
+
+      {/* Detailed Property Tooltip on Hover */}
+      {isHovered && property && isPropertyType && (
+        <motion.div
+          initial={{ opacity: 0, y: -10 }}
+          animate={{ opacity: 1, y: 0 }}
+          style={{
+            position: "fixed",
+            top: "100%",
+            left: "50%",
+            transform: "translateX(-50%)",
+            marginTop: "8px",
+            backgroundColor: "#fff",
+            border: "2px solid #333",
+            borderRadius: "8px",
+            padding: "12px",
+            minWidth: "200px",
+            maxWidth: "300px",
+            boxShadow: "0 4px 12px rgba(0,0,0,0.3)",
+            zIndex: 1001,
+            pointerEvents: "none",
+            fontSize: "12px",
+            lineHeight: 1.4,
+          }}
+        >
+          <div style={{ fontWeight: "bold", marginBottom: "8px", fontSize: "14px", borderBottom: "1px solid #ddd", paddingBottom: "4px" }}>
+            {space.name}
+          </div>
+          
+          <div style={{ display: "flex", flexDirection: "column", gap: "4px" }}>
+            <div><strong>Price:</strong> £{property.price}</div>
+            <div><strong>Base Rent:</strong> £{property.baseRent}</div>
+            
+            {property.rents && property.rents.length > 0 && (
+              <div>
+                <strong>Rent with Houses:</strong>
+                <div style={{ marginLeft: "8px", fontSize: "11px" }}>
+                  {property.rents.map((rent, idx) => (
+                    <div key={idx}>{(idx + 1)} house{idx + 1 !== 1 ? "s" : ""}: £{rent}</div>
+                  ))}
+                </div>
+              </div>
+            )}
+            
+            {property.buildingCost && (
+              <div><strong>Building Cost:</strong> £{property.buildingCost}</div>
+            )}
+            
+            <div><strong>Mortgage Value:</strong> £{property.mortgageValue}</div>
+            
+            {ownerName ? (
+              <div><strong>Owner:</strong> {ownerName}</div>
+            ) : (
+              <div><strong>Owner:</strong> Unowned</div>
+            )}
+            
+            {property.mortgaged && (
+              <div style={{ color: "#d32f2f", fontWeight: "bold" }}>⚠️ Mortgaged</div>
+            )}
+            
+            {property.houses > 0 && (
+              <div><strong>Houses:</strong> {property.houses}</div>
+            )}
+            
+            {property.hotel && (
+              <div><strong>Hotel:</strong> Yes</div>
+            )}
+            
+            {property.isInsured && property.insurancePaidUntilRound > 0 && (
+              <div style={{ color: "#2e7d32" }}>🛡️ Insured</div>
+            )}
+            
+            {property.valueMultiplier !== 1.0 && (
+              <div>
+                <strong>Value Multiplier:</strong> {property.valueMultiplier > 1 ? "+" : ""}
+                {Math.round((property.valueMultiplier - 1) * 100)}%
+              </div>
+            )}
+          </div>
+        </motion.div>
+      )}
     </motion.div>
   );
 };
 
-export const Board = () => {
+export const Board = ({ onPropertyClick }: { onPropertyClick?: (property: Property) => void }) => {
   const spaces = useGameStore((s) => s.spaces);
   const jackpot = useGameStore((s) => s.jackpot);
   const boardRef = React.useRef<HTMLDivElement>(null);
@@ -365,6 +460,7 @@ export const Board = () => {
         width: "100%",
         height: "100%",
         position: "relative",
+        overflow: "visible", // Allow hover tooltips to overflow
       }}
     >
       {/* LUDOMERCATUS Title at Top Center - Above Board */}
@@ -403,6 +499,7 @@ export const Board = () => {
           border: "6px solid #2E8B57",
           boxSizing: "border-box",
           zIndex: 1, // Low z-index - board is behind modals and UserPanel
+          overflow: "visible", // Allow hover tooltips to overflow
         }}
       >
 
@@ -412,6 +509,7 @@ export const Board = () => {
           key={space.id}
           space={space}
           spaceSize={spaceSize}
+          onPropertyClick={onPropertyClick}
         />
       ))}
 

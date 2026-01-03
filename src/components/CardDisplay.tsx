@@ -24,8 +24,8 @@ export const CardDisplay: React.FC<CardDisplayProps> = ({ card, onClose }) => {
         transition={{ type: "spring", stiffness: 200, damping: 20, duration: 0.6 }}
         style={{
           position: "fixed",
-          top: "15%",
-          left: "35%",
+          top: "20%",
+          left: "30%",
           transform: "translate(-50%, -50%)",
           width: "280px",
           maxWidth: "90vw",
