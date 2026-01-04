@@ -1,4 +1,4 @@
-import React from "react";
+import React, { useRef, useState, useEffect } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { useGameStore } from "../store/gameStore";
 import type { Property, Player } from "../types/game";
@@ -45,29 +45,69 @@ export const RentNegotiationModal: React.FC<Props> = ({
     useGameStore.getState().demandImmediatePaymentOrProperty(undefined);
   };
 
+  // Use ref to measure actual modal size and center properly
+  const modalRef = useRef<HTMLDivElement>(null);
+  const [position, setPosition] = useState({ x: 0, y: 0 });
+
+  useEffect(() => {
+    const updatePosition = () => {
+      if (modalRef.current) {
+        requestAnimationFrame(() => {
+          if (modalRef.current) {
+            const rect = modalRef.current.getBoundingClientRect();
+            // Position modal on the right side (where GameLog used to be)
+            // Modals should be positioned at top: 12px, right: 12px, width: 320px
+            const modalAreaWidth = 320;
+            const modalAreaTop = 12;
+            const rightMargin = 12;
+            const spacing = 20; // Space for multiple modals if needed
+            // Position on the right side
+            const modalX = window.innerWidth - modalAreaWidth - rightMargin;
+            // Position at top of modal area
+            const modalY = modalAreaTop;
+            // Ensure modal doesn't extend below viewport
+            const maxY = window.innerHeight - rect.height - 20; // 20px margin from bottom
+            const adjustedY = Math.min(modalY, maxY);
+            setPosition({ x: modalX, y: adjustedY });
+          }
+        });
+      }
+    };
+
+    const timer1 = setTimeout(updatePosition, 0);
+    const timer2 = setTimeout(updatePosition, 50);
+    const timer3 = setTimeout(updatePosition, 200);
+    window.addEventListener('resize', updatePosition);
+    return () => {
+      clearTimeout(timer1);
+      clearTimeout(timer2);
+      clearTimeout(timer3);
+      window.removeEventListener('resize', updatePosition);
+    };
+  }, []);
+
   return (
     <AnimatePresence>
       <motion.div
-        initial={{ opacity: 0, scale: 0.3, rotateY: -180 }}
-        animate={{ opacity: 1, scale: 1, rotateY: 0 }}
-        exit={{ opacity: 0, scale: 0.3, rotateY: 180 }}
-        transition={{ type: "spring", stiffness: 200, damping: 20, duration: 0.6 }}
+        ref={modalRef}
+        initial={{ opacity: 0, scale: 0.9 }}
+        animate={{ opacity: 1, scale: 1 }}
+        exit={{ opacity: 0, scale: 0.9 }}
+        transition={{ duration: 0.2 }}
         style={{
           position: "fixed",
-          top: "15%",
-          left: "27.5%",
-          transform: "translate(-50%, -50%)",
+          left: `${position.x}px`,
+          top: `${position.y}px`,
           width: "360px",
-          maxWidth: "90vw",
-          maxHeight: "80vh",
+          maxWidth: "320px",
+          maxHeight: "calc(100vh - 24px)",
           overflowX: "hidden",
           overflowY: "auto",
           backgroundColor: "rgba(15, 15, 20, 0.98)",
           border: "2px solid #ef4444",
-          boxShadow: "0 8px 32px rgba(0, 0, 0, 0.4), 0 0 0 4px rgba(255,255,255,0.2)",
+          boxShadow: "0 0 40px rgba(239, 68, 68, 0.3)",
           borderRadius: "16px",
-          zIndex: 10000,
-          pointerEvents: "auto",
+          zIndex: 300,
         }}
       >
         <div style={{ padding: "20px" }}>

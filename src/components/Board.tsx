@@ -166,7 +166,7 @@ const Space = ({ space, spaceSize, onPropertyClick }: { space: { id: number; nam
         boxShadow: "0 2px 4px rgba(0,0,0,0.2)",
         cursor: isClickableProperty ? "pointer" : "default",
       }}
-      whileHover={{ scale: 1.1, zIndex: 100 }}
+      whileHover={{ scale: 2.0, zIndex: 100 }}
       transition={{ type: "spring", stiffness: 300, damping: 20 }}
       onClick={(e) => {
         e.stopPropagation();

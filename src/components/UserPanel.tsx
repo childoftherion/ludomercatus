@@ -20,23 +20,33 @@ export const UserPanel: React.FC = () => {
 
   if (!players || players.length === 0) return null
 
+  // Filter out bankrupt players for layout calculation
+  const activePlayers = players.filter((p, i) => p && !p.bankrupt)
+  const playerCount = activePlayers.length
+
+  // #region agent log
+  React.useEffect(() => {
+    fetch('http://127.0.0.1:7242/ingest/624eb4a4-a4cd-4fc4-9b95-f587dccf83e6',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'UserPanel.tsx:26',message:'UserPanel layout calculation',data:{totalPlayers:players.length,activePlayers:playerCount,expandedIndex:expandedPlayerIndex,windowWidth:typeof window !== 'undefined' ? window.innerWidth : 0,windowHeight:typeof window !== 'undefined' ? window.innerHeight : 0},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'A'})}).catch(()=>{});
+  }, [players.length, playerCount, expandedPlayerIndex]);
+  // #endregion
+
   return (
     <div
       style={{
         position: "fixed",
-        bottom: "8px", // Minimal bottom spacing
-        left: "8px", // Reduced from 12px - tighter spacing
-        right: "8px", // Reduced from 12px - tighter spacing
-        zIndex: 20000, // Very high z-index to ensure it's always on top of everything
+        bottom: "8px",
+        left: "8px",
+        right: "8px",
+        zIndex: 20000,
         display: "flex",
         flexDirection: "row",
-        gap: "6px", // Reduced from 8px - more compact
-        justifyContent: "flex-start",
+        gap: "8px",
+        justifyContent: "space-evenly", // Distribute players evenly across the bottom
         alignItems: "flex-end",
-        overflowY: "visible", // Allow expanded content to show
-        overflowX: "auto",
-        paddingBottom: "2px", // Reduced padding
-        isolation: "isolate", // Create new stacking context to ensure proper z-index behavior
+        overflowY: "visible",
+        overflowX: "visible",
+        paddingBottom: "2px",
+        isolation: "isolate",
       }}
     >
       {players.map((player, index) => {
@@ -57,14 +67,17 @@ export const UserPanel: React.FC = () => {
             className="player-panel"
             initial={false}
             animate={{
-              width: isExpanded ? "200px" : "100px",
-              height: isExpanded ? "auto" : "36px",
+              flex: isExpanded ? "0 0 240px" : "1 1 0", // Equal flex distribution when not expanded, fixed when expanded
+              width: isExpanded ? "240px" : undefined, // Fixed width when expanded, undefined when not (let flex handle it)
+              minWidth: isExpanded ? "240px" : "140px", // Increased minimum width for better visibility
+              maxWidth: isExpanded ? "240px" : "none", // No max width when not expanded, let flex distribute equally
+              height: isExpanded ? "auto" : "auto", // Allow height to adjust
               zIndex: isExpanded ? 20001 : 20000,
             }}
             transition={{ duration: 0.2, ease: "easeInOut" }}
             style={{
               position: "relative",
-              zIndex: isExpanded ? 20001 : 20000, // Ensure z-index is applied
+              zIndex: isExpanded ? 20001 : 20000,
             }}
           >
             <div
@@ -102,15 +115,16 @@ export const UserPanel: React.FC = () => {
               >
                 <div
                   style={{
-                    width: "18px", // Scaled down for 100% zoom
-                    height: "18px", // Scaled down for 100% zoom
+                    width: "28px",
+                    height: "28px",
                     borderRadius: "50%",
                     background: player.color,
                     display: "flex",
                     alignItems: "center",
                     justifyContent: "center",
-                    fontSize: "11px", // Scaled down for 100% zoom
+                    fontSize: "14px",
                     flexShrink: 0,
+                    fontWeight: "bold",
                   }}
                 >
                   {player.token}
@@ -120,7 +134,7 @@ export const UserPanel: React.FC = () => {
                     style={{
                       color: "#fff",
                       fontWeight: 600,
-                      fontSize: "12px",
+                      fontSize: "13px",
                       whiteSpace: "nowrap",
                       overflow: "hidden",
                       textOverflow: "ellipsis",
@@ -131,8 +145,8 @@ export const UserPanel: React.FC = () => {
                       <span
                         style={{
                           color: "#FF9800",
-                          marginLeft: "4px",
-                          fontSize: "10px",
+                          marginLeft: "6px",
+                          fontSize: "11px",
                         }}
                       >
                         (AI)
@@ -144,9 +158,9 @@ export const UserPanel: React.FC = () => {
                       <div
                         style={{
                           color: "#4ECDC4",
-                          fontSize: "11px",
+                          fontSize: "12px",
                           fontWeight: 600,
-                          marginTop: "2px",
+                          marginTop: "4px",
                         }}
                       >
                         £{player.cash.toLocaleString()}
@@ -154,9 +168,9 @@ export const UserPanel: React.FC = () => {
                       <div
                         style={{
                           color: "#22c55e",
-                          fontSize: "10px",
+                          fontSize: "11px",
                           fontWeight: 500,
-                          marginTop: "1px",
+                          marginTop: "2px",
                         }}
                       >
                         Net: £{getNetWorth(index).toLocaleString()}
@@ -167,9 +181,9 @@ export const UserPanel: React.FC = () => {
                     <div
                       style={{
                         color: "rgba(255,255,255,0.4)",
-                        fontSize: "10px",
+                        fontSize: "11px",
                         fontStyle: "italic",
-                        marginTop: "2px",
+                        marginTop: "4px",
                       }}
                     >
                       ???

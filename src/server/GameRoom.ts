@@ -2267,11 +2267,10 @@ export class GameRoom implements GameActions {
       return;
     }
     
-    // Validate properties
+    // Validate properties (mortgaged properties are allowed - buyer assumes mortgage debt)
     const receiverProps = this.state.spaces.filter(s => 
       (s.type === "property" || s.type === "railroad" || s.type === "utility") &&
       (s as Property).owner === counterOffer.fromPlayer &&
-      !(s as Property).mortgaged &&
       (s as Property).houses === 0 &&
       !(s as Property).hotel
     );
@@ -2279,7 +2278,6 @@ export class GameRoom implements GameActions {
     const initiatorProps = this.state.spaces.filter(s => 
       (s.type === "property" || s.type === "railroad" || s.type === "utility") &&
       (s as Property).owner === counterOffer.toPlayer &&
-      !(s as Property).mortgaged &&
       (s as Property).houses === 0 &&
       !(s as Property).hotel
     );

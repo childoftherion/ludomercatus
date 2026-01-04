@@ -957,28 +957,13 @@ export default function App() {
         )}
       </AnimatePresence>
 
-      {/* Rent Negotiation Modal - Phase 3 - Centered like Chance Cards */}
-      {phase === "awaiting_rent_negotiation" && pendingRentNegotiation && (() => {
-        const debtor = players[pendingRentNegotiation.debtorIndex];
-        const creditor = players[pendingRentNegotiation.creditorIndex];
-        if (!debtor || !creditor) return null;
-        return (
-          <div
-            id="screen-center-rent-negotiation-container"
-            style={{
-              position: "fixed",
-              top: "50%",
-              left: "50%",
-              transform: "translate(-50%, -50%)",
-              width: "100vw",
-              height: "100vh",
-              pointerEvents: "none",
-              zIndex: 10000,
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "center",
-            }}
-          >
+      {/* Rent Negotiation Modal - Phase 3 */}
+      <AnimatePresence>
+        {phase === "awaiting_rent_negotiation" && pendingRentNegotiation && (() => {
+          const debtor = players[pendingRentNegotiation.debtorIndex];
+          const creditor = players[pendingRentNegotiation.creditorIndex];
+          if (!debtor || !creditor) return null;
+          return (
             <RentNegotiationModal
               debtor={debtor}
               creditor={creditor}
@@ -986,9 +971,9 @@ export default function App() {
               rentAmount={pendingRentNegotiation.rentAmount}
               debtorCanAfford={pendingRentNegotiation.debtorCanAfford}
             />
-          </div>
-        );
-      })()}
+          );
+        })()}
+      </AnimatePresence>
 
       {/* Bankruptcy Modal - Phase 3 */}
       <AnimatePresence>
