@@ -813,13 +813,7 @@ export default function App() {
           }}
         >
           <Board onPropertyClick={(property) => {
-            // #region agent log
-            fetch('http://127.0.0.1:7242/ingest/624eb4a4-a4cd-4fc4-9b95-f587dccf83e6',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'App.tsx:815',message:'onPropertyClick callback invoked',data:{propertyId:property.id,propertyName:property.name,propertyType:property.type},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'B'})}).catch(()=>{});
-            // #endregion
             setSelectedProperty(property);
-            // #region agent log
-            fetch('http://127.0.0.1:7242/ingest/624eb4a4-a4cd-4fc4-9b95-f587dccf83e6',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'App.tsx:818',message:'setSelectedProperty called',data:{propertyId:property.id},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'B'})}).catch(()=>{});
-            // #endregion
           }} />
           <PlayerTokens />
           
@@ -870,21 +864,10 @@ export default function App() {
                 justifyContent: "center",
               }}
             >
-              {/* #region agent log */}
-              {(() => {
-                fetch('http://127.0.0.1:7242/ingest/624eb4a4-a4cd-4fc4-9b95-f587dccf83e6',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'App.tsx:856',message:'Rendering PropertyDetailsModal container',data:{propertyId:selectedProperty.id,propertyName:selectedProperty.name,hasOwner:selectedProperty.owner !== undefined,ownerIndex:selectedProperty.owner},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'C'})}).catch(()=>{});
-                return null;
-              })()}
-              {/* #endregion */}
               <PropertyDetailsModal
                 property={selectedProperty}
                 ownerName={selectedProperty.owner !== undefined ? players[selectedProperty.owner]?.name : undefined}
-                onClose={() => {
-                  // #region agent log
-                  fetch('http://127.0.0.1:7242/ingest/624eb4a4-a4cd-4fc4-9b95-f587dccf83e6',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'App.tsx:872',message:'Closing PropertyDetailsModal',data:{propertyId:selectedProperty.id},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'C'})}).catch(()=>{});
-                  // #endregion
-                  setSelectedProperty(null);
-                }}
+                onClose={() => setSelectedProperty(null)}
               />
             </div>
           )}
@@ -974,13 +957,28 @@ export default function App() {
         )}
       </AnimatePresence>
 
-      {/* Rent Negotiation Modal - Phase 3 */}
-      <AnimatePresence>
-        {phase === "awaiting_rent_negotiation" && pendingRentNegotiation && (() => {
-          const debtor = players[pendingRentNegotiation.debtorIndex];
-          const creditor = players[pendingRentNegotiation.creditorIndex];
-          if (!debtor || !creditor) return null;
-          return (
+      {/* Rent Negotiation Modal - Phase 3 - Centered like Chance Cards */}
+      {phase === "awaiting_rent_negotiation" && pendingRentNegotiation && (() => {
+        const debtor = players[pendingRentNegotiation.debtorIndex];
+        const creditor = players[pendingRentNegotiation.creditorIndex];
+        if (!debtor || !creditor) return null;
+        return (
+          <div
+            id="screen-center-rent-negotiation-container"
+            style={{
+              position: "fixed",
+              top: "50%",
+              left: "50%",
+              transform: "translate(-50%, -50%)",
+              width: "100vw",
+              height: "100vh",
+              pointerEvents: "none",
+              zIndex: 10000,
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+            }}
+          >
             <RentNegotiationModal
               debtor={debtor}
               creditor={creditor}
@@ -988,9 +986,9 @@ export default function App() {
               rentAmount={pendingRentNegotiation.rentAmount}
               debtorCanAfford={pendingRentNegotiation.debtorCanAfford}
             />
-          );
-        })()}
-      </AnimatePresence>
+          </div>
+        );
+      })()}
 
       {/* Bankruptcy Modal - Phase 3 */}
       <AnimatePresence>

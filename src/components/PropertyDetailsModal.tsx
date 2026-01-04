@@ -9,15 +9,6 @@ interface PropertyDetailsModalProps {
 }
 
 export const PropertyDetailsModal: React.FC<PropertyDetailsModalProps> = ({ property, ownerName, onClose }) => {
-  // #region agent log
-  React.useEffect(() => {
-    if (property) {
-      fetch('http://127.0.0.1:7242/ingest/624eb4a4-a4cd-4fc4-9b95-f587dccf83e6',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'PropertyDetailsModal.tsx:12',message:'PropertyDetailsModal rendered',data:{propertyId:property.id,propertyName:property.name,hasProperty:!!property},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'C'})}).catch(()=>{});
-    } else {
-      fetch('http://127.0.0.1:7242/ingest/624eb4a4-a4cd-4fc4-9b95-f587dccf83e6',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'PropertyDetailsModal.tsx:15',message:'PropertyDetailsModal returning null - no property',data:{hasProperty:!!property},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'C'})}).catch(()=>{});
-    }
-  }, [property]);
-  // #endregion
   if (!property) return null;
 
   const isPropertyType = property.type === "property" || property.type === "railroad" || property.type === "utility";

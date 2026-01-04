@@ -170,18 +170,8 @@ const Space = ({ space, spaceSize, onPropertyClick }: { space: { id: number; nam
       transition={{ type: "spring", stiffness: 300, damping: 20 }}
       onClick={(e) => {
         e.stopPropagation();
-        // #region agent log
-        fetch('http://127.0.0.1:7242/ingest/624eb4a4-a4cd-4fc4-9b95-f587dccf83e6',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'Board.tsx:171',message:'Property tile clicked',data:{spaceId:space.id,spaceType:space.type,isClickableProperty,hasOnPropertyClick:!!onPropertyClick,hasProperty:!!property,propertyId:property?.id,propertyName:property?.name},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'A'})}).catch(()=>{});
-        // #endregion
         if (isClickableProperty && onPropertyClick) {
-          // #region agent log
-          fetch('http://127.0.0.1:7242/ingest/624eb4a4-a4cd-4fc4-9b95-f587dccf83e6',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'Board.tsx:175',message:'Calling onPropertyClick callback',data:{propertyId:property.id,propertyName:property.name,propertyType:property.type},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'A'})}).catch(()=>{});
-          // #endregion
           onPropertyClick(property);
-        } else {
-          // #region agent log
-          fetch('http://127.0.0.1:7242/ingest/624eb4a4-a4cd-4fc4-9b95-f587dccf83e6',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'Board.tsx:179',message:'Not calling onPropertyClick - condition failed',data:{isClickableProperty,hasOnPropertyClick:!!onPropertyClick},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'A'})}).catch(()=>{});
-          // #endregion
         }
       }}
     >
