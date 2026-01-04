@@ -24,12 +24,6 @@ export const UserPanel: React.FC = () => {
   const activePlayers = players.filter((p, i) => p && !p.bankrupt)
   const playerCount = activePlayers.length
 
-  // #region agent log
-  React.useEffect(() => {
-    fetch('http://127.0.0.1:7242/ingest/624eb4a4-a4cd-4fc4-9b95-f587dccf83e6',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'UserPanel.tsx:26',message:'UserPanel layout calculation',data:{totalPlayers:players.length,activePlayers:playerCount,expandedIndex:expandedPlayerIndex,windowWidth:typeof window !== 'undefined' ? window.innerWidth : 0,windowHeight:typeof window !== 'undefined' ? window.innerHeight : 0},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'A'})}).catch(()=>{});
-  }, [players.length, playerCount, expandedPlayerIndex]);
-  // #endregion
-
   return (
     <div
       style={{
