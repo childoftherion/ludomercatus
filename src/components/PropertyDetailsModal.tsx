@@ -9,6 +9,15 @@ interface PropertyDetailsModalProps {
 }
 
 export const PropertyDetailsModal: React.FC<PropertyDetailsModalProps> = ({ property, ownerName, onClose }) => {
+  // #region agent log
+  React.useEffect(() => {
+    if (property) {
+      fetch('http://127.0.0.1:7242/ingest/624eb4a4-a4cd-4fc4-9b95-f587dccf83e6',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'PropertyDetailsModal.tsx:12',message:'PropertyDetailsModal rendered',data:{propertyId:property.id,propertyName:property.name,hasProperty:!!property},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'C'})}).catch(()=>{});
+    } else {
+      fetch('http://127.0.0.1:7242/ingest/624eb4a4-a4cd-4fc4-9b95-f587dccf83e6',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'PropertyDetailsModal.tsx:15',message:'PropertyDetailsModal returning null - no property',data:{hasProperty:!!property},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'C'})}).catch(()=>{});
+    }
+  }, [property]);
+  // #endregion
   if (!property) return null;
 
   const isPropertyType = property.type === "property" || property.type === "railroad" || property.type === "utility";
@@ -44,12 +53,12 @@ export const PropertyDetailsModal: React.FC<PropertyDetailsModalProps> = ({ prop
         transition={{ type: "spring", stiffness: 200, damping: 20, duration: 0.6 }}
         style={{
           position: "fixed",
-          top: "50%",
-          left: "50%",
+          top: "15%",
+          left: "27.5%",
           transform: "translate(-50%, -50%)",
           width: "320px",
           maxWidth: "90vw",
-          maxHeight: "80vh",
+          maxHeight: "68vh",
           backgroundColor: isPropertyType ? "#FFFFFF" : propertyColor,
           borderRadius: "12px",
           boxShadow: "0 8px 32px rgba(0, 0, 0, 0.4), 0 0 0 4px rgba(255,255,255,0.2)",
@@ -115,7 +124,8 @@ export const PropertyDetailsModal: React.FC<PropertyDetailsModalProps> = ({ prop
             <div><strong>Price:</strong> £{property.price}</div>
             <div><strong>Base Rent:</strong> £{property.baseRent}</div>
             
-            {property.rents && property.rents.length > 0 && (
+            {/* Regular Properties: Rent with Houses */}
+            {property.type === "property" && property.rents && property.rents.length > 0 && (
               <div>
                 <strong>Rent with Houses:</strong>
                 <div style={{ marginLeft: "12px", marginTop: "4px", fontSize: "13px" }}>
@@ -126,7 +136,30 @@ export const PropertyDetailsModal: React.FC<PropertyDetailsModalProps> = ({ prop
               </div>
             )}
             
-            {property.buildingCost && (
+            {/* Railroads: Rent with Number of Railroads Owned */}
+            {property.type === "railroad" && property.rents && property.rents.length > 0 && (
+              <div>
+                <strong>Rent with Railroads Owned:</strong>
+                <div style={{ marginLeft: "12px", marginTop: "4px", fontSize: "13px" }}>
+                  {property.rents.map((rent, idx) => (
+                    <div key={idx}>{idx + 1} railroad{idx + 1 !== 1 ? "s" : ""}: £{rent}</div>
+                  ))}
+                </div>
+              </div>
+            )}
+            
+            {/* Utilities: Dice-based Rent Calculation */}
+            {property.type === "utility" && (
+              <div>
+                <strong>Rent Calculation:</strong>
+                <div style={{ marginLeft: "12px", marginTop: "4px", fontSize: "13px" }}>
+                  <div>1 utility owned: 4× dice roll</div>
+                  <div>2 utilities owned: 10× dice roll</div>
+                </div>
+              </div>
+            )}
+            
+            {property.buildingCost && property.buildingCost > 0 && (
               <div><strong>Building Cost:</strong> £{property.buildingCost}</div>
             )}
             

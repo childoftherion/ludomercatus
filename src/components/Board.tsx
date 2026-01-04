@@ -129,22 +129,18 @@ const getSpaceIcon = (space: { type: string; name: string }) => {
 const Space = ({ space, spaceSize, onPropertyClick }: { space: { id: number; name: string; type: string; colorGroup?: string | null }; spaceSize: number; onPropertyClick?: (property: Property) => void }) => {
   const pos = getSpacePosition(space.id, spaceSize);
   const spaces = useGameStore((s) => s.spaces);
-  const players = useGameStore((s) => s.players);
   const property = spaces.find((s) => s.id === space.id) as Property | undefined;
   
   const icon = getSpaceIcon(space);
   const isPropertyType = space.type === "property";
+  const isClickableProperty = property !== undefined && (space.type === "property" || space.type === "railroad" || space.type === "utility");
   const color = getColorForSpace(space);
-  const [isHovered, setIsHovered] = React.useState(false);
 
   // Calculate font sizes based on space size - scale proportionally for larger boards
   // Optimized for better text fitting and readability
   const fontSize = Math.max(8, Math.floor(spaceSize * 0.16)); // Reduced to fit more text
   const priceFontSize = Math.max(7, Math.floor(spaceSize * 0.14)); // Reduced for better fit
   const iconSize = Math.max(14, Math.floor(spaceSize * 0.30)); // Reduced to make room for text
-
-  // Get owner name if property is owned
-  const ownerName = property?.owner !== undefined ? players[property.owner]?.name : undefined;
 
   return (
     <motion.div
@@ -166,18 +162,26 @@ const Space = ({ space, spaceSize, onPropertyClick }: { space: { id: number; nam
         color: "#333",
         borderRadius: "4px",
         textAlign: "center",
-        overflow: isHovered ? "visible" : "hidden",
+        overflow: "hidden",
         boxShadow: "0 2px 4px rgba(0,0,0,0.2)",
-        cursor: property && isPropertyType ? "pointer" : "default",
+        cursor: isClickableProperty ? "pointer" : "default",
       }}
-      whileHover={{ scale: 2.08, zIndex: 1000 }}
+      whileHover={{ scale: 1.1, zIndex: 100 }}
       transition={{ type: "spring", stiffness: 300, damping: 20 }}
-      onMouseEnter={() => setIsHovered(true)}
-      onMouseLeave={() => setIsHovered(false)}
       onClick={(e) => {
         e.stopPropagation();
-        if (property && isPropertyType && onPropertyClick) {
+        // #region agent log
+        fetch('http://127.0.0.1:7242/ingest/624eb4a4-a4cd-4fc4-9b95-f587dccf83e6',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'Board.tsx:171',message:'Property tile clicked',data:{spaceId:space.id,spaceType:space.type,isClickableProperty,hasOnPropertyClick:!!onPropertyClick,hasProperty:!!property,propertyId:property?.id,propertyName:property?.name},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'A'})}).catch(()=>{});
+        // #endregion
+        if (isClickableProperty && onPropertyClick) {
+          // #region agent log
+          fetch('http://127.0.0.1:7242/ingest/624eb4a4-a4cd-4fc4-9b95-f587dccf83e6',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'Board.tsx:175',message:'Calling onPropertyClick callback',data:{propertyId:property.id,propertyName:property.name,propertyType:property.type},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'A'})}).catch(()=>{});
+          // #endregion
           onPropertyClick(property);
+        } else {
+          // #region agent log
+          fetch('http://127.0.0.1:7242/ingest/624eb4a4-a4cd-4fc4-9b95-f587dccf83e6',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'Board.tsx:179',message:'Not calling onPropertyClick - condition failed',data:{isClickableProperty,hasOnPropertyClick:!!onPropertyClick},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'A'})}).catch(()=>{});
+          // #endregion
         }
       }}
     >
@@ -227,7 +231,7 @@ const Space = ({ space, spaceSize, onPropertyClick }: { space: { id: number; nam
         justifyContent: "center",
         padding: "3px 2px",
         width: "100%",
-        overflow: isHovered ? "visible" : "hidden",
+        overflow: "hidden",
       }}>
         {/* Icon for non-properties */}
         {icon && !isPropertyType && (
@@ -242,11 +246,11 @@ const Space = ({ space, spaceSize, onPropertyClick }: { space: { id: number; nam
           fontWeight: "bold",
           textAlign: "center",
           wordBreak: "break-word",
-          overflow: isHovered ? "visible" : "hidden",
-          display: isHovered ? "block" : "-webkit-box",
-          WebkitLineClamp: isHovered ? undefined : (isPropertyType ? 2 : 3),
-          WebkitBoxOrient: isHovered ? undefined : "vertical",
-          maxHeight: isHovered ? "none" : (isPropertyType ? `${fontSize * 2.2}px` : `${fontSize * 3.3}px`),
+          overflow: "hidden",
+          display: "-webkit-box",
+          WebkitLineClamp: isPropertyType ? 2 : 3,
+          WebkitBoxOrient: "vertical",
+          maxHeight: isPropertyType ? `${fontSize * 2.2}px` : `${fontSize * 3.3}px`,
           width: "100%",
         }}>
           {space.name}
@@ -276,86 +280,6 @@ const Space = ({ space, spaceSize, onPropertyClick }: { space: { id: number; nam
         )}
       </div>
 
-      {/* Detailed Property Tooltip on Hover */}
-      {isHovered && property && isPropertyType && (
-        <motion.div
-          initial={{ opacity: 0, y: -10 }}
-          animate={{ opacity: 1, y: 0 }}
-          style={{
-            position: "fixed",
-            top: "100%",
-            left: "50%",
-            transform: "translateX(-50%)",
-            marginTop: "8px",
-            backgroundColor: "#fff",
-            border: "2px solid #333",
-            borderRadius: "8px",
-            padding: "12px",
-            minWidth: "200px",
-            maxWidth: "300px",
-            boxShadow: "0 4px 12px rgba(0,0,0,0.3)",
-            zIndex: 1001,
-            pointerEvents: "none",
-            fontSize: "12px",
-            lineHeight: 1.4,
-          }}
-        >
-          <div style={{ fontWeight: "bold", marginBottom: "8px", fontSize: "14px", borderBottom: "1px solid #ddd", paddingBottom: "4px" }}>
-            {space.name}
-          </div>
-          
-          <div style={{ display: "flex", flexDirection: "column", gap: "4px" }}>
-            <div><strong>Price:</strong> £{property.price}</div>
-            <div><strong>Base Rent:</strong> £{property.baseRent}</div>
-            
-            {property.rents && property.rents.length > 0 && (
-              <div>
-                <strong>Rent with Houses:</strong>
-                <div style={{ marginLeft: "8px", fontSize: "11px" }}>
-                  {property.rents.map((rent, idx) => (
-                    <div key={idx}>{(idx + 1)} house{idx + 1 !== 1 ? "s" : ""}: £{rent}</div>
-                  ))}
-                </div>
-              </div>
-            )}
-            
-            {property.buildingCost && (
-              <div><strong>Building Cost:</strong> £{property.buildingCost}</div>
-            )}
-            
-            <div><strong>Mortgage Value:</strong> £{property.mortgageValue}</div>
-            
-            {ownerName ? (
-              <div><strong>Owner:</strong> {ownerName}</div>
-            ) : (
-              <div><strong>Owner:</strong> Unowned</div>
-            )}
-            
-            {property.mortgaged && (
-              <div style={{ color: "#d32f2f", fontWeight: "bold" }}>⚠️ Mortgaged</div>
-            )}
-            
-            {property.houses > 0 && (
-              <div><strong>Houses:</strong> {property.houses}</div>
-            )}
-            
-            {property.hotel && (
-              <div><strong>Hotel:</strong> Yes</div>
-            )}
-            
-            {property.isInsured && property.insurancePaidUntilRound > 0 && (
-              <div style={{ color: "#2e7d32" }}>🛡️ Insured</div>
-            )}
-            
-            {property.valueMultiplier !== 1.0 && (
-              <div>
-                <strong>Value Multiplier:</strong> {property.valueMultiplier > 1 ? "+" : ""}
-                {Math.round((property.valueMultiplier - 1) * 100)}%
-              </div>
-            )}
-          </div>
-        </motion.div>
-      )}
     </motion.div>
   );
 };

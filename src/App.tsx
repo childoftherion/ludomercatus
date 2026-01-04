@@ -603,9 +603,15 @@ export default function App() {
             }
           }
           break;
-        case "Escape": // Escape - Cancel/decline
+        case "Escape": // Escape - Cancel/decline or close modals
+          e.preventDefault();
+          // Close property details modal if open
+          if (selectedProperty) {
+            setSelectedProperty(null);
+            return;
+          }
+          // Handle game actions
           if (playerCanAct) {
-            e.preventDefault();
             if (phase === "awaiting_buy_decision" && currentSpace) {
               handleDeclineProperty();
             }
@@ -637,7 +643,7 @@ export default function App() {
 
     window.addEventListener("keydown", handleKeyPress);
     return () => window.removeEventListener("keydown", handleKeyPress);
-  }, [phase, diceRoll, isRolling, currentSpace, isMyTurn, currentPlayerIndex, myPlayerIndex]);
+  }, [phase, diceRoll, isRolling, currentSpace, isMyTurn, currentPlayerIndex, myPlayerIndex, selectedProperty]);
 
   const handlePayTax = () => {
     if (!currentSpace || currentSpace.type !== "tax" || !currentPlayer) return;
@@ -806,7 +812,15 @@ export default function App() {
             justifyContent: "center",
           }}
         >
-          <Board />
+          <Board onPropertyClick={(property) => {
+            // #region agent log
+            fetch('http://127.0.0.1:7242/ingest/624eb4a4-a4cd-4fc4-9b95-f587dccf83e6',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'App.tsx:815',message:'onPropertyClick callback invoked',data:{propertyId:property.id,propertyName:property.name,propertyType:property.type},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'B'})}).catch(()=>{});
+            // #endregion
+            setSelectedProperty(property);
+            // #region agent log
+            fetch('http://127.0.0.1:7242/ingest/624eb4a4-a4cd-4fc4-9b95-f587dccf83e6',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'App.tsx:818',message:'setSelectedProperty called',data:{propertyId:property.id},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'B'})}).catch(()=>{});
+            // #endregion
+          }} />
           <PlayerTokens />
           
           {/* Card Display in Center of Screen */}
@@ -856,10 +870,21 @@ export default function App() {
                 justifyContent: "center",
               }}
             >
+              {/* #region agent log */}
+              {(() => {
+                fetch('http://127.0.0.1:7242/ingest/624eb4a4-a4cd-4fc4-9b95-f587dccf83e6',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'App.tsx:856',message:'Rendering PropertyDetailsModal container',data:{propertyId:selectedProperty.id,propertyName:selectedProperty.name,hasOwner:selectedProperty.owner !== undefined,ownerIndex:selectedProperty.owner},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'C'})}).catch(()=>{});
+                return null;
+              })()}
+              {/* #endregion */}
               <PropertyDetailsModal
                 property={selectedProperty}
                 ownerName={selectedProperty.owner !== undefined ? players[selectedProperty.owner]?.name : undefined}
-                onClose={() => setSelectedProperty(null)}
+                onClose={() => {
+                  // #region agent log
+                  fetch('http://127.0.0.1:7242/ingest/624eb4a4-a4cd-4fc4-9b95-f587dccf83e6',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'App.tsx:872',message:'Closing PropertyDetailsModal',data:{propertyId:selectedProperty.id},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'C'})}).catch(()=>{});
+                  // #endregion
+                  setSelectedProperty(null);
+                }}
               />
             </div>
           )}
