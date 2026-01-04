@@ -54,8 +54,8 @@ export const RentNegotiationModal: React.FC<Props> = ({
         transition={{ type: "spring", stiffness: 200, damping: 20, duration: 0.6 }}
         style={{
           position: "fixed",
-          top: "50%",
-          left: "50%",
+          top: "15%",
+          left: "27.5%",
           transform: "translate(-50%, -50%)",
           width: "360px",
           maxWidth: "90vw",
