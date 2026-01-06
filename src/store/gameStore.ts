@@ -3,6 +3,7 @@ import type { GameState, Property, ColorGroup, GameLogEntry, TradeOffer, GameSet
 import { DEFAULT_GAME_SETTINGS } from "../types/game";
 import { boardSpaces } from "../data/board";
 import { getPlayerProperties, hasMonopoly } from "../logic/rules/monopoly";
+import { useLocalStore } from "./localStore";
 
 const isProperty = (space: any): space is Property => {
   return space.type === "property" || space.type === "railroad" || space.type === "utility";
@@ -12,6 +13,7 @@ type GameStore = GameState & {
   connected: boolean;
   inRoom: boolean;
   connect: () => void;
+  clientId: string;
 
   // Actions (send to server)
   initGame: (playerNames: string[], tokens: string[], isAIFlags?: boolean[], aiDifficulties?: AIDifficulty[]) => void;
@@ -97,6 +99,7 @@ let socket: WebSocket | null = null;
 
 export const useGameStore = create<GameStore>((set, get) => ({
   // Initial state
+  clientId: useLocalStore.getState().clientId,
   players: [],
   currentPlayerIndex: 0,
   spaces: boardSpaces,
@@ -131,9 +134,10 @@ export const useGameStore = create<GameStore>((set, get) => ({
   connect: () => {
     if (socket && (socket.readyState === WebSocket.OPEN || socket.readyState === WebSocket.CONNECTING)) return;
 
+    const clientId = useLocalStore.getState().clientId;
     const protocol = window.location.protocol === "https:" ? "wss:" : "ws:";
     const host = window.location.host;
-    socket = new WebSocket(`${protocol}//${host}/ws`);
+    socket = new WebSocket(`${protocol}//${host}/ws?clientId=${clientId}`);
 
     socket.onopen = () => {
       console.log("Connected to game server");
@@ -205,7 +209,8 @@ export const useGameStore = create<GameStore>((set, get) => ({
   listRooms: () => {
     socket?.send(JSON.stringify({ type: "LIST_ROOMS" }));
   },
-  addPlayer: (name, token, clientId) => {
+  addPlayer: (name: string, token: string) => {
+    const clientId = useLocalStore.getState().clientId;
     socket?.send(JSON.stringify({ type: "ACTION", action: "addPlayer", payload: [name, token, clientId] }));
   },
   updatePlayer: (index, name, token) => {

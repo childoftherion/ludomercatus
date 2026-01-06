@@ -16,7 +16,6 @@ import { PlayerSelectionModal } from "./components/PlayerSelectionModal";
 import { CardDisplay } from "./components/CardDisplay";
 import { PropertyDetailsModal } from "./components/PropertyDetailsModal";
 import { UserPanel } from "./components/UserPanel";
-import { useLocalStore } from "./store/localStore";
 import type { Property } from "./types/game";
 import { BurgerMenu } from "./components/BurgerMenu";
 import { GamePanel } from "./components/GamePanel";
@@ -40,12 +39,40 @@ export default function App() {
     currentGoSalary,
     pendingRentNegotiation,
     settings,
+    roomId,
+    joinRoom,
+    clientId,
   } = useGameStore();
-  const { myPlayerIndex, setMyPlayerIndex } = useLocalStore();
-  
+
   React.useEffect(() => {
     connect();
-  }, []);
+  }, [connect]);
+
+  // Hash-based routing
+  React.useEffect(() => {
+    const handleHashChange = () => {
+      const hash = window.location.hash.replace("#", "");
+      if (hash.startsWith("/room/")) {
+        const roomIdFromHash = hash.split("/")[2];
+        if (roomIdFromHash && roomIdFromHash !== roomId) {
+          joinRoom(roomIdFromHash);
+        }
+      }
+    };
+
+    window.addEventListener("hashchange", handleHashChange, false);
+    handleHashChange(); // Check on initial load
+
+    return () => window.removeEventListener("hashchange", handleHashChange);
+  }, [joinRoom, roomId]);
+
+  // Update hash when room ID changes
+  React.useEffect(() => {
+    if (inRoom && roomId && window.location.hash !== `#/room/${roomId}`) {
+      window.location.hash = `#/room/${roomId}`;
+    }
+  }, [inRoom, roomId]);
+
   // Enable body scrolling for setup screen
   React.useEffect(() => {
     if (phase === "setup") {
@@ -57,39 +84,15 @@ export default function App() {
       document.body.style.overflow = "hidden";
     };
   }, [phase]);
-  // Auto-detect human player if myPlayerIndex is not set (fallback for games started before fix)
-  React.useEffect(() => {
-    if (players.length > 0 && phase !== "setup" && phase !== "lobby") {
-      // If myPlayerIndex is null, find the first human player
-      if (myPlayerIndex === null) {
-        const humanPlayer = players.findIndex(p => !p.isAI && !p.bankrupt);
-        if (humanPlayer !== -1) {
-          console.log("[App] Auto-detecting human player:", humanPlayer, players[humanPlayer]?.name);
-          setMyPlayerIndex(humanPlayer);
-        }
-      }
-      // If myPlayerIndex is set but points to an AI or bankrupt player, fix it
-      else if (myPlayerIndex !== null) {
-        const myPlayer = players[myPlayerIndex];
-        if (!myPlayer || myPlayer.isAI || myPlayer.bankrupt) {
-          console.warn("[App] myPlayerIndex points to invalid player, re-detecting...", {
-            myPlayerIndex,
-            player: myPlayer,
-          });
-          const humanPlayer = players.findIndex(p => !p.isAI && !p.bankrupt);
-          if (humanPlayer !== -1) {
-            console.log("[App] Re-setting myPlayerIndex to:", humanPlayer, players[humanPlayer]?.name);
-            setMyPlayerIndex(humanPlayer);
-          }
-        }
-      }
-    }
-  }, [players, phase, myPlayerIndex, setMyPlayerIndex]);
 
-  const currentPlayer = currentPlayerIndex !== undefined && currentPlayerIndex < players.length 
-    ? players[currentPlayerIndex] 
+  const myPlayerIndex = React.useMemo(() => {
+    return players.findIndex(p => p.clientId === clientId);
+  }, [players, clientId]);
+
+  const currentPlayer = currentPlayerIndex !== undefined && currentPlayerIndex < players.length
+    ? players[currentPlayerIndex]
     : null;
-  
+
   const isMyTurn = currentPlayerIndex === myPlayerIndex;
   
   const currentSpace = currentPlayer ? spaces[currentPlayer.position] : null;

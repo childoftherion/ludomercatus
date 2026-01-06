@@ -1,21 +1,13 @@
 import React from "react";
 import { motion } from "framer-motion";
 import { useGameStore } from "../store/gameStore";
-import { useLocalStore } from "../store/localStore";
 
 const TOKENS = ["🚗", "🚙", "🚕", "🏎", "🚁", "✈️", "⛵", "🎭"];
 
 export const MultiplayerLobby = () => {
-  const { players, addPlayer, startGame, leaveRoom } = useGameStore();
-  const { clientId, setMyPlayerIndex } = useLocalStore();
+  const { players, addPlayer, startGame, leaveRoom, clientId } = useGameStore();
   
   const myPlayer = players.find(p => p.clientId === clientId);
-  
-  React.useEffect(() => {
-    if (myPlayer) {
-      setMyPlayerIndex(myPlayer.id);
-    }
-  }, [myPlayer]);
 
   const [name, setName] = React.useState("");
   const [token, setToken] = React.useState("");
