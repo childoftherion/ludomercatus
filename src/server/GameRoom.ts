@@ -94,6 +94,45 @@ export class GameRoom implements GameActions {
       // Jackpot system
       jackpot: 0,
     };
+
+    // Bind all public methods to `this`
+    this.addPlayer = this.addPlayer.bind(this);
+    this.updatePlayer = this.updatePlayer.bind(this);
+    this.startGame = this.startGame.bind(this);
+    this.initGame = this.initGame.bind(this);
+    this.updateSettings = this.updateSettings.bind(this);
+    this.rollDice = this.rollDice.bind(this);
+    this.movePlayer = this.movePlayer.bind(this);
+    this.buyProperty = this.buyProperty.bind(this);
+    this.declineProperty = this.declineProperty.bind(this);
+    this.payRent = this.payRent.bind(this);
+    this.endTurn = this.endTurn.bind(this);
+    this.goToJail = this.goToJail.bind(this);
+    this.getOutOfJail = this.getOutOfJail.bind(this);
+    this.buildHouse = this.buildHouse.bind(this);
+    this.buildHotel = this.buildHotel.bind(this);
+    this.sellHouse = this.sellHouse.bind(this);
+    this.sellHotel = this.sellHotel.bind(this);
+    this.mortgageProperty = this.mortgageProperty.bind(this);
+    this.unmortgageProperty = this.unmortgageProperty.bind(this);
+    this.drawCard = this.drawCard.bind(this);
+    this.checkBankruptcy = this.checkBankruptcy.bind(this);
+    this.declareBankruptcy = this.declareBankruptcy.bind(this);
+    this.startAuction = this.startAuction.bind(this);
+    this.placeBid = this.placeBid.bind(this);
+    this.passAuction = this.passAuction.bind(this);
+    this.endAuction = this.endAuction.bind(this);
+    this.startTrade = this.startTrade.bind(this);
+    this.updateTradeOffer = this.updateTradeOffer.bind(this);
+    this.proposeTrade = this.proposeTrade.bind(this);
+    this.acceptTrade = this.acceptTrade.bind(this);
+    this.rejectTrade = this.rejectTrade.bind(this);
+    this.cancelTrade = this.cancelTrade.bind(this);
+    this.counterOffer = this.counterOffer.bind(this);
+    this.acceptCounterOffer = this.acceptCounterOffer.bind(this);
+    this.executeAITurn = this.executeAITurn.bind(this);
+    this.executeAITradeResponse = this.executeAITradeResponse.bind(this);
+    this.chooseTaxOption = this.chooseTaxOption.bind(this);
   }
 
   public subscribe(listener: (state: GameState) => void) {
