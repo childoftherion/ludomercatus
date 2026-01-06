@@ -11,195 +11,20 @@ import { AuctionModal } from "./components/AuctionModal";
 import { TradeModal } from "./components/TradeModal";
 import { RentNegotiationModal } from "./components/RentNegotiationModal";
 import { BankruptcyModal } from "./components/BankruptcyModal";
-import { Dice, DiceDisplay } from "./components/Dice";
 import { GameLog } from "./components/GameLog";
-import { PlayerPropertiesPanel } from "./components/PlayerProperties";
 import { PlayerSelectionModal } from "./components/PlayerSelectionModal";
 import { CardDisplay } from "./components/CardDisplay";
 import { PropertyDetailsModal } from "./components/PropertyDetailsModal";
-import { DraggableModal } from "./components/DraggableModal";
 import { UserPanel } from "./components/UserPanel";
 import { useLocalStore } from "./store/localStore";
 import type { Property } from "./types/game";
-
-// Burger Menu Component - Consolidated menu for game controls
-const BurgerMenu = ({ isMuted, onToggleMute, onExit }: { isMuted: boolean; onToggleMute: () => void; onExit: () => void }) => {
-  const [isOpen, setIsOpen] = React.useState(false);
-
-  return (
-    <div style={{ position: "fixed", top: "8px", right: "8px", zIndex: 10000 }}>
-      {/* Burger Menu Button */}
-      <motion.button
-        whileHover={{ scale: 1.1 }}
-        whileTap={{ scale: 0.95 }}
-        onClick={() => setIsOpen(!isOpen)}
-        style={{
-          background: "rgba(30, 30, 30, 0.95)",
-          color: "white",
-          border: "1px solid rgba(255,255,255,0.2)",
-          borderRadius: "6px",
-          width: "32px",
-          height: "32px",
-          cursor: "pointer",
-          boxShadow: "0 2px 8px rgba(0,0,0,0.4)",
-          display: "flex",
-          flexDirection: "column",
-          alignItems: "center",
-          justifyContent: "center",
-          gap: "4px",
-          padding: "6px",
-          transition: "all 0.2s ease",
-        }}
-        title="Menu"
-      >
-        <motion.span
-          style={{
-            width: "18px",
-            height: "2px",
-            background: "white",
-            borderRadius: "1px",
-            display: "block",
-          }}
-          animate={{
-            rotate: isOpen ? 45 : 0,
-            y: isOpen ? 6 : 0,
-          }}
-          transition={{ duration: 0.2 }}
-        />
-        <motion.span
-          style={{
-            width: "18px",
-            height: "2px",
-            background: "white",
-            borderRadius: "1px",
-            display: "block",
-          }}
-          animate={{
-            opacity: isOpen ? 0 : 1,
-          }}
-          transition={{ duration: 0.2 }}
-        />
-        <motion.span
-          style={{
-            width: "18px",
-            height: "2px",
-            background: "white",
-            borderRadius: "1px",
-            display: "block",
-          }}
-          animate={{
-            rotate: isOpen ? -45 : 0,
-            y: isOpen ? -6 : 0,
-          }}
-          transition={{ duration: 0.2 }}
-        />
-      </motion.button>
-
-      {/* Dropdown Menu */}
-      <AnimatePresence>
-        {isOpen && (
-          <motion.div
-            initial={{ opacity: 0, scale: 0.9, y: -10 }}
-            animate={{ opacity: 1, scale: 1, y: 0 }}
-            exit={{ opacity: 0, scale: 0.9, y: -10 }}
-            transition={{ duration: 0.2 }}
-            style={{
-              position: "absolute",
-              top: "40px",
-              right: 0,
-              background: "rgba(30, 30, 30, 0.98)",
-              border: "1px solid rgba(255,255,255,0.2)",
-              borderRadius: "8px",
-              boxShadow: "0 4px 16px rgba(0,0,0,0.5)",
-              minWidth: "160px",
-              overflow: "hidden",
-              zIndex: 10001,
-            }}
-            onClick={(e) => e.stopPropagation()}
-          >
-            {/* Mute/Unmute Option */}
-            <motion.button
-              whileHover={{ background: "rgba(255,255,255,0.1)" }}
-              whileTap={{ scale: 0.98 }}
-              onClick={() => {
-                onToggleMute();
-              }}
-              style={{
-                width: "100%",
-                padding: "12px 16px",
-                background: "transparent",
-                border: "none",
-                color: "white",
-                cursor: "pointer",
-                display: "flex",
-                alignItems: "center",
-                gap: "10px",
-                fontSize: "14px",
-                textAlign: "left",
-                borderBottom: "1px solid rgba(255,255,255,0.1)",
-              }}
-            >
-              <span style={{ fontSize: "18px" }}>{isMuted ? "🔇" : "🔊"}</span>
-              <span>{isMuted ? "Unmute Sound" : "Mute Sound"}</span>
-            </motion.button>
-
-            {/* Exit Game Option */}
-            <motion.button
-              whileHover={{ background: "rgba(255, 71, 87, 0.2)" }}
-              whileTap={{ scale: 0.98 }}
-              onClick={() => {
-                onExit();
-                setIsOpen(false);
-              }}
-              style={{
-                width: "100%",
-                padding: "12px 16px",
-                background: "transparent",
-                border: "none",
-                color: "#FF4757",
-                cursor: "pointer",
-                display: "flex",
-                alignItems: "center",
-                gap: "10px",
-                fontSize: "14px",
-                textAlign: "left",
-                fontWeight: "500",
-              }}
-            >
-              <span style={{ fontSize: "18px" }}>✕</span>
-              <span>Exit Game</span>
-            </motion.button>
-          </motion.div>
-        )}
-      </AnimatePresence>
-
-      {/* Backdrop to close menu when clicking outside */}
-      {isOpen && (
-        <div
-          style={{
-            position: "fixed",
-            top: 0,
-            left: 0,
-            right: 0,
-            bottom: 0,
-            zIndex: 9999,
-            background: "transparent",
-          }}
-          onClick={() => setIsOpen(false)}
-        />
-      )}
-    </div>
-  );
-};
-
-const isProperty = (space: { type: string }): space is Property => {
-  return space.type === "property" || space.type === "railroad" || space.type === "utility";
-};
+import { BurgerMenu } from "./components/BurgerMenu";
+import { GamePanel } from "./components/GamePanel";
+import { isProperty } from "./utils/helpers";
 
 export default function App() {
   const { 
     phase, 
-    diceRoll, 
     currentPlayerIndex, 
     players, 
     passedGo: storePassedGo, 
@@ -213,8 +38,6 @@ export default function App() {
     inRoom,
     leaveRoom,
     currentGoSalary,
-    awaitingTaxDecision,
-    chooseTaxOption,
     pendingRentNegotiation,
     settings,
   } = useGameStore();
@@ -223,7 +46,6 @@ export default function App() {
   React.useEffect(() => {
     connect();
   }, []);
-
   // Enable body scrolling for setup screen
   React.useEffect(() => {
     if (phase === "setup") {
@@ -235,7 +57,6 @@ export default function App() {
       document.body.style.overflow = "hidden";
     };
   }, [phase]);
-
   // Auto-detect human player if myPlayerIndex is not set (fallback for games started before fix)
   React.useEffect(() => {
     if (players.length > 0 && phase !== "setup" && phase !== "lobby") {
@@ -316,7 +137,7 @@ export default function App() {
       prevPlayerIndexRef.current = currentPlayerIndex;
     }
   }, [currentPlayerIndex, phase]);
-
+  const { diceRoll } = useGameStore();
   // Detect new turns and handle stale diceRoll
   React.useEffect(() => {
     const detectedNewTurn = lastPlayerIndexRef.current !== undefined && 
@@ -434,7 +255,6 @@ export default function App() {
       }, 2000);
     }
   }, [storePassedGo]);
-
   // AI turn execution
   React.useEffect(() => {
     if (!connected) return; // Wait for connection
@@ -448,7 +268,6 @@ export default function App() {
 
     return () => clearTimeout(aiDelay);
   }, [currentPlayer, phase, auction?.activePlayerIndex, connected]);
-
   // AI auction bid execution - separate handler for auction phase
   React.useEffect(() => {
     if (!connected) return;
@@ -465,7 +284,6 @@ export default function App() {
 
     return () => clearTimeout(aiDelay);
   }, [phase, auction?.activePlayerIndex, players, connected]);
-
   // AI trade response
   React.useEffect(() => {
     if (!connected) return;
@@ -492,7 +310,6 @@ export default function App() {
       }
     }
   }, [phase, trade?.status, connected, players]);
-
   // AI rent negotiation response
   React.useEffect(() => {
     if (!connected) return;
@@ -506,7 +323,6 @@ export default function App() {
       }
     }
   }, [phase, pendingRentNegotiation, connected, players]);
-
   // AI bankruptcy decision
   React.useEffect(() => {
     if (!connected) return;
@@ -523,13 +339,11 @@ export default function App() {
       }
     }
   }, [phase, connected, players]);
-
   const handleRollDice = () => {
     if (isRolling) return;
     setIsRolling(true);
     audioManager.playDiceRoll();
   };
-
   const handleRollComplete = () => {
     const roll = useGameStore.getState().diceRoll;
     
@@ -546,7 +360,6 @@ export default function App() {
       }
     }, 800);
   };
-
   const handleEndTurn = () => {
     const currentRoll = useGameStore.getState().diceRoll;
     const isDoubles = currentRoll?.isDoubles;
@@ -563,18 +376,15 @@ export default function App() {
       }, 100);
     }
   };
-
   const handleBuyProperty = () => {
     if (!currentSpace || !isProperty(currentSpace)) return;
     useGameStore.getState().buyProperty(currentSpace.id);
     audioManager.playPurchase();
   };
-
   const handleDeclineProperty = () => {
     if (!currentSpace) return;
     useGameStore.getState().declineProperty(currentSpace.id);
   };
-
   // Keyboard shortcuts
   React.useEffect(() => {
     const handleKeyPress = (e: KeyboardEvent) => {
@@ -644,19 +454,16 @@ export default function App() {
     window.addEventListener("keydown", handleKeyPress);
     return () => window.removeEventListener("keydown", handleKeyPress);
   }, [phase, diceRoll, isRolling, currentSpace, isMyTurn, currentPlayerIndex, myPlayerIndex, selectedProperty]);
-
   const handlePayTax = () => {
     if (!currentSpace || currentSpace.type !== "tax" || !currentPlayer) return;
     const amount = currentSpace.name.includes("Income") ? 200 : 100;
     useGameStore.getState().payTax(currentPlayerIndex, amount);
     audioManager.playMoney();
   };
-
   const handleDrawCard = (cardType: "chance" | "community_chest") => {
     useGameStore.getState().drawCard(currentPlayerIndex, cardType);
     audioManager.playCardDraw();
   };
-
   const handleJailAction = (action: "card" | "pay" | "roll") => {
     if (currentPlayer) {
       useGameStore.getState().getOutOfJail(currentPlayerIndex, action);
@@ -682,7 +489,6 @@ export default function App() {
   if (!inRoom) {
     return <ServerBrowser />;
   }
-
   // Winner screen
   if (winner !== undefined) {
     const winnerPlayer = players.find(p => p.id === winner);
@@ -724,20 +530,14 @@ export default function App() {
       </div>
     );
   }
-
   // Setup screen
   if (phase === "setup") {
     return <PlayerSetup />;
   }
-
   // Lobby screen
   if (phase === "lobby") {
     return <MultiplayerLobby />;
   }
-
-  // Get other players (for compact display)
-  const otherPlayers = players.filter((_, i) => i !== currentPlayerIndex);
-
   return (
     <div
       style={{
@@ -762,7 +562,6 @@ export default function App() {
         }}
         onExit={leaveRoom}
       />
-
       {/* Left Side - Game Log (Fixed) - Expanded to fill screen */}
       <div
         style={{
@@ -777,7 +576,6 @@ export default function App() {
       >
         <GameLog />
       </div>
-
       {/* Center - Board and Game Controls - MAXIMIZED - perfectly centered and expanded */}
       <div
         id="board-container-parent"
@@ -845,7 +643,6 @@ export default function App() {
               />
             </div>
           )}
-
           {/* Property Details Modal in Center of Screen */}
           {selectedProperty && (
             <div
@@ -871,7 +668,6 @@ export default function App() {
               />
             </div>
           )}
-
           {/* Passed GO notification */}
           <AnimatePresence>
             {passedGo && (
@@ -904,7 +700,6 @@ export default function App() {
           </AnimatePresence>
         </div>
       </div>
-
       {/* Connection Status Indicator */}
       {!connected && inRoom && (
         <motion.div
@@ -933,7 +728,6 @@ export default function App() {
           <span>Disconnected. Reconnecting...</span>
         </motion.div>
       )}
-
       {/* All Modals - Rendered outside board container for proper fixed positioning */}
       {/* Auction Modal */}
       <AnimatePresence>
@@ -945,7 +739,6 @@ export default function App() {
           />
         )}
       </AnimatePresence>
-
       {/* Trade Modal */}
       <AnimatePresence>
         {phase === "trading" && trade && (
@@ -956,7 +749,6 @@ export default function App() {
           />
         )}
       </AnimatePresence>
-
       {/* Rent Negotiation Modal - Phase 3 */}
       <AnimatePresence>
         {phase === "awaiting_rent_negotiation" && pendingRentNegotiation && (() => {
@@ -974,7 +766,6 @@ export default function App() {
           );
         })()}
       </AnimatePresence>
-
       {/* Bankruptcy Modal - Phase 3 */}
       <AnimatePresence>
         {phase === "awaiting_bankruptcy_decision" && (useGameStore.getState() as any).pendingBankruptcy && (() => {
@@ -991,457 +782,17 @@ export default function App() {
           ) : null;
         })()}
       </AnimatePresence>
-
-      {/* Main game panel - Compact, positioned at top right */}
-      {currentPlayer && phase !== "auction" && phase !== "trading" && (
-            <motion.div
-              initial={{ opacity: 0, scale: 0.9 }}
-              animate={{ opacity: 1, scale: 1 }}
-              exit={{ opacity: 0, scale: 0.9 }}
-              transition={{ duration: 0.2 }}
-              style={{
-                position: "fixed",
-                top: "48px", // Start below burger menu
-                right: "8px",
-                width: "300px",
-                maxWidth: "300px",
-                height: "calc(100vh - 100px)", // Fill most of the screen height
-                maxHeight: "calc(100vh - 100px)",
-                textAlign: "center",
-                color: "#fff",
-                zIndex: 300,
-                backgroundColor: "rgba(0, 0, 0, 0.95)",
-                borderRadius: "12px",
-                boxShadow: "0 4px 16px rgba(0, 0, 0, 0.5)",
-                border: "1px solid rgba(255,255,255,0.1)",
-                overflowY: "auto",
-                overflowX: "hidden",
-                display: "flex",
-                flexDirection: "column",
-              }}
-            >
-              <div style={{ padding: "12px", display: "flex", flexDirection: "column", flex: 1, minHeight: 0, overflow: "hidden", gap: "8px" }}> {/* Reduced padding, use flex for better fit */}
-              <div style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: "8px", marginBottom: "8px", flexShrink: 0 }}> {/* Reduced gap and margin */}
-                <div
-                  style={{
-                    width: "24px", // Reduced size
-                    height: "24px",
-                    borderRadius: "50%",
-                    backgroundColor: currentPlayer.color,
-                    border: "2px solid #fff",
-                    display: "flex",
-                    alignItems: "center",
-                    justifyContent: "center",
-                    fontSize: "14px", // Reduced font size
-                  }}
-                >
-                  {currentPlayer.token}
-                </div>
-                <h2 style={{ margin: 0, fontSize: "16px" }}> {/* Reduced font size for better fit */}
-                  {currentPlayer.name}'s Turn
-                  {currentPlayer.isAI && <span style={{ fontSize: "11px", color: "#FF9800", marginLeft: "6px" }}>(AI)</span>}
-                </h2>
-              </div>
-              
-              <p style={{ fontSize: "12px", marginBottom: "6px", color: "#ccc", flexShrink: 0 }}> {/* Reduced font size and margin */}
-                Cash: £{currentPlayer.cash}
-              </p>
-              
-              {/* AI Thinking Indicator */}
-              {currentPlayer.isAI && (
-                <motion.div
-                  initial={{ opacity: 0 }}
-                  animate={{ opacity: 1 }}
-                  style={{
-                    padding: "8px", // Reduced padding
-                    fontSize: "12px", // Reduced font size
-                    color: "#FF9800",
-                    fontWeight: "bold",
-                    flexShrink: 0,
-                  }}
-                >
-                  <motion.span
-                    animate={{ opacity: [1, 0.5, 1] }}
-                    transition={{ repeat: Infinity, duration: 1.5 }}
-                  >
-                    AI is thinking...
-                  </motion.span>
-                </motion.div>
-              )}
-
-              {/* Rolling phase - not in jail */}
-              {phase === "rolling" && !currentPlayer.inJail && !currentPlayer.isAI && (
-                <div style={{ flexShrink: 0 }}>
-                  {isMyTurn ? (
-                    <>
-                      {/* Show Roll Dice button if:
-                          - No diceRoll exists, OR
-                          - It's a new turn (stale diceRoll), OR  
-                          - Phase is rolling and we're ready to roll (not currently rolling)
-                          Note: After doubles, server clears diceRoll, but client might still have it briefly */}
-                      {(!diceRoll || isNewTurn) && !isRolling ? (
-                        <motion.button
-                          onClick={handleRollDice}
-                          whileHover={{ scale: 1.05 }}
-                          whileTap={{ scale: 0.95 }}
-                          style={{
-                            padding: "10px 24px", // Further reduced padding
-                            fontSize: "14px", // Reduced font size
-                            backgroundColor: "#4CAF50",
-                            color: "#fff",
-                            border: "none",
-                            borderRadius: "8px",
-                            cursor: "pointer",
-                            fontWeight: "bold",
-                            width: "100%", // Full width for better appearance
-                          }}
-                        >
-                          Roll Dice
-                        </motion.button>
-                      ) : isRolling ? (
-                        <Dice onRollComplete={handleRollComplete} />
-                      ) : (
-                        <div style={{ padding: "16px", color: "#ff9800", fontSize: "14px", textAlign: "center" }}>
-                          <p>Dice already rolled. Check console for details.</p>
-                          <p style={{ fontSize: "12px", marginTop: "8px", color: "#888" }}>
-                            diceRoll: {diceRoll ? JSON.stringify(diceRoll) : "undefined"}
-                          </p>
-                          {isNewTurn && (
-                            <p style={{ fontSize: "12px", marginTop: "8px", color: "#4CAF50" }}>
-                              (New turn detected - button should appear above)
-                            </p>
-                          )}
-                        </div>
-                      )}
-                    </>
-                  ) : (
-                    <div style={{ padding: "16px", color: "#888", fontSize: "14px", textAlign: "center" }}>
-                      {myPlayerIndex === null ? (
-                        <>
-                          <p style={{ color: "#ff9800", fontWeight: "bold" }}>⚠️ Player not selected</p>
-                          <p style={{ fontSize: "12px", marginTop: "4px" }}>Auto-detecting player...</p>
-                        </>
-                      ) : (
-                        <>
-                          <p>Waiting for {currentPlayer.name} to roll...</p>
-                          <p style={{ fontSize: "12px", marginTop: "4px", color: "#666" }}>
-                            Debug: currentPlayerIndex={currentPlayerIndex}, myPlayerIndex={myPlayerIndex}
-                          </p>
-                        </>
-                      )}
-                    </div>
-                  )}
-                </div>
-              )}
-
-              {/* Jail decision phase */}
-              {(phase === "jail_decision" || (phase === "rolling" && currentPlayer.inJail)) && currentPlayer.inJail && (
-                <div style={{ backgroundColor: "#333", padding: "10px", borderRadius: "8px", flexShrink: 0 }}> {/* Reduced padding */}
-                  <h3 style={{ marginBottom: "4px", fontSize: "12px", color: "#ff6b6b" }}>In Jail</h3> {/* Reduced margin and font size */}
-                  <p style={{ fontSize: "11px", marginBottom: "8px", color: "#ccc" }}> {/* Reduced font size and margin */}
-                    Turn {currentPlayer.jailTurns + 1} of 3
-                  </p>
-                  
-                  {/* Hide interactive buttons for AI */}
-                  {!currentPlayer.isAI && isMyTurn && (
-                    <div style={{ display: "flex", gap: "6px", justifyContent: "center", flexWrap: "wrap" }}>
-                      {currentPlayer.jailFreeCards > 0 && (
-                        <motion.button
-                          onClick={() => handleJailAction("card")}
-                          whileHover={{ scale: 1.05 }}
-                          whileTap={{ scale: 0.95 }}
-                          style={{
-                            padding: "8px 16px",
-                            fontSize: "12px",
-                            backgroundColor: "#9C27B0",
-                            color: "#fff",
-                            border: "none",
-                            borderRadius: "6px",
-                            cursor: "pointer",
-                          }}
-                        >
-                          Use Card ({currentPlayer.jailFreeCards})
-                        </motion.button>
-                      )}
-                      {currentPlayer.cash >= 50 && (
-                        <motion.button
-                          onClick={() => handleJailAction("pay")}
-                          whileHover={{ scale: 1.05 }}
-                          whileTap={{ scale: 0.95 }}
-                          style={{
-                            padding: "8px 16px",
-                            fontSize: "12px",
-                            backgroundColor: "#2196F3",
-                            color: "#fff",
-                            border: "none",
-                            borderRadius: "6px",
-                            cursor: "pointer",
-                          }}
-                        >
-                          Pay £50
-                        </motion.button>
-                      )}
-                      <motion.button
-                        onClick={() => handleJailAction("roll")}
-                        whileHover={{ scale: 1.05 }}
-                        whileTap={{ scale: 0.95 }}
-                        style={{
-                          padding: "8px 16px",
-                          fontSize: "12px",
-                          backgroundColor: "#4CAF50",
-                          color: "#fff",
-                          border: "none",
-                          borderRadius: "6px",
-                          cursor: "pointer",
-                        }}
-                      >
-                        Roll for Doubles
-                      </motion.button>
-                    </div>
-                  )}
-                </div>
-              )}
-
-              {/* Tax decision phase - Progressive Income Tax */}
-              {phase === "awaiting_tax_decision" && awaitingTaxDecision && isMyTurn && (
-                <div style={{ backgroundColor: "#333", padding: "16px", borderRadius: "8px" }}>
-                  <h3 style={{ marginBottom: "8px", color: "#FFD700" }}>💰 Income Tax</h3>
-                  <p style={{ fontSize: "14px", marginBottom: "16px", color: "#ccc" }}>
-                    Choose your tax payment method:
-                  </p>
-                  
-                  <div style={{ display: "flex", gap: "12px", justifyContent: "center", flexDirection: "column" }}>
-                    <motion.button
-                      onClick={() => chooseTaxOption(currentPlayerIndex, "flat")}
-                      whileHover={{ scale: 1.02 }}
-                      whileTap={{ scale: 0.98 }}
-                      style={{
-                        padding: "16px 24px",
-                        fontSize: "16px",
-                        backgroundColor: awaitingTaxDecision.flatAmount <= awaitingTaxDecision.percentageAmount ? "#4CAF50" : "#555",
-                        color: "#fff",
-                        border: awaitingTaxDecision.flatAmount <= awaitingTaxDecision.percentageAmount ? "2px solid #8BC34A" : "2px solid transparent",
-                        borderRadius: "8px",
-                        cursor: "pointer",
-                        display: "flex",
-                        justifyContent: "space-between",
-                        alignItems: "center",
-                      }}
-                    >
-                      <span>Flat Tax</span>
-                      <span style={{ fontWeight: "bold" }}>£{awaitingTaxDecision.flatAmount}</span>
-                    </motion.button>
-                    
-                    <motion.button
-                      onClick={() => chooseTaxOption(currentPlayerIndex, "percentage")}
-                      whileHover={{ scale: 1.02 }}
-                      whileTap={{ scale: 0.98 }}
-                      style={{
-                        padding: "16px 24px",
-                        fontSize: "16px",
-                        backgroundColor: awaitingTaxDecision.percentageAmount < awaitingTaxDecision.flatAmount ? "#4CAF50" : "#555",
-                        color: "#fff",
-                        border: awaitingTaxDecision.percentageAmount < awaitingTaxDecision.flatAmount ? "2px solid #8BC34A" : "2px solid transparent",
-                        borderRadius: "8px",
-                        cursor: "pointer",
-                        display: "flex",
-                        justifyContent: "space-between",
-                        alignItems: "center",
-                      }}
-                    >
-                      <span>10% of Net Worth</span>
-                      <span style={{ fontWeight: "bold" }}>£{awaitingTaxDecision.percentageAmount}</span>
-                    </motion.button>
-                  </div>
-                  
-                  <p style={{ fontSize: "11px", marginTop: "12px", color: "rgba(255,255,255,0.5)", textAlign: "center" }}>
-                    {awaitingTaxDecision.percentageAmount < awaitingTaxDecision.flatAmount 
-                      ? "💡 10% is cheaper for you!" 
-                      : "💡 Flat tax is cheaper for you!"}
-                  </p>
-                </div>
-              )}
-
-              {/* Buy decision phase */}
-              {phase === "awaiting_buy_decision" && currentSpace && isProperty(currentSpace) && (
-                <div style={{ backgroundColor: "#333", padding: "16px", borderRadius: "8px" }}>
-                  <h3 style={{ marginBottom: "8px", color: "#fff" }}>{currentSpace.name}</h3>
-                  <p style={{ fontSize: "16px", marginBottom: "12px", color: "#ccc" }}>
-                    Price: £{currentSpace.price}
-                  </p>
-                  
-                  {/* Hide interactive buttons for AI */}
-                  {!currentPlayer.isAI && isMyTurn && (
-                    <div style={{ display: "flex", gap: "12px", justifyContent: "center" }}>
-                      {currentPlayer.cash >= currentSpace.price ? (
-                        <>
-                          <motion.button
-                            onClick={handleBuyProperty}
-                            whileHover={{ scale: 1.05 }}
-                            whileTap={{ scale: 0.95 }}
-                            style={{
-                              padding: "12px 24px",
-                              fontSize: "16px",
-                              backgroundColor: "#4CAF50",
-                              color: "#fff",
-                              border: "none",
-                              borderRadius: "8px",
-                              cursor: "pointer",
-                            }}
-                          >
-                            Buy for £{currentSpace.price}
-                          </motion.button>
-                          <motion.button
-                            onClick={handleDeclineProperty}
-                            whileHover={{ scale: 1.05 }}
-                            whileTap={{ scale: 0.95 }}
-                            style={{
-                              padding: "12px 24px",
-                              fontSize: "16px",
-                              backgroundColor: "#FF9800",
-                              color: "#fff",
-                              border: "none",
-                              borderRadius: "8px",
-                              cursor: "pointer",
-                            }}
-                          >
-                            Auction
-                          </motion.button>
-                        </>
-                      ) : (
-                        <div style={{ textAlign: "center" }}>
-                          <p style={{ color: "#ff6b6b", fontWeight: "bold", marginBottom: "12px" }}>
-                            Not enough cash!
-                          </p>
-                          <motion.button
-                            onClick={handleDeclineProperty}
-                            whileHover={{ scale: 1.05 }}
-                            whileTap={{ scale: 0.95 }}
-                            style={{
-                              padding: "12px 24px",
-                              fontSize: "16px",
-                              backgroundColor: "#FF9800",
-                              color: "#fff",
-                              border: "none",
-                              borderRadius: "8px",
-                              cursor: "pointer",
-                            }}
-                          >
-                            Go to Auction
-                          </motion.button>
-                        </div>
-                      )}
-                    </div>
-                  )}
-                </div>
-              )}
-
-              {/* Resolving space phase */}
-              {phase === "resolving_space" && currentSpace && (
-                <div style={{ flexShrink: 0, display: "flex", flexDirection: "column", gap: "8px" }}>
-                  <div style={{ marginBottom: "8px" }}>
-                    <DiceDisplay />
-                  </div>
-                  
-                  <div style={{ backgroundColor: "#333", padding: "10px", borderRadius: "8px" }}>
-                    <h3 style={{ marginBottom: "6px", fontSize: "13px", color: "#fff" }}>{currentSpace.name}</h3>
-                    
-                    {/* Property display */}
-                    {isProperty(currentSpace) && (
-                      <div style={{ marginBottom: "8px" }}>
-                        {currentSpace.owner !== undefined && currentSpace.owner !== currentPlayerIndex && (
-                          <p style={{ color: "#ff6b6b", fontSize: "11px" }}>
-                            Owned by {players[currentSpace.owner]?.name ?? "Unknown"}
-                            {currentSpace.mortgaged && " (Mortgaged)"}
-                          </p>
-                        )}
-                        {currentSpace.owner === currentPlayerIndex && (
-                          <p style={{ color: "#4CAF50", fontSize: "11px" }}>You own this property!</p>
-                        )}
-                      </div>
-                    )}
-
-                    {/* Tax payment */}
-                    {currentSpace.type === "tax" && (
-                      <div>
-                        <p style={{ fontSize: "16px", marginBottom: "12px", color: "#ff6b6b" }}>
-                          Paid £{currentSpace.name.includes("Income") ? 200 : 100} tax automatically
-                        </p>
-                        {!currentPlayer.isAI && isMyTurn && (
-                          <motion.button
-                            onClick={handleEndTurn}
-                            whileHover={{ scale: 1.05 }}
-                            whileTap={{ scale: 0.95 }}
-                            style={{
-                              padding: "12px 24px",
-                              fontSize: "16px",
-                              backgroundColor: "#2196F3",
-                              color: "#fff",
-                              border: "none",
-                              borderRadius: "8px",
-                              cursor: "pointer",
-                            }}
-                          >
-                            End Turn
-                          </motion.button>
-                        )}
-                      </div>
-                    )}
-
-                    {/* Card spaces */}
-                    {(currentSpace.type === "chance" || currentSpace.type === "community_chest") && !lastCardDrawn && (
-                      <div>
-                        {!currentPlayer.isAI && isMyTurn && (
-                          <motion.button
-                            onClick={() => handleDrawCard(currentSpace.type as "chance" | "community_chest")}
-                            whileHover={{ scale: 1.05 }}
-                            whileTap={{ scale: 0.95 }}
-                            style={{
-                              padding: "8px 20px",
-                              fontSize: "13px",
-                              backgroundColor: currentSpace.type === "chance" ? "#FF8C00" : "#4169E1",
-                              color: "#fff",
-                              border: "none",
-                              borderRadius: "6px",
-                              cursor: "pointer",
-                              width: "100%",
-                            }}
-                          >
-                            Draw {currentSpace.type === "chance" ? "Chance" : "Community Chest"}
-                          </motion.button>
-                        )}
-                      </div>
-                    )}
-                  </div>
-
-                  {/* End turn button */}
-                  {diceRoll && !currentPlayer.inJail && !currentPlayer.isAI && isMyTurn && (
-                    <motion.button
-                      onClick={handleEndTurn}
-                      whileHover={{ scale: 1.05 }}
-                      whileTap={{ scale: 0.95 }}
-                      style={{
-                        marginTop: "8px",
-                        padding: "10px 24px",
-                        fontSize: "14px",
-                        backgroundColor: diceRoll.isDoubles ? "#4CAF50" : "#2196F3",
-                        color: "#fff",
-                        border: "none",
-                        borderRadius: "6px",
-                        cursor: "pointer",
-                        fontWeight: "bold",
-                        width: "100%",
-                        flexShrink: 0,
-                      }}
-                    >
-                      {diceRoll.isDoubles ? "Roll Again (Doubles!)" : "End Turn"}
-                    </motion.button>
-                  )}
-                </div>
-              )}
-              </div>
-            </motion.div>
-          )}
+      <GamePanel
+        isRolling={isRolling}
+        isNewTurn={isNewTurn}
+        handleRollDice={handleRollDice}
+        handleRollComplete={handleRollComplete}
+        handleEndTurn={handleEndTurn}
+        handleBuyProperty={handleBuyProperty}
+        handleDeclineProperty={handleDeclineProperty}
+        handleJailAction={handleJailAction}
+        handleDrawCard={handleDrawCard}
+      />
 
       <PlayerSelectionModal />
 

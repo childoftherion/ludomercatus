@@ -1,5 +1,5 @@
 import { create } from "zustand";
-import type { GameState, Property, ColorGroup, GameLogEntry, TradeOffer, GameSettings } from "../types/game";
+import type { GameState, Property, ColorGroup, GameLogEntry, TradeOffer, GameSettings, AIDifficulty } from "../types/game";
 import { DEFAULT_GAME_SETTINGS } from "../types/game";
 import { boardSpaces } from "../data/board";
 import { getPlayerProperties, hasMonopoly } from "../logic/rules/monopoly";
