@@ -9,6 +9,7 @@ interface Props {
   property: Property;
   rentAmount: number;
   debtorCanAfford: number;
+  myPlayerIndex: number;
 }
 
 export const RentNegotiationModal: React.FC<Props> = ({
@@ -17,7 +18,10 @@ export const RentNegotiationModal: React.FC<Props> = ({
   property,
   rentAmount,
   debtorCanAfford,
+  myPlayerIndex,
 }) => {
+  const isCreditor = myPlayerIndex === creditor.id;
+  const isDebtor = myPlayerIndex === debtor.id;
   const [partialPayment, setPartialPayment] = React.useState(debtorCanAfford);
   const [selectedPropertyId, setSelectedPropertyId] = React.useState<number | undefined>(undefined);
   const [showPropertyTransfer, setShowPropertyTransfer] = React.useState(false);
@@ -178,15 +182,17 @@ export const RentNegotiationModal: React.FC<Props> = ({
         <div style={{ display: "flex", gap: "10px", flexWrap: "wrap" }}>
           <button
             onClick={handleForgive}
+            disabled={!isCreditor}
             style={{
               padding: "10px 16px",
               backgroundColor: "rgba(34, 197, 94, 0.2)",
               border: "1px solid #22c55e",
               borderRadius: "8px",
               color: "#22c55e",
-              cursor: "pointer",
+              cursor: isCreditor ? "pointer" : "not-allowed",
               fontSize: "13px",
               transition: "all 0.2s",
+              opacity: isCreditor ? 1 : 0.5,
             }}
             onMouseEnter={(e) => {
               e.currentTarget.style.backgroundColor = "rgba(34, 197, 94, 0.4)";
@@ -200,15 +206,17 @@ export const RentNegotiationModal: React.FC<Props> = ({
           
           <button
             onClick={() => setShowPropertyTransfer(!showPropertyTransfer)}
+            disabled={!isCreditor}
             style={{
               padding: "10px 16px",
               backgroundColor: showPropertyTransfer ? "rgba(251, 191, 36, 0.3)" : "rgba(251, 191, 36, 0.2)",
               border: "1px solid #fbbf24",
               borderRadius: "8px",
               color: "#fbbf24",
-              cursor: "pointer",
+              cursor: isCreditor ? "pointer" : "not-allowed",
               fontSize: "13px",
               transition: "all 0.2s",
+              opacity: isCreditor ? 1 : 0.5,
             }}
           >
             🏠 Demand Property
@@ -216,15 +224,17 @@ export const RentNegotiationModal: React.FC<Props> = ({
           
           <button
             onClick={handleForceBankruptcy}
+            disabled={!isCreditor}
             style={{
               padding: "10px 16px",
               backgroundColor: "rgba(239, 68, 68, 0.2)",
               border: "1px solid #ef4444",
               borderRadius: "8px",
               color: "#ef4444",
-              cursor: "pointer",
+              cursor: isCreditor ? "pointer" : "not-allowed",
               fontSize: "13px",
               transition: "all 0.2s",
+              opacity: isCreditor ? 1 : 0.5,
             }}
             onMouseEnter={(e) => {
               e.currentTarget.style.backgroundColor = "rgba(239, 68, 68, 0.4)";
@@ -317,8 +327,14 @@ export const RentNegotiationModal: React.FC<Props> = ({
             min={0}
             max={debtorCanAfford}
             value={partialPayment}
+            disabled={!isDebtor}
             onChange={(e) => setPartialPayment(Number(e.target.value))}
-            style={{ width: "100%", marginBottom: "4px" }}
+            style={{ 
+              width: "100%", 
+              marginBottom: "4px",
+              cursor: isDebtor ? "pointer" : "not-allowed",
+              opacity: isDebtor ? 1 : 0.5,
+            }}
           />
           <div style={{ display: "flex", justifyContent: "space-between", fontSize: "13px" }}>
             <span style={{ color: "#22c55e" }}>Pay Now: £{partialPayment}</span>
@@ -339,19 +355,21 @@ export const RentNegotiationModal: React.FC<Props> = ({
         
         <button
           onClick={handleCreateIOU}
+          disabled={!isDebtor}
           style={{
             width: "100%",
             padding: "12px",
-            backgroundColor: "#3b82f6",
+            backgroundColor: isDebtor ? "#3b82f6" : "#444",
             border: "none",
             borderRadius: "8px",
-            color: "#fff",
+            color: isDebtor ? "#fff" : "#888",
             fontWeight: "bold",
-            cursor: "pointer",
+            cursor: isDebtor ? "pointer" : "not-allowed",
             fontSize: "14px",
+            opacity: isDebtor ? 1 : 0.5,
           }}
         >
-          Create IOU for £{remainingDebt}
+          {isDebtor ? `Create IOU for £${remainingDebt}` : `Waiting for ${debtor.name}...`}
         </button>
       </div>
         </div>

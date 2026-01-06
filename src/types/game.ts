@@ -102,6 +102,7 @@ export interface Player {
   inChapter11: boolean;
   chapter11TurnsRemaining: number; // Turns left to pay off debts
   chapter11DebtTarget: number; // Amount that must be paid off
+  isMobile?: boolean; // Whether the player is on a mobile device
 }
 
 // Restructuring plan for Chapter 11 bankruptcy
@@ -288,6 +289,7 @@ export interface GameState {
   previousPhase?: GamePhase;
   lastCardDrawn?: Card;
   gameLog: GameLogEntry[];
+  roomId?: string; // Current room ID
 
   // Game settings
   settings: GameSettings;

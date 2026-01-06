@@ -1,17 +1,16 @@
 import React from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { useGameStore } from "../store/gameStore";
-import { useLocalStore } from "../store/localStore";
 import type { TradeState, Player, Space, Property, TradeOffer } from "../types/game";
 
 interface Props {
   trade: TradeState;
   players: Player[];
   spaces: Space[];
+  myPlayerIndex: number;
 }
 
-export const TradeModal: React.FC<Props> = ({ trade, players, spaces }) => {
-  const { myPlayerIndex } = useLocalStore();
+export const TradeModal: React.FC<Props> = ({ trade, players, spaces, myPlayerIndex }) => {
   
   // Use ref to measure actual modal size and center properly
   const modalRef = React.useRef<HTMLDivElement>(null);

@@ -8,19 +8,20 @@ const getSpaceSize = () => {
   if (typeof window === "undefined") return 80;
   const vh = window.innerHeight;
   const vw = window.innerWidth;
+  const isMobile = vw <= 768;
   
   // Account for fixed UI elements (updated for optimized UI):
   // - GameLog on left: 180px + 8px margin + 8px spacing = 196px
   // - Main panel on right: 300px + 8px margin + 8px spacing = 316px
   // - Top burger menu: ~48px (reduced from 60px)
   // - Bottom UserPanel: ~52px (reduced from 60px)
-  const leftPanelWidth = 196;
-  const rightPanelWidth = 316;
-  const topSpace = 48;
-  const bottomSpace = 52;
+  const leftPanelWidth = isMobile ? 0 : 196;
+  const rightPanelWidth = isMobile ? 0 : 316;
+  const topSpace = isMobile ? 60 : 48; // A bit more space at top for mobile
+  const bottomSpace = isMobile ? 80 : 52; // More space for UserPanel on mobile
   
   // Calculate available space for the board
-  const availableWidth = vw - leftPanelWidth - rightPanelWidth;
+  const availableWidth = vw - (isMobile ? 20 : (leftPanelWidth + rightPanelWidth));
   const availableHeight = vh - topSpace - bottomSpace;
   
   // Use the smaller available dimension to ensure board fits proportionally
@@ -30,8 +31,8 @@ const getSpaceSize = () => {
   // Board scales proportionally to screen size
   const calculatedSize = Math.floor((minAvailable * 0.998) / 11);
   
-  // Clamp between 50 and 600 for better fit - increased max for very large screens
-  const result = Math.max(50, Math.min(600, calculatedSize));
+  // Clamp between 40 and 600 for better fit - increased max for very large screens
+  const result = Math.max(40, Math.min(600, calculatedSize));
   
   return result;
 };
@@ -289,6 +290,7 @@ export const Board = ({ onPropertyClick }: { onPropertyClick?: (property: Proper
       const container = containerRef.current;
       const containerWidth = container.clientWidth;
       const containerHeight = container.clientHeight;
+      const isMobile = window.innerWidth <= 768;
       
       // Account for board border (6px on each side = 12px total)
       const borderWidth = 12;
@@ -306,9 +308,9 @@ export const Board = ({ onPropertyClick }: { onPropertyClick?: (property: Proper
       // Board scales proportionally to screen size
       const calculatedSize = Math.min(widthBasedSize, heightBasedSize);
       
-      // Clamp between 50 and 600 for better fit - increased max for very large screens
+      // Clamp between 40 and 600 for better fit - increased max for very large screens
       // Property cards will scale proportionally with space size
-      const result = Math.max(50, Math.min(600, calculatedSize));
+      const result = Math.max(40, Math.min(600, calculatedSize));
       
       setSpaceSize(result);
       

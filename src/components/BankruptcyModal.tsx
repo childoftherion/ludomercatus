@@ -8,6 +8,7 @@ interface Props {
   debtAmount: number;
   creditor?: Player;
   chapter11Turns: number;
+  myPlayerIndex: number;
 }
 
 export const BankruptcyModal: React.FC<Props> = ({
@@ -15,7 +16,9 @@ export const BankruptcyModal: React.FC<Props> = ({
   debtAmount,
   creditor,
   chapter11Turns,
+  myPlayerIndex,
 }) => {
+  const isMyBankruptcy = myPlayerIndex === player.id;
   const spaces = useGameStore((s) => s.spaces);
   const enterChapter11 = useGameStore((s) => s.enterChapter11);
   const declineRestructuring = useGameStore((s) => s.declineRestructuring);
@@ -185,28 +188,34 @@ export const BankruptcyModal: React.FC<Props> = ({
           </ul>
           <button
             onClick={() => enterChapter11()}
+            disabled={!isMyBankruptcy}
             style={{
               width: "100%",
               padding: "14px",
-              backgroundColor: "#3b82f6",
+              backgroundColor: isMyBankruptcy ? "#3b82f6" : "#444",
               border: "none",
               borderRadius: "8px",
-              color: "#fff",
+              color: isMyBankruptcy ? "#fff" : "#888",
               fontWeight: "bold",
-              cursor: "pointer",
+              cursor: isMyBankruptcy ? "pointer" : "not-allowed",
               fontSize: "15px",
               transition: "all 0.2s",
+              opacity: isMyBankruptcy ? 1 : 0.5,
             }}
             onMouseEnter={(e) => {
-              e.currentTarget.style.backgroundColor = "#2563eb";
-              e.currentTarget.style.transform = "scale(1.02)";
+              if (isMyBankruptcy) {
+                e.currentTarget.style.backgroundColor = "#2563eb";
+                e.currentTarget.style.transform = "scale(1.02)";
+              }
             }}
             onMouseLeave={(e) => {
-              e.currentTarget.style.backgroundColor = "#3b82f6";
-              e.currentTarget.style.transform = "scale(1)";
+              if (isMyBankruptcy) {
+                e.currentTarget.style.backgroundColor = "#3b82f6";
+                e.currentTarget.style.transform = "scale(1)";
+              }
             }}
           >
-            Enter Chapter 11 Restructuring
+            {isMyBankruptcy ? "Enter Chapter 11 Restructuring" : `Waiting for ${player.name}...`}
           </button>
         </div>
         
@@ -240,29 +249,37 @@ export const BankruptcyModal: React.FC<Props> = ({
           </ul>
           <button
             onClick={() => {
-              console.log("[BankruptcyModal] Declaring bankruptcy via declineRestructuring");
-              declineRestructuring();
+              if (isMyBankruptcy) {
+                console.log("[BankruptcyModal] Declaring bankruptcy via declineRestructuring");
+                declineRestructuring();
+              }
             }}
+            disabled={!isMyBankruptcy}
             style={{
               width: "100%",
               padding: "14px",
-              backgroundColor: "rgba(239, 68, 68, 0.2)",
-              border: "1px solid #ef4444",
+              backgroundColor: isMyBankruptcy ? "rgba(239, 68, 68, 0.2)" : "rgba(255, 255, 255, 0.05)",
+              border: `1px solid ${isMyBankruptcy ? "#ef4444" : "#444"}`,
               borderRadius: "8px",
-              color: "#ef4444",
+              color: isMyBankruptcy ? "#ef4444" : "#666",
               fontWeight: "bold",
-              cursor: "pointer",
+              cursor: isMyBankruptcy ? "pointer" : "not-allowed",
               fontSize: "15px",
               transition: "all 0.2s",
+              opacity: isMyBankruptcy ? 1 : 0.5,
             }}
             onMouseEnter={(e) => {
-              e.currentTarget.style.backgroundColor = "rgba(239, 68, 68, 0.4)";
+              if (isMyBankruptcy) {
+                e.currentTarget.style.backgroundColor = "rgba(239, 68, 68, 0.4)";
+              }
             }}
             onMouseLeave={(e) => {
-              e.currentTarget.style.backgroundColor = "rgba(239, 68, 68, 0.2)";
+              if (isMyBankruptcy) {
+                e.currentTarget.style.backgroundColor = "rgba(239, 68, 68, 0.2)";
+              }
             }}
           >
-            Declare Bankruptcy
+            {isMyBankruptcy ? "Declare Bankruptcy" : `Liquidating Assets...`}
           </button>
         </div>
       </div>

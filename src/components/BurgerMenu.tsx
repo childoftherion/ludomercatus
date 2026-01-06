@@ -5,9 +5,19 @@ interface BurgerMenuProps {
   isMuted: boolean;
   onToggleMute: () => void;
   onExit: () => void;
+  isMobile?: boolean;
+  showLog?: boolean;
+  onToggleLog?: () => void;
 }
 
-export const BurgerMenu: React.FC<BurgerMenuProps> = ({ isMuted, onToggleMute, onExit }) => {
+export const BurgerMenu: React.FC<BurgerMenuProps> = ({ 
+  isMuted, 
+  onToggleMute, 
+  onExit, 
+  isMobile, 
+  showLog, 
+  onToggleLog 
+}) => {
   const [isOpen, setIsOpen] = React.useState(false);
 
   return (
@@ -22,8 +32,8 @@ export const BurgerMenu: React.FC<BurgerMenuProps> = ({ isMuted, onToggleMute, o
           color: "white",
           border: "1px solid rgba(255,255,255,0.2)",
           borderRadius: "6px",
-          width: "32px",
-          height: "32px",
+          width: isMobile ? "40px" : "32px",
+          height: isMobile ? "40px" : "32px",
           cursor: "pointer",
           boxShadow: "0 2px 8px rgba(0,0,0,0.4)",
           display: "flex",
@@ -38,7 +48,7 @@ export const BurgerMenu: React.FC<BurgerMenuProps> = ({ isMuted, onToggleMute, o
       >
         <motion.span
           style={{
-            width: "18px",
+            width: isMobile ? "24px" : "18px",
             height: "2px",
             background: "white",
             borderRadius: "1px",
@@ -46,13 +56,13 @@ export const BurgerMenu: React.FC<BurgerMenuProps> = ({ isMuted, onToggleMute, o
           }}
           animate={{
             rotate: isOpen ? 45 : 0,
-            y: isOpen ? 6 : 0,
+            y: isOpen ? (isMobile ? 8 : 6) : 0,
           }}
           transition={{ duration: 0.2 }}
         />
         <motion.span
           style={{
-            width: "18px",
+            width: isMobile ? "24px" : "18px",
             height: "2px",
             background: "white",
             borderRadius: "1px",
@@ -65,7 +75,7 @@ export const BurgerMenu: React.FC<BurgerMenuProps> = ({ isMuted, onToggleMute, o
         />
         <motion.span
           style={{
-            width: "18px",
+            width: isMobile ? "24px" : "18px",
             height: "2px",
             background: "white",
             borderRadius: "1px",
@@ -73,7 +83,7 @@ export const BurgerMenu: React.FC<BurgerMenuProps> = ({ isMuted, onToggleMute, o
           }}
           animate={{
             rotate: isOpen ? -45 : 0,
-            y: isOpen ? -6 : 0,
+            y: isOpen ? (isMobile ? -8 : -6) : 0,
           }}
           transition={{ duration: 0.2 }}
         />
@@ -89,18 +99,47 @@ export const BurgerMenu: React.FC<BurgerMenuProps> = ({ isMuted, onToggleMute, o
             transition={{ duration: 0.2 }}
             style={{
               position: "absolute",
-              top: "40px",
+              top: isMobile ? "48px" : "40px",
               right: 0,
               background: "rgba(30, 30, 30, 0.98)",
               border: "1px solid rgba(255,255,255,0.2)",
               borderRadius: "8px",
               boxShadow: "0 4px 16px rgba(0,0,0,0.5)",
-              minWidth: "160px",
+              minWidth: isMobile ? "200px" : "160px",
               overflow: "hidden",
               zIndex: 10001,
             }}
             onClick={(e) => e.stopPropagation()}
           >
+            {/* Game Log Toggle (Mobile Only) */}
+            {isMobile && onToggleLog && (
+              <motion.button
+                whileHover={{ background: "rgba(255,255,255,0.1)" }}
+                whileTap={{ scale: 0.98 }}
+                onClick={() => {
+                  onToggleLog();
+                  setIsOpen(false);
+                }}
+                style={{
+                  width: "100%",
+                  padding: "12px 16px",
+                  background: "transparent",
+                  border: "none",
+                  color: "white",
+                  cursor: "pointer",
+                  display: "flex",
+                  alignItems: "center",
+                  gap: "10px",
+                  fontSize: "14px",
+                  textAlign: "left",
+                  borderBottom: "1px solid rgba(255,255,255,0.1)",
+                }}
+              >
+                <span style={{ fontSize: "18px" }}>📜</span>
+                <span>{showLog ? "Hide Game Log" : "Show Game Log"}</span>
+              </motion.button>
+            )}
+
             {/* Mute/Unmute Option */}
             <motion.button
               whileHover={{ background: "rgba(255,255,255,0.1)" }}

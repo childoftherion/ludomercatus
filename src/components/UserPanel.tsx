@@ -4,10 +4,16 @@ import { PlayerPropertiesPanel } from "./PlayerProperties"
 import { useGameStore } from "../store/gameStore"
 import { useLocalStore } from "../store/localStore"
 import { calculateNetWorth } from "../logic/rules/economics"
+import { useIsMobile } from "../utils/useIsMobile"
 
 export const UserPanel: React.FC = () => {
+  const isMobile = useIsMobile()
   const { players, currentPlayerIndex, settings, spaces } = useGameStore()
-  const { myPlayerIndex } = useLocalStore()
+  const { clientId } = useLocalStore()
+  
+  const myPlayerIndex = React.useMemo(() => {
+    return players.findIndex(p => p.clientId === clientId);
+  }, [players, clientId]);
   const [expandedPlayerIndex, setExpandedPlayerIndex] = useState<number | null>(
     null
   )
@@ -34,11 +40,11 @@ export const UserPanel: React.FC = () => {
         zIndex: 20000,
         display: "flex",
         flexDirection: "row",
-        gap: "8px",
+        gap: isMobile ? "4px" : "8px",
         justifyContent: "space-evenly", // Distribute players evenly across the bottom
         alignItems: "flex-end",
         overflowY: "visible",
-        overflowX: "visible",
+        overflowX: isMobile ? "auto" : "visible",
         paddingBottom: "2px",
         isolation: "isolate",
       }}
@@ -49,11 +55,8 @@ export const UserPanel: React.FC = () => {
         const isExpanded = expandedPlayerIndex === index
         const isCurrentPlayer = currentPlayerIndex === index
         const isYou = myPlayerIndex === index
-        // Hide cash if hideOpponentWealth is enabled (hides cash & net worth) or hideOpponentProperties is enabled
-        const shouldHideCash =
-          (settings?.hideOpponentWealth || settings?.hideOpponentProperties) &&
-          !isYou &&
-          !player.bankrupt
+        const shouldHideCash = settings?.hideOpponentWealth && !isYou && !player.bankrupt;
+        const shouldHideProperties = settings?.hideOpponentProperties && !isYou && !player.bankrupt;
 
         return (
           <motion.div
@@ -61,11 +64,11 @@ export const UserPanel: React.FC = () => {
             className="player-panel"
             initial={false}
             animate={{
-              flex: isExpanded ? "0 0 240px" : "1 1 0", // Equal flex distribution when not expanded, fixed when expanded
-              width: isExpanded ? "240px" : undefined, // Fixed width when expanded, undefined when not (let flex handle it)
-              minWidth: isExpanded ? "240px" : "140px", // Increased minimum width for better visibility
-              maxWidth: isExpanded ? "240px" : "none", // No max width when not expanded, let flex distribute equally
-              height: isExpanded ? "auto" : "auto", // Allow height to adjust
+              flex: isMobile ? "0 0 auto" : `1 1 0%`, 
+              width: isMobile ? "100px" : "0px", 
+              minWidth: isMobile ? "80px" : "120px",
+              maxWidth: "none", 
+              height: isMobile ? "40px" : "45px", // Fixed height for the collapsed header
               zIndex: isExpanded ? 20001 : 20000,
             }}
             transition={{ duration: 0.2, ease: "easeInOut" }}
@@ -75,8 +78,13 @@ export const UserPanel: React.FC = () => {
             }}
           >
             <div
-              onMouseEnter={() => setExpandedPlayerIndex(index)}
-              onMouseLeave={() => setExpandedPlayerIndex(null)}
+              onMouseEnter={isMobile ? undefined : () => setExpandedPlayerIndex(index)}
+              onMouseLeave={isMobile ? undefined : () => setExpandedPlayerIndex(null)}
+              onClick={() => {
+                if (isMobile) {
+                  setExpandedPlayerIndex(isExpanded ? null : index)
+                }
+              }}
               style={{
                 background: "rgba(30, 30, 30, 0.95)",
                 borderRadius: "10px",
@@ -86,7 +94,6 @@ export const UserPanel: React.FC = () => {
                 boxShadow: isCurrentPlayer
                   ? `0 0 20px ${player.color}40, 0 4px 20px rgba(0,0,0,0.3)`
                   : "0 4px 20px rgba(0,0,0,0.3)",
-                // boxShadow: "0 4px 20px rgba(0,0,0,0.3)",
                 transition: "border-color 0.3s",
                 position: "relative",
                 zIndex: isExpanded ? 20001 : 20000, // Ensure expanded content is on top
@@ -98,8 +105,8 @@ export const UserPanel: React.FC = () => {
                 style={{
                   display: "flex",
                   alignItems: "center",
-                  gap: "6px", // Scaled down for 100% zoom
-                  padding: "6px 9px", // Scaled down for 100% zoom
+                  gap: isMobile ? "4px" : "6px", // Scaled down for 100% zoom
+                  padding: isMobile ? "4px 6px" : "6px 9px", // Scaled down for 100% zoom
                   cursor: "pointer",
                   minHeight: "30px", // Scaled down for 100% zoom
                   borderBottom: isExpanded
@@ -147,61 +154,100 @@ export const UserPanel: React.FC = () => {
                       </span>
                     )}
                   </div>
-                  {!isExpanded && !shouldHideCash && (
+                  {!isExpanded && (
                     <>
-                      <div
-                        style={{
-                          color: "#4ECDC4",
-                          fontSize: "12px",
-                          fontWeight: 600,
-                          marginTop: "4px",
-                        }}
-                      >
-                        £{player.cash.toLocaleString()}
-                      </div>
-                      <div
-                        style={{
-                          color: "#22c55e",
-                          fontSize: "11px",
-                          fontWeight: 500,
-                          marginTop: "2px",
-                        }}
-                      >
-                        Net: £{getNetWorth(index).toLocaleString()}
-                      </div>
+                      {!shouldHideCash ? (
+                        <>
+                          <div
+                            style={{
+                              color: "#4ECDC4",
+                              fontSize: "12px",
+                              fontWeight: 600,
+                              marginTop: "4px",
+                            }}
+                          >
+                            £{player.cash.toLocaleString()}
+                          </div>
+                          {/* Only show Net Worth if properties are also visible to prevent calculating property value */}
+                          {!shouldHideProperties && (
+                            <div
+                              style={{
+                                color: "#22c55e",
+                                fontSize: "11px",
+                                fontWeight: 500,
+                                marginTop: "2px",
+                              }}
+                            >
+                              Net: £{getNetWorth(index).toLocaleString()}
+                            </div>
+                          )}
+                        </>
+                      ) : (
+                        <div
+                          style={{
+                            color: "rgba(255,255,255,0.4)",
+                            fontSize: "11px",
+                            fontStyle: "italic",
+                            marginTop: "4px",
+                          }}
+                        >
+                          Wealth Hidden
+                        </div>
+                      )}
                     </>
-                  )}
-                  {!isExpanded && shouldHideCash && (
-                    <div
-                      style={{
-                        color: "rgba(255,255,255,0.4)",
-                        fontSize: "11px",
-                        fontStyle: "italic",
-                        marginTop: "4px",
-                      }}
-                    >
-                      ???
-                    </div>
                   )}
                 </div>
               </div>
 
-              {/* Expanded Content - Shown on Hover */}
+              {/* Expanded Content - Shown on Hover/Click - Now expands UPWARDS */}
               <AnimatePresence>
                 {isExpanded && (
                   <motion.div
-                    initial={{ height: 0, opacity: 0 }}
-                    animate={{ height: "auto", opacity: 1 }}
-                    exit={{ height: 0, opacity: 0 }}
+                    initial={{ height: 0, opacity: 0, scale: 0.95 }}
+                    animate={{ height: "auto", opacity: 1, scale: 1 }}
+                    exit={{ height: 0, opacity: 0, scale: 0.95 }}
                     transition={{ duration: 0.2 }}
                     style={{ 
-                      overflow: "visible", // Changed to visible so content can show above
-                      position: "relative",
-                      zIndex: 20002, // Even higher z-index for expanded content
+                      position: "absolute",
+                      bottom: "calc(100% + 10px)", // Position it above the header with a gap
+                      left: 0,
+                      right: 0,
+                      zIndex: 20002, // Stack above the header
+                      backgroundColor: "rgba(30, 30, 30, 0.98)", // Solider background for readability
+                      borderRadius: "10px",
+                      boxShadow: "0 -8px 32px rgba(0,0,0,0.5)", // Upward shadow
+                      overflow: "visible", 
+                      border: `1px solid ${player.color}60`, // Subtle border with player color
                     }}
                   >
-                    <div style={{ padding: "0", position: "relative", zIndex: 20002 }}>
-                      <PlayerPropertiesPanel playerIndex={index} />
+                    <div style={{ 
+                      padding: "4px", 
+                      position: "relative", 
+                      zIndex: 20002,
+                      maxHeight: "70vh", // Prevent it from going off the top of the screen
+                      overflowY: "auto", // Allow scrolling within the properties if too many
+                    }}>
+                      {/* Check privacy settings for properties panel as well */}
+                      {!shouldHideProperties ? (
+                        <PlayerPropertiesPanel playerIndex={index} myPlayerIndex={myPlayerIndex} />
+                      ) : (
+                         <div style={{ 
+                           padding: "16px", 
+                           textAlign: "center", 
+                           color: "rgba(255,255,255,0.6)",
+                           fontSize: "13px",
+                           background: "rgba(0,0,0,0.2)",
+                           borderRadius: "0 0 10px 10px"
+                         }}>
+                           <div style={{ fontSize: "24px", marginBottom: "4px" }}>🔒</div>
+                           <div style={{ fontWeight: "bold", color: "#fff" }}>
+                             {player.properties.length} Properties
+                           </div>
+                           <div style={{ fontSize: "11px", marginTop: "2px", opacity: 0.7 }}>
+                             Details Hidden
+                           </div>
+                         </div>
+                      )}
                     </div>
                   </motion.div>
                 )}

@@ -3,6 +3,7 @@ import type { GameState, Property, ColorGroup, GameLogEntry, TradeOffer, GameSet
 import { DEFAULT_GAME_SETTINGS } from "../types/game";
 import { boardSpaces } from "../data/board";
 import { getPlayerProperties, hasMonopoly } from "../logic/rules/monopoly";
+import { useLocalStore } from "./localStore";
 
 const isProperty = (space: any): space is Property => {
   return space.type === "property" || space.type === "railroad" || space.type === "utility";
@@ -12,9 +13,10 @@ type GameStore = GameState & {
   connected: boolean;
   inRoom: boolean;
   connect: () => void;
+  clientId: string;
 
   // Actions (send to server)
-  initGame: (playerNames: string[], tokens: string[], isAIFlags?: boolean[], aiDifficulties?: AIDifficulty[]) => void;
+  initGame: (playerNames: string[], tokens: string[], isAIFlags?: boolean[], aiDifficulties?: AIDifficulty[], clientIds?: (string | undefined)[]) => void;
   rollDice: () => void;
   movePlayer: (playerIndex: number, steps: number) => void;
   buyProperty: (propertyId: number) => void;
@@ -81,8 +83,9 @@ type GameStore = GameState & {
   listRooms: () => void;
   
   // Lobby actions
-  addPlayer: (name: string, token: string, clientId: string) => void;
+  addPlayer: (name: string, token: string, clientId: string, isMobile?: boolean) => void;
   updatePlayer: (index: number, name: string, token: string) => void;
+  assignPlayer: (index: number, clientId: string) => void;
   startGame: () => void;
 
   rooms: { id: string; players: number }[];
@@ -97,6 +100,7 @@ let socket: WebSocket | null = null;
 
 export const useGameStore = create<GameStore>((set, get) => ({
   // Initial state
+  clientId: useLocalStore.getState().clientId,
   players: [],
   currentPlayerIndex: 0,
   spaces: boardSpaces,
@@ -113,6 +117,7 @@ export const useGameStore = create<GameStore>((set, get) => ({
   turn: 1,
   connected: false,
   inRoom: false,
+  roomId: undefined,
   rooms: [],
   // Game settings
   settings: DEFAULT_GAME_SETTINGS,
@@ -131,9 +136,10 @@ export const useGameStore = create<GameStore>((set, get) => ({
   connect: () => {
     if (socket && (socket.readyState === WebSocket.OPEN || socket.readyState === WebSocket.CONNECTING)) return;
 
+    const clientId = useLocalStore.getState().clientId;
     const protocol = window.location.protocol === "https:" ? "wss:" : "ws:";
     const host = window.location.host;
-    socket = new WebSocket(`${protocol}//${host}/ws`);
+    socket = new WebSocket(`${protocol}//${host}/ws?clientId=${clientId}`);
 
     socket.onopen = () => {
       console.log("Connected to game server");
@@ -205,8 +211,10 @@ export const useGameStore = create<GameStore>((set, get) => ({
   listRooms: () => {
     socket?.send(JSON.stringify({ type: "LIST_ROOMS" }));
   },
-  addPlayer: (name, token, clientId) => {
-    socket?.send(JSON.stringify({ type: "ACTION", action: "addPlayer", payload: [name, token, clientId] }));
+  addPlayer: (name: string, token: string) => { // Updated signature
+    const clientId = useLocalStore.getState().clientId;
+    const isMobile = window.innerWidth <= 768; // Detect mobile on join
+    socket?.send(JSON.stringify({ type: "ACTION", action: "addPlayer", payload: [name, token, clientId, isMobile] }));
   },
   updatePlayer: (index, name, token) => {
     socket?.send(JSON.stringify({ type: "ACTION", action: "updatePlayer", payload: [index, name, token] }));
@@ -230,7 +238,7 @@ export const useGameStore = create<GameStore>((set, get) => ({
     "forgiveRent", "createRentIOU", "payIOU", "demandImmediatePaymentOrProperty",
     "buyPropertyInsurance", "getInsuranceCost",
     "enterChapter11", "declineRestructuring",
-    "appreciateColorGroup", "depreciateColorGroup"
+    "appreciateColorGroup", "depreciateColorGroup", "assignPlayer"
   ].reduce((acc, action) => {
     acc[action] = (...args: any[]) => {
       if (socket && socket.readyState === WebSocket.OPEN) {
