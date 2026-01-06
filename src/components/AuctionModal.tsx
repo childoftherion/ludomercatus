@@ -1,7 +1,6 @@
 import React from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { useGameStore } from "../store/gameStore";
-import { useLocalStore } from "../store/localStore";
 import { audioManager } from "../utils/audio";
 import type { AuctionState, Property, Player } from "../types/game";
 
@@ -9,10 +8,10 @@ interface Props {
   auction: AuctionState;
   property: Property;
   players: Player[];
+  myPlayerIndex: number;
 }
 
-export const AuctionModal: React.FC<Props> = ({ auction, property, players }) => {
-  const { myPlayerIndex } = useLocalStore();
+export const AuctionModal: React.FC<Props> = ({ auction, property, players, myPlayerIndex }) => {
   
   // Calculate minimum bid: 10% increment or £10, whichever is higher
   const minIncrement = Math.max(10, Math.floor(auction.currentBid * 0.1));

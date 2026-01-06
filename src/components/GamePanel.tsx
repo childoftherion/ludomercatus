@@ -1,7 +1,6 @@
 import React from "react";
 import { motion } from "framer-motion";
 import { useGameStore } from "../store/gameStore";
-import { useLocalStore } from "../store/localStore";
 import { Dice, DiceDisplay } from "./Dice";
 import type { Property } from "../types/game";
 import { isProperty } from "../utils/helpers";
@@ -16,6 +15,7 @@ interface GamePanelProps {
   handleDeclineProperty: () => void;
   handleJailAction: (action: "card" | "pay" | "roll") => void;
   handleDrawCard: (cardType: "chance" | "community_chest") => void;
+  myPlayerIndex: number;
 }
 
 export const GamePanel: React.FC<GamePanelProps> = ({
@@ -28,6 +28,7 @@ export const GamePanel: React.FC<GamePanelProps> = ({
   handleDeclineProperty,
   handleJailAction,
   handleDrawCard,
+  myPlayerIndex,
 }) => {
   const {
     phase,
@@ -39,7 +40,7 @@ export const GamePanel: React.FC<GamePanelProps> = ({
     awaitingTaxDecision,
     chooseTaxOption,
   } = useGameStore();
-  const { myPlayerIndex } = useLocalStore();
+
 
   const currentPlayer = currentPlayerIndex !== undefined && currentPlayerIndex < players.length
     ? players[currentPlayerIndex]
@@ -178,7 +179,7 @@ export const GamePanel: React.FC<GamePanelProps> = ({
                 </>
               ) : (
                 <>
-                  <p>Waiting for {currentPlayer.name} to roll...</p>
+                  <p>Waiting for {currentPlayer.token} {currentPlayer.name} to roll...</p>
                   <p style={{ fontSize: "12px", marginTop: "4px", color: "#666" }}>
                     Debug: currentPlayerIndex={currentPlayerIndex}, myPlayerIndex={myPlayerIndex}
                   </p>

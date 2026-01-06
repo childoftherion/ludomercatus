@@ -185,14 +185,15 @@ const PlayerSetup = () => {
 
     // Apply game settings first
     useGameStore.getState().updateSettings(gameSettings);
-    useGameStore.getState().initGame(names, tokens, isAIFlags, difficulties);
     
-    // Set the human player as player 0 in single-player mode
-    useLocalStore.getState().setMyPlayerIndex(0);
-    console.log("[PlayerSetup] Single-player game started, set myPlayerIndex to 0", {
+    // Pass user's clientId for the first player (human)
+    // Use the local store ID which is persisted/rehydrated
+    const clientIds = [useLocalStore.getState().clientId, ...aiTokens.map(() => undefined)];
+    useGameStore.getState().initGame(names, tokens, isAIFlags, difficulties, clientIds);
+    
+    console.log("[PlayerSetup] Single-player game started", {
       playerName: names[0],
       totalPlayers: names.length,
-      myPlayerIndex: useLocalStore.getState().myPlayerIndex,
     });
   };
 
@@ -207,7 +208,12 @@ const PlayerSetup = () => {
 
     // Apply game settings first
     useGameStore.getState().updateSettings(gameSettings);
-    useGameStore.getState().initGame(names, tokens, isAIFlags, difficulties);
+
+    // Provide clientId for the first human player (the host)
+    const hostClientId = useLocalStore.getState().clientId;
+    const clientIds = [hostClientId, ...humanTokens.slice(1).map(() => undefined), ...mpAiTokens.map(() => undefined)];
+
+    useGameStore.getState().initGame(names, tokens, isAIFlags, difficulties, clientIds);
   };
 
   // Game Settings Panel Component

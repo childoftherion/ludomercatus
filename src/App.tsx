@@ -20,8 +20,10 @@ import type { Property } from "./types/game";
 import { BurgerMenu } from "./components/BurgerMenu";
 import { GamePanel } from "./components/GamePanel";
 import { isProperty } from "./utils/helpers";
+import { useIsMobile } from "./utils/useIsMobile";
 
 export default function App() {
+  const isMobile = useIsMobile();
   const { 
     phase, 
     currentPlayerIndex, 
@@ -86,7 +88,9 @@ export default function App() {
   }, [phase]);
 
   const myPlayerIndex = React.useMemo(() => {
-    return players.findIndex(p => p.clientId === clientId);
+    const index = players.findIndex(p => p.clientId === clientId);
+    console.log("[Identity] Client ID:", clientId, "matched index:", index, "players:", players.map(p => ({ n: p.name, id: p.clientId })));
+    return index;
   }, [players, clientId]);
 
   const currentPlayer = currentPlayerIndex !== undefined && currentPlayerIndex < players.length
@@ -105,6 +109,7 @@ export default function App() {
   const [isNewTurn, setIsNewTurn] = React.useState(false);
   const [isMuted, setIsMuted] = React.useState(false);
   const [selectedProperty, setSelectedProperty] = React.useState<Property | null>(null);
+  const [showMobileLog, setShowMobileLog] = React.useState(false);
 
   // Auto-hide card after 8 seconds
   React.useEffect(() => {
@@ -564,30 +569,36 @@ export default function App() {
           }
         }}
         onExit={leaveRoom}
+        isMobile={isMobile}
+        showLog={showMobileLog}
+        onToggleLog={() => setShowMobileLog(!showMobileLog)}
       />
       {/* Left Side - Game Log (Fixed) - Expanded to fill screen */}
-      <div
-        style={{
-          position: "fixed",
-          top: "48px", // Start below burger menu
-          left: "8px",
-          width: "200px",
-          height: "calc(100vh - 100px)", // Fill most of the screen height
-          maxHeight: "calc(100vh - 100px)",
-          zIndex: 100,
-        }}
-      >
-        <GameLog />
-      </div>
+      {(!isMobile || showMobileLog) && (
+        <div
+          style={{
+            position: "fixed",
+            top: isMobile ? "60px" : "48px", // Start below burger menu
+            left: isMobile ? "10px" : "8px",
+            right: isMobile ? "10px" : "unset",
+            width: isMobile ? "unset" : "200px",
+            height: isMobile ? "calc(100vh - 150px)" : "calc(100vh - 100px)", // Fill most of the screen height
+            maxHeight: isMobile ? "calc(100vh - 150px)" : "calc(100vh - 100px)",
+            zIndex: 1000, // Higher than board but lower than menu
+          }}
+        >
+          <GameLog />
+        </div>
+      )}
       {/* Center - Board and Game Controls - MAXIMIZED - perfectly centered and expanded */}
       <div
         id="board-container-parent"
         style={{
           position: "fixed",
-          top: "48px", // Start below burger menu
-          left: "220px", // Right of GameLog (200px + 8px margin + 12px spacing) - better centering
-          right: "320px", // Left of right panel (300px + 8px margin + 12px spacing) - better centering
-          bottom: "60px", // Above UserPanel - give more space
+          top: isMobile ? "60px" : "48px", // Start below burger menu
+          left: isMobile ? "10px" : "220px", // Centered or right of GameLog
+          right: isMobile ? "10px" : "320px", // Centered or left of right panel
+          bottom: isMobile ? "80px" : "60px", // Above UserPanel - give more space
           overflow: "visible", // Allow board and tokens to be visible
           zIndex: 1, // Low z-index so it's behind modals and UserPanel
           display: "flex",
@@ -603,10 +614,10 @@ export default function App() {
             // Fill parent container completely but maintain aspect ratio
             width: "100%",
             height: "100%",
-            maxWidth: "800px", // Limit maximum width for better proportions
-            maxHeight: "800px", // Limit maximum height for better proportions
-            minWidth: "400px",
-            minHeight: "400px",
+            maxWidth: isMobile ? "100vw" : "800px", // Limit maximum width for better proportions
+            maxHeight: isMobile ? "100vw" : "800px", // Maintain square aspect ratio
+            minWidth: isMobile ? "300px" : "400px",
+            minHeight: isMobile ? "300px" : "400px",
             overflow: "visible", // Allow tokens to be visible
             display: "flex",
             alignItems: "center",
@@ -739,6 +750,7 @@ export default function App() {
             auction={auction}
             property={spaces.find(s => s.id === auction.propertyId) as Property}
             players={players}
+            myPlayerIndex={myPlayerIndex}
           />
         )}
       </AnimatePresence>
@@ -749,6 +761,7 @@ export default function App() {
             trade={trade}
             players={players}
             spaces={spaces}
+            myPlayerIndex={myPlayerIndex}
           />
         )}
       </AnimatePresence>
@@ -765,6 +778,7 @@ export default function App() {
               property={spaces.find(s => s.id === pendingRentNegotiation.propertyId) as Property}
               rentAmount={pendingRentNegotiation.rentAmount}
               debtorCanAfford={pendingRentNegotiation.debtorCanAfford}
+              myPlayerIndex={myPlayerIndex}
             />
           );
         })()}
@@ -781,6 +795,7 @@ export default function App() {
               debtAmount={pending.debtAmount}
               creditor={creditorPlayer}
               chapter11Turns={settings?.chapter11Turns ?? 5}
+              myPlayerIndex={myPlayerIndex}
             />
           ) : null;
         })()}
@@ -795,6 +810,7 @@ export default function App() {
         handleDeclineProperty={handleDeclineProperty}
         handleJailAction={handleJailAction}
         handleDrawCard={handleDrawCard}
+        myPlayerIndex={myPlayerIndex}
       />
 
       <PlayerSelectionModal />

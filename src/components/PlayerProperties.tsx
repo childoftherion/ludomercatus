@@ -1,7 +1,6 @@
 import React, { useState, useMemo, useEffect } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { useGameStore } from "../store/gameStore";
-import { useLocalStore } from "../store/localStore";
 import { calculateNetWorth } from "../logic/rules/economics";
 import { audioManager } from "../utils/audio";
 import type { Player, Property, TradeOffer, BankLoan, IOU } from "../types/game";
@@ -19,9 +18,10 @@ const COLOR_MAP: Record<string, string> = {
 
 interface PlayerPropertiesPanelProps {
   playerIndex: number;
+  myPlayerIndex: number;
 }
 
-export const PlayerPropertiesPanel = ({ playerIndex }: PlayerPropertiesPanelProps) => {
+export const PlayerPropertiesPanel = ({ playerIndex, myPlayerIndex }: PlayerPropertiesPanelProps) => {
   const state = useGameStore();
   const { 
     players, 
@@ -45,7 +45,6 @@ export const PlayerPropertiesPanel = ({ playerIndex }: PlayerPropertiesPanelProp
     roundsCompleted,
   } = state;
   
-  const { myPlayerIndex } = useLocalStore();
   const [selectedPropertyId, setSelectedPropertyId] = useState<number | null>(null);
   const [showLoanModal, setShowLoanModal] = useState(false);
   const [loanAmount, setLoanAmount] = useState(100);
