@@ -20,6 +20,17 @@ export const PlayerSelectionModal: React.FC<PlayerSelectionModalProps> = ({
   }, [players, clientId])
 
   if (phase === "setup" || myPlayerIndex !== -1) return null
+export const PlayerSelectionModal = () => {
+  const players = useGameStore((s) => s.players);
+  const phase = useGameStore((s) => s.phase);
+  const assignPlayer = useGameStore((s) => s.assignPlayer);
+  const { clientId } = useLocalStore();
+
+  const myPlayerIndex = React.useMemo(() => {
+    return players.findIndex(p => p.clientId === clientId);
+  }, [players, clientId]);
+
+  if (phase === "setup" || myPlayerIndex !== -1) return null;
 
   return (
     <div
@@ -57,6 +68,7 @@ export const PlayerSelectionModal: React.FC<PlayerSelectionModalProps> = ({
               whileHover={{ scale: 1.02 }}
               whileTap={{ scale: 0.98 }}
               onClick={() => onPlayerSelected(index)}
+              onClick={() => assignPlayer(index, clientId)}
               disabled={player.bankrupt || player.isAI}
               style={{
                 padding: "16px",
@@ -65,8 +77,9 @@ export const PlayerSelectionModal: React.FC<PlayerSelectionModalProps> = ({
                 backgroundColor: player.isAI
                   ? "rgba(255,255,255,0.05)"
                   : "rgba(255,255,255,0.1)",
+                backgroundColor: (player.isAI) ? "rgba(255,255,255,0.05)" : "rgba(255,255,255,0.1)",
                 color: "#fff",
-                cursor: player.isAI ? "not-allowed" : "pointer",
+                cursor: (player.isAI) ? "not-allowed" : "pointer",
                 display: "flex",
                 alignItems: "center",
                 gap: "12px",
@@ -75,6 +88,7 @@ export const PlayerSelectionModal: React.FC<PlayerSelectionModalProps> = ({
                   player.clientId !== null && player.clientId !== clientId
                     ? "4px solid #FF9800"
                     : "4px solid transparent",
+                borderLeft: (player.clientId !== undefined && player.clientId !== clientId) ? "4px solid #FF9800" : "4px solid transparent",
               }}
             >
               <div
@@ -106,6 +120,11 @@ export const PlayerSelectionModal: React.FC<PlayerSelectionModalProps> = ({
                 <span style={{ fontSize: "12px", color: "#FF9800" }}>
                   (Taken)
                 </span>
+                  {player.isAI ? "AI Player" : (player.clientId ? "Occupied" : "Human Player")}
+                </div>
+              </div>
+              {(player.isAI || (player.clientId !== undefined && player.clientId !== clientId)) && (
+                <span style={{ fontSize: "12px", color: "#FF9800" }}>(Taken)</span>
               )}
             </motion.button>
           ))}

@@ -1,4 +1,3 @@
-// Authored by childoftherion
 import React, { useState, useEffect, useMemo } from "react"
 import { motion, AnimatePresence } from "framer-motion"
 import { audioManager } from "./utils/audio"
@@ -30,6 +29,37 @@ export default function App() {
     currentPlayerIndex,
     players,
     passedGo: storePassedGo,
+import React from "react";
+import { motion, AnimatePresence } from "framer-motion";
+import { audioManager } from "./utils/audio";
+import { useGameStore } from "./store/gameStore";
+import { Board } from "./components/Board";
+import { MultiplayerLobby } from "./components/MultiplayerLobby";
+import { ServerBrowser } from "./components/ServerBrowser";
+import { PlayerTokens } from "./components/PlayerToken";
+import PlayerSetup from "./components/PlayerSetup";
+import { AuctionModal } from "./components/AuctionModal";
+import { TradeModal } from "./components/TradeModal";
+import { RentNegotiationModal } from "./components/RentNegotiationModal";
+import { BankruptcyModal } from "./components/BankruptcyModal";
+import { GameLog } from "./components/GameLog";
+import { PlayerSelectionModal } from "./components/PlayerSelectionModal";
+import { CardDisplay } from "./components/CardDisplay";
+import { PropertyDetailsModal } from "./components/PropertyDetailsModal";
+import { UserPanel } from "./components/UserPanel";
+import type { Property } from "./types/game";
+import { BurgerMenu } from "./components/BurgerMenu";
+import { GamePanel } from "./components/GamePanel";
+import { isProperty } from "./utils/helpers";
+import { useIsMobile } from "./utils/useIsMobile";
+
+export default function App() {
+  const isMobile = useIsMobile();
+  const { 
+    phase, 
+    currentPlayerIndex, 
+    players, 
+    passedGo: storePassedGo, 
     winner,
     spaces,
     auction,
@@ -45,36 +75,36 @@ export default function App() {
     roomId,
     joinRoom,
     clientId,
-  } = useGameStore()
+  } = useGameStore();
 
   React.useEffect(() => {
-    connect()
-  }, [connect])
+    connect();
+  }, [connect]);
 
   // Hash-based routing
   React.useEffect(() => {
     const handleHashChange = () => {
-      const hash = window.location.hash.replace("#", "")
+      const hash = window.location.hash.replace("#", "");
       if (hash.startsWith("/room/")) {
-        const roomIdFromHash = hash.split("/")[2]
+        const roomIdFromHash = hash.split("/")[2];
         if (roomIdFromHash && roomIdFromHash !== roomId) {
-          joinRoom(roomIdFromHash)
+          joinRoom(roomIdFromHash);
         }
       }
-    }
+    };
 
-    window.addEventListener("hashchange", handleHashChange, false)
-    handleHashChange() // Check on initial load
+    window.addEventListener("hashchange", handleHashChange, false);
+    handleHashChange(); // Check on initial load
 
-    return () => window.removeEventListener("hashchange", handleHashChange)
-  }, [joinRoom, roomId])
+    return () => window.removeEventListener("hashchange", handleHashChange);
+  }, [joinRoom, roomId]);
 
   // Update hash when room ID changes
   React.useEffect(() => {
     if (inRoom && roomId && window.location.hash !== `#/room/${roomId}`) {
-      window.location.hash = `#/room/${roomId}`
+      window.location.hash = `#/room/${roomId}`;
     }
-  }, [inRoom, roomId])
+  }, [inRoom, roomId]);
 
   // Enable body scrolling for setup screen
   React.useEffect(() => {
@@ -147,6 +177,33 @@ export default function App() {
   const [selectedProperty, setSelectedProperty] =
     React.useState<Property | null>(null)
   const [showMobileLog, setShowMobileLog] = React.useState(false)
+      document.body.style.overflow = "hidden";
+    };
+  }, [phase]);
+
+  const myPlayerIndex = React.useMemo(() => {
+    const index = players.findIndex(p => p.clientId === clientId);
+    console.log("[Identity] Client ID:", clientId, "matched index:", index, "players:", players.map(p => ({ n: p.name, id: p.clientId })));
+    return index;
+  }, [players, clientId]);
+
+  const currentPlayer = currentPlayerIndex !== undefined && currentPlayerIndex < players.length
+    ? players[currentPlayerIndex]
+    : null;
+
+  const isMyTurn = currentPlayerIndex === myPlayerIndex;
+  
+  const currentSpace = currentPlayer ? spaces[currentPlayer.position] : null;
+
+  const [passedGo, setPassedGo] = React.useState(false);
+  const [isRolling, setIsRolling] = React.useState(false);
+  const [showCard, setShowCard] = React.useState(false);
+  const [lastShownCardId, setLastShownCardId] = React.useState<number | null>(null);
+  const lastPlayerIndexRef = React.useRef<number | undefined>(undefined);
+  const [isNewTurn, setIsNewTurn] = React.useState(false);
+  const [isMuted, setIsMuted] = React.useState(false);
+  const [selectedProperty, setSelectedProperty] = React.useState<Property | null>(null);
+  const [showMobileLog, setShowMobileLog] = React.useState(false);
 
   // Auto-hide card after 8 seconds
   React.useEffect(() => {
@@ -899,6 +956,14 @@ export default function App() {
               myPlayerIndex={myPlayerIndex}
             />
           ) : null)}
+        {phase === "trading" && trade && (
+          <TradeModal
+            trade={trade}
+            players={players}
+            spaces={spaces}
+            myPlayerIndex={myPlayerIndex}
+          />
+        )}
       </AnimatePresence>
       {/* Rent Negotiation Modal - Phase 3 - Only visible to creditor and debtor */}
       <AnimatePresence>
@@ -950,6 +1015,38 @@ export default function App() {
               />
             ) : null
           })()}
+        {phase === "awaiting_rent_negotiation" && pendingRentNegotiation && (() => {
+          const debtor = players[pendingRentNegotiation.debtorIndex];
+          const creditor = players[pendingRentNegotiation.creditorIndex];
+          if (!debtor || !creditor) return null;
+          return (
+            <RentNegotiationModal
+              debtor={debtor}
+              creditor={creditor}
+              property={spaces.find(s => s.id === pendingRentNegotiation.propertyId) as Property}
+              rentAmount={pendingRentNegotiation.rentAmount}
+              debtorCanAfford={pendingRentNegotiation.debtorCanAfford}
+              myPlayerIndex={myPlayerIndex}
+            />
+          );
+        })()}
+      </AnimatePresence>
+      {/* Bankruptcy Modal - Phase 3 */}
+      <AnimatePresence>
+        {phase === "awaiting_bankruptcy_decision" && (useGameStore.getState() as any).pendingBankruptcy && (() => {
+          const pending = (useGameStore.getState() as any).pendingBankruptcy;
+          const bankruptPlayer = players[pending.playerIndex];
+          const creditorPlayer = pending.creditorIndex !== undefined ? players[pending.creditorIndex] : undefined;
+          return bankruptPlayer ? (
+            <BankruptcyModal
+              player={bankruptPlayer}
+              debtAmount={pending.debtAmount}
+              creditor={creditorPlayer}
+              chapter11Turns={settings?.chapter11Turns ?? 5}
+              myPlayerIndex={myPlayerIndex}
+            />
+          ) : null;
+        })()}
       </AnimatePresence>
       <GamePanel
         isRolling={isRolling}

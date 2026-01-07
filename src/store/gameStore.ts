@@ -121,6 +121,7 @@ export const useGameStore = create<GameStore>((set, get) => ({
   connected: false,
   inRoom: false,
   roomId: null,
+  roomId: undefined,
   rooms: [],
   // Game settings
   settings: DEFAULT_GAME_SETTINGS,

@@ -705,6 +705,7 @@ export class GameRoom implements GameActions {
       choice === "flat" ? taxDecision.flatAmount : taxDecision.percentageAmount;
 
     this.setState({ awaitingTaxDecision: null, phase: "resolving_space" });
+    this.setState({ awaitingTaxDecision: undefined, phase: "resolving_space" });
     this.payTax(playerIndex, amount);
 
     this.addLogEntry(
@@ -2472,6 +2473,7 @@ export class GameRoom implements GameActions {
 
     this.setState({
       pendingBankruptcy: null,
+      pendingBankruptcy: undefined,
       phase:
         this.state.phase === "awaiting_bankruptcy_decision"
           ? "resolving_space"
@@ -2779,7 +2781,7 @@ export class GameRoom implements GameActions {
               }
             : p,
         ),
-        auction: null,
+        auction: undefined,
         phase: "resolving_space",
       });
       this.addLogEntry(
@@ -2788,7 +2790,7 @@ export class GameRoom implements GameActions {
       );
     } else {
       // No bids - property goes back to the bank
-      this.setState({ auction: null, phase: "resolving_space" });
+      this.setState({ auction: undefined, phase: "resolving_space" });
       this.addLogEntry(
         `No bids placed. ${property?.name} remains unowned.`,
         "auction",
@@ -2810,8 +2812,6 @@ export class GameRoom implements GameActions {
           jailCardsRequested: 0,
         },
         status: "draft",
-        counterOffer: null,
-        counterOfferMadeBy: null,
       },
       phase: "trading",
       previousPhase: this.state.phase,
@@ -2820,7 +2820,7 @@ export class GameRoom implements GameActions {
 
   public updateTradeOffer(offer: TradeOffer) {
     this.setState({
-      trade: this.state.trade ? { ...this.state.trade, offer } : null,
+      trade: this.state.trade ? { ...this.state.trade, offer } : undefined,
     });
   }
 
@@ -2884,9 +2884,9 @@ export class GameRoom implements GameActions {
           return { ...s, owner: offer.fromPlayer };
         return s;
       }),
-      trade: null,
+      trade: undefined,
       phase: this.state.previousPhase ?? "resolving_space",
-      previousPhase: null,
+      previousPhase: undefined,
     });
     this.addLogEntry(`Trade completed!`, "trade");
   }
@@ -2935,7 +2935,7 @@ export class GameRoom implements GameActions {
     }
 
     this.setState({
-      trade: null,
+      trade: undefined,
       phase: this.state.previousPhase ?? "resolving_space",
       previousPhase: null,
     });
@@ -2943,7 +2943,7 @@ export class GameRoom implements GameActions {
 
   public cancelTrade() {
     this.setState({
-      trade: null,
+      trade: undefined,
       phase: this.state.previousPhase ?? "resolving_space",
       previousPhase: null,
     });

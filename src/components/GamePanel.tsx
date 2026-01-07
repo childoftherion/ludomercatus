@@ -42,6 +42,7 @@ export const GamePanel: React.FC<GamePanelProps> = ({
   } = useGameStore();
 
 
+
   const currentPlayer = currentPlayerIndex >= 0 && currentPlayerIndex < players.length
     ? players[currentPlayerIndex]
     : null;
