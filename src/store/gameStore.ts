@@ -106,30 +106,39 @@ export const useGameStore = create<GameStore>((set, get) => ({
   spaces: boardSpaces,
   chanceDeck: [],
   communityChestDeck: [],
-  diceRoll: undefined,
+  diceRoll: null,
   consecutiveDoubles: 0,
   phase: "setup",
   passedGo: false,
-  auction: undefined,
-  trade: undefined,
-  lastCardDrawn: undefined,
+  auction: null,
+  trade: null,
+  lastCardDrawn: null,
+  previousPhase: null,
+  winner: null,
+  lastDiceRoll: null,
   gameLog: [],
   turn: 1,
   connected: false,
   inRoom: false,
-  roomId: undefined,
+  roomId: null,
   rooms: [],
   // Game settings
   settings: DEFAULT_GAME_SETTINGS,
   // Phase 1: Economic Realism
   roundsCompleted: 0,
   currentGoSalary: 200,
-  awaitingTaxDecision: undefined,
+  awaitingTaxDecision: null,
   // Phase 2: Housing Scarcity
   availableHouses: 32,
   availableHotels: 12,
   // Phase 2: Economic Events
   activeEconomicEvents: [],
+  // Phase 3: Rent Negotiation
+  pendingRentNegotiation: null,
+  // Phase 3: Bankruptcy
+  pendingBankruptcy: null,
+  // Card-triggered utility multiplier override
+  utilityMultiplierOverride: null,
   // Jackpot system
   jackpot: 0,
 

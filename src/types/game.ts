@@ -84,10 +84,10 @@ export interface Player {
   bankrupt: boolean;
   color: string;
   isAI: boolean;
-  aiDifficulty?: AIDifficulty; // Difficulty level for AI players
-  clientId?: string; // Unique ID for multiplayer identity
-  lastTradeTurn?: number; // Turn number when they last proposed a trade
-  tradeHistory?: Record<string, { attempts: number; lastOffer: number }>; // Key: "playerId-propertyId"
+  aiDifficulty: AIDifficulty | null; // Difficulty level for AI players
+  clientId: string | null; // Unique ID for multiplayer identity
+  lastTradeTurn: number | null; // Turn number when they last proposed a trade
+  tradeHistory: Record<string, { attempts: number; lastOffer: number }> | null; // Key: "playerId-propertyId"
   
   // Bank Loans (Phase 2)
   bankLoans: BankLoan[];
@@ -200,8 +200,8 @@ export interface TradeOffer {
 export interface TradeState {
   offer: TradeOffer;
   status: "draft" | "pending" | "accepted" | "rejected" | "cancelled" | "counter_pending";
-  counterOffer?: TradeOffer; // Counter-offer made by receiver
-  counterOfferMadeBy?: number; // Player index who made the counter-offer (to track one per player)
+  counterOffer: TradeOffer | null; // Counter-offer made by receiver
+  counterOfferMadeBy: number | null; // Player index who made the counter-offer (to track one per player)
 }
 
 // Game event log entry
@@ -258,15 +258,15 @@ export const DEFAULT_GAME_SETTINGS: GameSettings = {
   enableBankLoans: true,
   loanInterestRate: 0.10, // 10% interest per turn
   maxLoanPercent: 0.50, // Can borrow up to 50% of net worth
-  enableEconomicEvents: true, // Economic events on Free Parking
-  enableRentNegotiation: true, // Allow rent negotiation
-  iouInterestRate: 0.05, // 5% interest on IOUs per turn
-  enablePropertyInsurance: true, // Allow property insurance
-  insuranceCostPercent: 0.05, // 5% of property value per round
-  enablePropertyValueFluctuation: true, // Allow property values to change
-  appreciationRate: 0.05, // 5% appreciation per development
-  enableBankruptcyRestructuring: true, // Allow Chapter 11 restructuring
-  chapter11Turns: 5, // 5 turns to repay debt
+  enableEconomicEvents: true,
+  enableRentNegotiation: true,
+  iouInterestRate: 0.05, // 5% interest per turn
+  enablePropertyInsurance: true,
+  insuranceCostPercent: 0.05, // 5% of property value
+  enablePropertyValueFluctuation: true,
+  appreciationRate: 0.05, // 5% appreciation per development step
+  enableBankruptcyRestructuring: true,
+  chapter11Turns: 5,
   enableInflation: true,
   enableProgressiveTax: true,
 };
@@ -277,19 +277,19 @@ export interface GameState {
   spaces: Space[];
   chanceDeck: Card[];
   communityChestDeck: Card[];
-  diceRoll?: DiceRoll;
+  diceRoll: DiceRoll | null;
   consecutiveDoubles: number;
   phase: GamePhase;
   turn: number; // Current turn number
-  winner?: number;
-  lastDiceRoll?: DiceRoll;
+  winner: number | null;
+  lastDiceRoll: DiceRoll | null;
   passedGo: boolean;
-  auction?: AuctionState;
-  trade?: TradeState;
-  previousPhase?: GamePhase;
-  lastCardDrawn?: Card;
+  auction: AuctionState | null;
+  trade: TradeState | null;
+  previousPhase: GamePhase | null;
+  lastCardDrawn: Card | null;
   gameLog: GameLogEntry[];
-  roomId?: string; // Current room ID
+  roomId: string | null; // Current room ID
 
   // Game settings
   settings: GameSettings;
@@ -299,37 +299,37 @@ export interface GameState {
   currentGoSalary: number; // Current GO salary (increases with inflation)
 
   // Tax decision state
-  awaitingTaxDecision?: {
+  awaitingTaxDecision: {
     playerIndex: number;
     flatAmount: number;
     percentageAmount: number;
-  };
+  } | null;
 
   // Phase 2: Housing Scarcity
   availableHouses: number; // Max 32
   availableHotels: number; // Max 12
   
   // Card-triggered utility multiplier override
-  utilityMultiplierOverride?: number; // When set, use this instead of normal utility rent calculation
+  utilityMultiplierOverride: number | null; // When set, use this instead of normal utility rent calculation
   
   // Phase 2: Economic Events
   activeEconomicEvents: ActiveEconomicEvent[];
   
   // Phase 3: Rent Negotiation
-  pendingRentNegotiation?: {
+  pendingRentNegotiation: {
     debtorIndex: number;
     creditorIndex: number;
     propertyId: number;
     rentAmount: number;
-    debtorCanAfford: number; // How much debtor can pay now
-  };
+    debtorCanAfford: number;
+  } | null;
   
   // Phase 3: Bankruptcy Restructuring
-  pendingBankruptcy?: {
+  pendingBankruptcy: {
     playerIndex: number;
     creditorIndex?: number;
     debtAmount: number;
-  };
+  } | null;
   
   // Jackpot system
   jackpot: number; // Accumulated jackpot from mortgage contributions

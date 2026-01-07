@@ -127,7 +127,7 @@ export const AuctionModal: React.FC<Props> = ({ auction, property, players, myPl
           borderRadius: "16px",
           boxShadow: "0 8px 32px rgba(0, 0, 0, 0.5)",
           border: "1px solid rgba(255,255,255,0.1)",
-          zIndex: 300,
+          zIndex: 500,
         }}
       >
         <div style={{ padding: "20px" }}>

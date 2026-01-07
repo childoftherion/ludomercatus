@@ -1,18 +1,17 @@
+/* Authored by childoftherion */
+
 body {
   font-family: Arial, sans-serif;
-  background: #1a1a2a; /* Solid dark background instead of gradient */
+  background: #1a1a2a;
   min-height: 100vh;
   margin: 0;
   padding: 0;
-  overflow: hidden; /* Prevent body scrollbars */
+  overflow: hidden;
 }
 
 #root {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 20px;
-  padding: 40px;
+  width: 100%;
+  height: 100%;
 }
 
 .space {

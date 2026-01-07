@@ -74,7 +74,7 @@ export const TradeModal: React.FC<Props> = ({ trade, players, spaces, myPlayerIn
   const isReceiver = myPlayerIndex === offer.toPlayer;
   
   // Check if counter-offer has been made
-  const hasCounterOffer = status === "counter_pending" && counterOfferData !== undefined;
+  const hasCounterOffer = status === "counter_pending" && counterOfferData !== null;
   const canMakeCounterOffer = status === "pending" && isReceiver && counterOfferMadeBy !== myPlayerIndex;
   
   const fromPlayerOwnedProps = getPlayerProperties(offer.fromPlayer).filter(p => p.houses === 0 && !p.hotel);
@@ -219,7 +219,7 @@ export const TradeModal: React.FC<Props> = ({ trade, players, spaces, myPlayerIn
           borderRadius: "16px",
           boxShadow: "0 8px 32px rgba(0, 0, 0, 0.5)",
           border: "1px solid rgba(255,255,255,0.1)",
-          zIndex: 300,
+          zIndex: 500,
         }}
       >
       <div style={{ padding: "12px", display: "flex", flexDirection: "column", flex: 1, overflowY: "auto" }}>

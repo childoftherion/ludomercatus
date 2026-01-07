@@ -1,3 +1,4 @@
+// Authored by childoftherion
 import type {
   GameState,
   Player,
@@ -88,8 +89,10 @@ const createPlayer = (
   jailFreeCards: 0,
   bankrupt: false,
   isAI,
-  aiDifficulty: isAI ? (aiDifficulty ?? "medium") : undefined,
+  aiDifficulty: isAI ? (aiDifficulty ?? "medium") : null,
+  clientId: null,
   lastTradeTurn: -10,
+  tradeHistory: null,
   // Bank Loans (Phase 2)
   bankLoans: [],
   totalDebt: 0,
@@ -117,26 +120,36 @@ export class GameRoom implements GameActions {
       spaces: boardSpaces as Space[],
       chanceDeck: shuffleDeck(createChanceDeck()),
       communityChestDeck: shuffleDeck(createCommunityChestDeck()),
-      diceRoll: undefined,
+      diceRoll: null,
       consecutiveDoubles: 0,
       phase: initialPhase,
       passedGo: false,
-      auction: undefined,
-      trade: undefined,
-      lastCardDrawn: undefined,
+      auction: null,
+      trade: null,
+      previousPhase: null,
+      lastCardDrawn: null,
       gameLog: [],
       turn: 1,
+      winner: null,
+      lastDiceRoll: null,
+      roomId: null,
       // Game settings
       settings: { ...DEFAULT_GAME_SETTINGS, ...settings },
       // Phase 1: Economic Realism
       roundsCompleted: 0,
       currentGoSalary: 200,
-      awaitingTaxDecision: undefined,
+      awaitingTaxDecision: null,
       // Phase 2: Housing Scarcity
       availableHouses: 32,
       availableHotels: 12,
       // Phase 2: Economic Events
       activeEconomicEvents: [],
+      // Card-triggered utility multiplier override
+      utilityMultiplierOverride: null,
+      // Phase 3: Rent Negotiation
+      pendingRentNegotiation: null,
+      // Phase 3: Bankruptcy Restructuring
+      pendingBankruptcy: null,
       // Jackpot system
       jackpot: 0,
     };
@@ -313,25 +326,34 @@ export class GameRoom implements GameActions {
       chanceDeck: shuffleDeck(createChanceDeck()),
       communityChestDeck: shuffleDeck(createCommunityChestDeck()),
       phase: "rolling",
-      diceRoll: undefined,
+      diceRoll: null,
       consecutiveDoubles: 0,
       passedGo: false,
-      auction: undefined,
-      trade: undefined,
-      lastCardDrawn: undefined,
+      auction: null,
+      trade: null,
+      lastCardDrawn: null,
       gameLog: [],
       turn: 1,
-      // Keep existing settings
+      winner: null,
+      lastDiceRoll: null,
+      roomId: null,
+      // Game settings
       settings: this.state.settings,
       // Phase 1: Economic Realism
       roundsCompleted: 0,
       currentGoSalary: 200,
-      awaitingTaxDecision: undefined,
+      awaitingTaxDecision: null,
       // Phase 2: Housing Scarcity
       availableHouses: 32,
       availableHotels: 12,
       // Phase 2: Economic Events
       activeEconomicEvents: [],
+      // Card-triggered utility multiplier override
+      utilityMultiplierOverride: null,
+      // Phase 3: Rent Negotiation
+      pendingRentNegotiation: null,
+      // Phase 3: Bankruptcy Restructuring
+      pendingBankruptcy: null,
       // Jackpot system
       jackpot: 0,
     });
@@ -682,7 +704,7 @@ export class GameRoom implements GameActions {
     const amount =
       choice === "flat" ? taxDecision.flatAmount : taxDecision.percentageAmount;
 
-    this.setState({ awaitingTaxDecision: undefined, phase: "resolving_space" });
+    this.setState({ awaitingTaxDecision: null, phase: "resolving_space" });
     this.payTax(playerIndex, amount);
 
     this.addLogEntry(
@@ -773,7 +795,7 @@ export class GameRoom implements GameActions {
 
     if (rent <= 0) {
       // Clear utility multiplier override even if no rent is paid
-      this.setState({ utilityMultiplierOverride: undefined });
+      this.setState({ utilityMultiplierOverride: null });
       return;
     }
 
@@ -785,7 +807,7 @@ export class GameRoom implements GameActions {
           return p;
         }),
         // Clear utility multiplier override after rent is paid
-        utilityMultiplierOverride: undefined,
+        utilityMultiplierOverride: null,
       });
 
       const owner = this.state.players[property.owner];
@@ -849,8 +871,8 @@ export class GameRoom implements GameActions {
 
     this.setState({
       phase: "resolving_space",
-      pendingRentNegotiation: undefined,
-      utilityMultiplierOverride: undefined,
+      pendingRentNegotiation: null,
+      utilityMultiplierOverride: null,
     });
 
     this.addLogEntry(
@@ -906,8 +928,8 @@ export class GameRoom implements GameActions {
         return p;
       }),
       phase: "resolving_space",
-      pendingRentNegotiation: undefined,
-      utilityMultiplierOverride: undefined,
+      pendingRentNegotiation: null,
+      utilityMultiplierOverride: null,
     });
 
     this.addLogEntry(
@@ -1088,8 +1110,8 @@ export class GameRoom implements GameActions {
           return p;
         }),
         phase: "resolving_space",
-        pendingRentNegotiation: undefined,
-        utilityMultiplierOverride: undefined,
+        pendingRentNegotiation: null,
+        utilityMultiplierOverride: null,
       });
 
       this.addLogEntry(
@@ -1100,8 +1122,8 @@ export class GameRoom implements GameActions {
     } else {
       // No property transfer - debtor goes bankrupt
       this.setState({
-        pendingRentNegotiation: undefined,
-        utilityMultiplierOverride: undefined,
+        pendingRentNegotiation: null,
+        utilityMultiplierOverride: null,
       });
       this.declareBankruptcy(debtorIndex, creditorIndex);
     }
@@ -1124,7 +1146,7 @@ export class GameRoom implements GameActions {
       );
     } else if (this.state.settings.enableBankruptcyRestructuring) {
       // Phase 3: Offer Chapter 11 restructuring
-      this.offerRestructuring(playerIndex, undefined, amount);
+      this.offerRestructuring(playerIndex, null as any, amount);
     } else {
       this.declareBankruptcy(playerIndex);
     }
@@ -1162,9 +1184,9 @@ export class GameRoom implements GameActions {
       );
       this.setState({
         phase: "rolling",
-        diceRoll: undefined,
+        diceRoll: null,
         consecutiveDoubles: newConsecutiveDoubles,
-        lastCardDrawn: undefined,
+        lastCardDrawn: null,
       });
       return;
     }
@@ -1242,10 +1264,10 @@ export class GameRoom implements GameActions {
     this.setState({
       currentPlayerIndex: nextPlayerIndex,
       phase: nextPlayer?.inJail ? "jail_decision" : "rolling",
-      diceRoll: undefined,
+      diceRoll: null,
       consecutiveDoubles: 0,
       passedGo: false,
-      lastCardDrawn: undefined,
+      lastCardDrawn: null,
       turn: this.state.turn + 1,
       roundsCompleted: newRoundsCompleted,
       currentGoSalary: newGoSalary,
@@ -1263,7 +1285,7 @@ export class GameRoom implements GameActions {
           : p,
       ),
       consecutiveDoubles: 0, // Reset doubles counter when going to jail
-      diceRoll: undefined,
+      diceRoll: null,
       phase: "jail_decision", // Set phase to jail decision
     });
 
@@ -2422,7 +2444,7 @@ export class GameRoom implements GameActions {
           : p,
       ),
       phase: "resolving_space",
-      pendingBankruptcy: undefined,
+      pendingBankruptcy: null,
     });
 
     this.addLogEntry(
@@ -2449,7 +2471,7 @@ export class GameRoom implements GameActions {
     );
 
     this.setState({
-      pendingBankruptcy: undefined,
+      pendingBankruptcy: null,
       phase:
         this.state.phase === "awaiting_bankruptcy_decision"
           ? "resolving_space"
@@ -2757,7 +2779,7 @@ export class GameRoom implements GameActions {
               }
             : p,
         ),
-        auction: undefined,
+        auction: null,
         phase: "resolving_space",
       });
       this.addLogEntry(
@@ -2766,7 +2788,7 @@ export class GameRoom implements GameActions {
       );
     } else {
       // No bids - property goes back to the bank
-      this.setState({ auction: undefined, phase: "resolving_space" });
+      this.setState({ auction: null, phase: "resolving_space" });
       this.addLogEntry(
         `No bids placed. ${property?.name} remains unowned.`,
         "auction",
@@ -2788,6 +2810,8 @@ export class GameRoom implements GameActions {
           jailCardsRequested: 0,
         },
         status: "draft",
+        counterOffer: null,
+        counterOfferMadeBy: null,
       },
       phase: "trading",
       previousPhase: this.state.phase,
@@ -2796,12 +2820,20 @@ export class GameRoom implements GameActions {
 
   public updateTradeOffer(offer: TradeOffer) {
     this.setState({
-      trade: this.state.trade ? { ...this.state.trade, offer } : undefined,
+      trade: this.state.trade ? { ...this.state.trade, offer } : null,
     });
   }
 
   public proposeTrade(offer: TradeOffer) {
-    this.setState({ trade: { offer, status: "pending" }, phase: "trading" });
+    this.setState({ 
+      trade: { 
+        offer, 
+        status: "pending",
+        counterOffer: null,
+        counterOfferMadeBy: null
+      }, 
+      phase: "trading" 
+    });
   }
 
   public acceptTrade() {
@@ -2852,9 +2884,9 @@ export class GameRoom implements GameActions {
           return { ...s, owner: offer.fromPlayer };
         return s;
       }),
-      trade: undefined,
+      trade: null,
       phase: this.state.previousPhase ?? "resolving_space",
-      previousPhase: undefined,
+      previousPhase: null,
     });
     this.addLogEntry(`Trade completed!`, "trade");
   }
@@ -2867,8 +2899,8 @@ export class GameRoom implements GameActions {
         this.setState({
           trade: {
             ...trade,
-            counterOffer: undefined,
-            counterOfferMadeBy: undefined,
+            counterOffer: null,
+            counterOfferMadeBy: null,
             status: "pending",
           },
         });
@@ -2903,17 +2935,17 @@ export class GameRoom implements GameActions {
     }
 
     this.setState({
-      trade: undefined,
+      trade: null,
       phase: this.state.previousPhase ?? "resolving_space",
-      previousPhase: undefined,
+      previousPhase: null,
     });
   }
 
   public cancelTrade() {
     this.setState({
-      trade: undefined,
+      trade: null,
       phase: this.state.previousPhase ?? "resolving_space",
-      previousPhase: undefined,
+      previousPhase: null,
     });
   }
 
@@ -3066,9 +3098,9 @@ export class GameRoom implements GameActions {
         }
         return s;
       }),
-      trade: undefined,
+      trade: null,
       phase: this.state.previousPhase ?? "resolving_space",
-      previousPhase: undefined,
+      previousPhase: null,
     });
 
     this.addLogEntry(
@@ -3078,6 +3110,8 @@ export class GameRoom implements GameActions {
   }
 
   public executeAITurn() {
+    const player = this.state.players[this.state.currentPlayerIndex];
+    console.log(`[GameRoom] executeAITurn called for ${player?.name} (index ${this.state.currentPlayerIndex}, phase ${this.state.phase})`);
     executeAITurn(this.state, this);
   }
 

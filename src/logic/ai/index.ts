@@ -138,7 +138,12 @@ export const executeAITurn = (state: GameState, actions: GameActions) => {
   
   const player = state.players[playerIndex];
   
-  if (!player || !player.isAI || player.bankrupt) return;
+  if (!player || !player.isAI || player.bankrupt) {
+    console.log(`[AI] Skipping turn for player ${playerIndex}: exists=${!!player}, isAI=${player?.isAI}, bankrupt=${player?.bankrupt}`);
+    return;
+  }
+
+  console.log(`[AI] Processing turn for ${player.name} (${playerIndex}) in phase ${state.phase}`);
 
   const currentSpace = state.spaces[player.position];
   
@@ -484,33 +489,23 @@ export const executeAITurn = (state: GameState, actions: GameActions) => {
   // Handle different phases
   switch (state.phase) {
     case "rolling": {
+      console.log(`[AI] In rolling phase. InJail: ${player.inJail}`);
       if (player.inJail) {
         if (player.jailFreeCards > 0) actions.getOutOfJail(playerIndex, "card");
         else if (player.cash >= 50 && player.jailTurns >= 1) actions.getOutOfJail(playerIndex, "pay");
         else actions.getOutOfJail(playerIndex, "roll");
       } else {
+        console.log(`[AI] Rolling dice...`);
         const roll = actions.rollDice();
-        // Move is handled by store timeout usually, or we call it?
-        // Store rollDice handles the log. Store creates the timeout?
-        // In the original code:
-        // const roll = get().rollDice();
-        // setTimeout(() => get().movePlayer(playerIndex, roll.total), 1000);
+        console.log(`[AI] Rolled ${roll?.total}. Scheduling move in 1s...`);
         
-        // We need to replicate that.
-        // We can't use setTimeout here easily if we want to be pure.
-        // But we can just call movePlayer? No, we want the delay.
-        // The store's 'executeAITurn' handled the timeout.
-        // We should move that responsibility to the store or keeping it here implies side effects.
-        // Let's assume the store's 'rollDice' JUST rolls.
-        // We need to trigger the move.
-        
-        // If we modify the store to handle the auto-move on AI roll, that violates "dumb store".
-        // If we keep it here, we need async.
-        
-        // Let's keep it simple: The action 'movePlayer' will be called by the caller of this function
-        // if we return a "ROLL" intent?
-        // Or we just call actions.movePlayer inside a timeout here.
+        if (!roll) {
+          console.error(`[AI] rollDice returned null! Stalling.`);
+          return;
+        }
+
         setTimeout(() => {
+          console.log(`[AI] Executing move for ${player.name}...`);
            actions.movePlayer(playerIndex, roll.total);
         }, 1000);
       }

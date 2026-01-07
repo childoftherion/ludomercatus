@@ -97,7 +97,7 @@ export const BankruptcyModal: React.FC<Props> = ({
           border: "2px solid #ef4444",
           boxShadow: "0 0 60px rgba(239, 68, 68, 0.4)",
           borderRadius: "16px",
-          zIndex: 300,
+          zIndex: 500,
         }}
       >
         <div style={{ padding: "20px" }}>
