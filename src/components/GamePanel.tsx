@@ -42,7 +42,8 @@ export const GamePanel: React.FC<GamePanelProps> = ({
   } = useGameStore();
 
 
-  const currentPlayer = currentPlayerIndex !== undefined && currentPlayerIndex < players.length
+
+  const currentPlayer = currentPlayerIndex >= 0 && currentPlayerIndex < players.length
     ? players[currentPlayerIndex]
     : null;
 
@@ -172,7 +173,7 @@ export const GamePanel: React.FC<GamePanelProps> = ({
             </>
           ) : (
             <div style={{ padding: "16px", color: "#888", fontSize: "14px", textAlign: "center" }}>
-              {myPlayerIndex === null ? (
+              {myPlayerIndex === -1 ? (
                 <>
                   <p style={{ color: "#ff9800", fontWeight: "bold" }}>⚠️ Player not selected</p>
                   <p style={{ fontSize: "12px", marginTop: "4px" }}>Auto-detecting player...</p>

@@ -24,42 +24,8 @@ const PlayerSetup = () => {
   const selectContainerRef = React.useRef<HTMLDivElement>(null);
   const multiplayerContainerRef = React.useRef<HTMLDivElement>(null);
   
-  // #region agent log
-  React.useEffect(() => {
-    const containerRef = gameMode === "single" ? singlePlayerContainerRef : 
-                        gameMode === "multiplayer" ? multiplayerContainerRef : 
-                        selectContainerRef;
-    if (containerRef.current) {
-      const el = containerRef.current;
-      const viewport = { width: window.innerWidth, height: window.innerHeight };
-      const rect = el.getBoundingClientRect();
-      const computedStyle = window.getComputedStyle(el);
-      const bodyStyle = window.getComputedStyle(document.body);
-      const logData = {
-        location: 'PlayerSetup.tsx:442',
-        message: 'Setup container sizing check',
-        data: {
-          gameMode,
-          viewport,
-          rect: { top: rect.top, left: rect.left, width: rect.width, height: rect.height },
-          computedStyle: { overflowY: computedStyle.overflowY, overflowX: computedStyle.overflowX, height: computedStyle.height },
-          scrollHeight: el.scrollHeight,
-          clientHeight: el.clientHeight,
-          needsScrollbar: el.scrollHeight > el.clientHeight,
-          bodyOverflow: bodyStyle.overflow
-        },
-        timestamp: Date.now(),
-        sessionId: 'debug-session',
-        runId: 'scrollbar-fix-v1',
-        hypothesisId: 'A'
-      };
-      fetch('http://127.0.0.1:7242/ingest/624eb4a4-a4cd-4fc4-9b95-f587dccf83e6', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(logData)
-      }).catch(() => {});
-    }
-  }, [gameMode]);
+  // #region metadata
+  // Authored by childoftherion
   // #endregion
   
   // Single player state

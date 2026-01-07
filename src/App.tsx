@@ -1,3 +1,34 @@
+import React, { useState, useEffect, useMemo } from "react"
+import { motion, AnimatePresence } from "framer-motion"
+import { audioManager } from "./utils/audio"
+import { useGameStore } from "./store/gameStore"
+import { Board } from "./components/Board"
+import { MultiplayerLobby } from "./components/MultiplayerLobby"
+import { ServerBrowser } from "./components/ServerBrowser"
+import { PlayerTokens } from "./components/PlayerToken"
+import PlayerSetup from "./components/PlayerSetup"
+import { AuctionModal } from "./components/AuctionModal"
+import { TradeModal } from "./components/TradeModal"
+import { RentNegotiationModal } from "./components/RentNegotiationModal"
+import { BankruptcyModal } from "./components/BankruptcyModal"
+import { GameLog } from "./components/GameLog"
+import { PlayerSelectionModal } from "./components/PlayerSelectionModal"
+import { CardDisplay } from "./components/CardDisplay"
+import { PropertyDetailsModal } from "./components/PropertyDetailsModal"
+import { UserPanel } from "./components/UserPanel"
+import type { Property } from "./types/game"
+import { BurgerMenu } from "./components/BurgerMenu"
+import { GamePanel } from "./components/GamePanel"
+import { isProperty } from "./utils/helpers"
+import { useIsMobile } from "./utils/useIsMobile"
+
+export default function App() {
+  const isMobile = useIsMobile()
+  const {
+    phase,
+    currentPlayerIndex,
+    players,
+    passedGo: storePassedGo,
 import React from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { audioManager } from "./utils/audio";
@@ -78,11 +109,74 @@ export default function App() {
   // Enable body scrolling for setup screen
   React.useEffect(() => {
     if (phase === "setup") {
-      document.body.style.overflow = "auto";
+      document.body.style.overflow = "auto"
     } else {
-      document.body.style.overflow = "hidden";
+      document.body.style.overflow = "hidden"
     }
     return () => {
+      document.body.style.overflow = "hidden"
+    }
+  }, [phase])
+
+  const [claimedPlayerIndex, setClaimedPlayerIndex] = React.useState<
+    number | null
+  >(null)
+
+  const myPlayerIndex = React.useMemo(() => {
+    // First, try to find based on claimed index
+    if (
+      claimedPlayerIndex !== null &&
+      players[claimedPlayerIndex]?.clientId === clientId
+    ) {
+      return claimedPlayerIndex
+    }
+    // Fallback to searching the array
+    const index = players.findIndex((p) => p.clientId === clientId)
+    console.log(
+      `[Identity] My player index is ${index} for client ID ${clientId}`
+    )
+    return index
+  }, [players, clientId, claimedPlayerIndex])
+
+  // Auto-claim player if only one human player
+  React.useEffect(() => {
+    if (
+      phase !== "setup" &&
+      myPlayerIndex === -1 &&
+      claimedPlayerIndex === null
+    ) {
+      const humanPlayers = players
+        .map((p, i) => ({ ...p, index: i }))
+        .filter((p) => !p.isAI && !p.clientId)
+      if (humanPlayers.length === 1 && humanPlayers[0]) {
+        console.log(`[Identity] Auto-claiming player ${humanPlayers[0].name}`)
+        setClaimedPlayerIndex(humanPlayers[0].index)
+        useGameStore.getState().assignPlayer(humanPlayers[0].index, clientId)
+      }
+    }
+  }, [players, phase, myPlayerIndex, claimedPlayerIndex, clientId])
+
+  const currentPlayer =
+    currentPlayerIndex >= 0 && currentPlayerIndex < players.length
+      ? players[currentPlayerIndex]
+      : null
+
+  const isMyTurn = currentPlayerIndex === myPlayerIndex
+
+  const currentSpace = currentPlayer ? spaces[currentPlayer.position] : null
+
+  const [passedGo, setPassedGo] = React.useState(false)
+  const [isRolling, setIsRolling] = React.useState(false)
+  const [showCard, setShowCard] = React.useState(false)
+  const [lastShownCardId, setLastShownCardId] = React.useState<number | null>(
+    null
+  )
+  const lastPlayerIndexRef = React.useRef<number | undefined>(undefined)
+  const [isNewTurn, setIsNewTurn] = React.useState(false)
+  const [isMuted, setIsMuted] = React.useState(false)
+  const [selectedProperty, setSelectedProperty] =
+    React.useState<Property | null>(null)
+  const [showMobileLog, setShowMobileLog] = React.useState(false)
       document.body.style.overflow = "hidden";
     };
   }, [phase]);
@@ -116,111 +210,128 @@ export default function App() {
     if (lastCardDrawn) {
       // Only show if this is a new card (different from last shown)
       if (lastCardDrawn.id !== lastShownCardId) {
-        setShowCard(true);
-        setLastShownCardId(lastCardDrawn.id);
-        audioManager.playCardDraw();
+        setShowCard(true)
+        setLastShownCardId(lastCardDrawn.id)
+        audioManager.playCardDraw()
         const timer = setTimeout(() => {
-          setShowCard(false);
+          setShowCard(false)
           // Mark as shown so it doesn't reappear
-          setLastShownCardId(lastCardDrawn.id);
-        }, 8000); // Show for 8 seconds (increased from 5 for better visibility)
-        return () => clearTimeout(timer);
+          setLastShownCardId(lastCardDrawn.id)
+        }, 8000) // Show for 8 seconds (increased from 5 for better visibility)
+        return () => clearTimeout(timer)
       }
     } else {
-      setShowCard(false);
-      setLastShownCardId(null);
+      setShowCard(false)
+      setLastShownCardId(null)
     }
-  }, [lastCardDrawn, lastShownCardId]);
+  }, [lastCardDrawn, lastShownCardId])
 
   // Track previous player index to detect player changes
-  const prevPlayerIndexRef = React.useRef(currentPlayerIndex);
-  
+  const prevPlayerIndexRef = React.useRef(currentPlayerIndex)
+
   // Clear card display when player changes (but NOT when phase changes during card display)
   React.useEffect(() => {
     // Only clear card display when player changes, not when phase changes
     // Phase changes can happen due to card effects (e.g., moving to property triggers awaiting_buy_decision)
     // We want to keep the card visible even if phase changes due to the card's effect
     if (prevPlayerIndexRef.current !== currentPlayerIndex) {
-      setShowCard(false);
-      prevPlayerIndexRef.current = currentPlayerIndex;
+      setShowCard(false)
+      prevPlayerIndexRef.current = currentPlayerIndex
     }
-  }, [currentPlayerIndex, phase]);
-  const { diceRoll } = useGameStore();
+  }, [currentPlayerIndex, phase])
+  const { diceRoll } = useGameStore()
   // Detect new turns and handle stale diceRoll
   React.useEffect(() => {
-    const detectedNewTurn = lastPlayerIndexRef.current !== undefined && 
-                             lastPlayerIndexRef.current !== currentPlayerIndex &&
-                             phase === "rolling";
-    
+    const detectedNewTurn =
+      lastPlayerIndexRef.current != null &&
+      lastPlayerIndexRef.current !== currentPlayerIndex &&
+      phase === "rolling"
+
     // Detect "roll again after doubles" - same player, phase is rolling, but diceRoll might still exist
-    const isRollAgainAfterDoubles = lastPlayerIndexRef.current === currentPlayerIndex &&
-                                     phase === "rolling" &&
-                                     diceRoll?.isDoubles;
-    
+    const isRollAgainAfterDoubles =
+      lastPlayerIndexRef.current === currentPlayerIndex &&
+      phase === "rolling" &&
+      diceRoll?.isDoubles
+
     if (detectedNewTurn) {
       console.log("[App] New turn detected:", {
         previousPlayer: lastPlayerIndexRef.current,
         currentPlayer: currentPlayerIndex,
         diceRoll: diceRoll,
         phase: phase,
-      });
-      
+      })
+
       // Play turn start sound if it's the human player's turn
       if (currentPlayerIndex === myPlayerIndex) {
-        audioManager.playTurnStart();
+        audioManager.playTurnStart()
       }
-      
+
       // If diceRoll exists on a new turn, it's stale (should have been cleared by server)
       if (diceRoll) {
-        console.warn("[App] Stale diceRoll detected on new turn! Server should have cleared it.", diceRoll);
-        setIsNewTurn(true); // Mark as new turn so we ignore stale diceRoll
+        console.warn(
+          "[App] Stale diceRoll detected on new turn! Server should have cleared it.",
+          diceRoll
+        )
+        setIsNewTurn(true) // Mark as new turn so we ignore stale diceRoll
       } else {
-        setIsNewTurn(true); // Still a new turn, even if diceRoll is cleared
+        setIsNewTurn(true) // Still a new turn, even if diceRoll is cleared
       }
-      
+
       // Reset local rolling state
-      setIsRolling(false);
+      setIsRolling(false)
     } else if (isRollAgainAfterDoubles) {
       // This is a roll-again situation after doubles
-      console.log("[App] Roll again after doubles detected");
-      setIsNewTurn(true); // Allow rolling again
-      setIsRolling(false); // Make sure rolling state is cleared
+      console.log("[App] Roll again after doubles detected")
+      setIsNewTurn(true) // Allow rolling again
+      setIsRolling(false) // Make sure rolling state is cleared
     }
-    
-    lastPlayerIndexRef.current = currentPlayerIndex;
-  }, [phase, currentPlayerIndex, diceRoll, myPlayerIndex]);
+
+    lastPlayerIndexRef.current = currentPlayerIndex
+  }, [phase, currentPlayerIndex, diceRoll, myPlayerIndex])
 
   // Clear isNewTurn flag when dice are actually rolled
   React.useEffect(() => {
     if (isRolling) {
       // When rolling starts, clear the new turn flag
-      setIsNewTurn(false);
+      setIsNewTurn(false)
     }
-  }, [isRolling]);
-  
+  }, [isRolling])
+
   // Handle roll-again after doubles: detect when we should be able to roll again
   React.useEffect(() => {
     // After clicking "Roll Again" for doubles, server sets phase to "rolling" and clears diceRoll
     // But client might still have the old diceRoll. If phase is "rolling" and we have a diceRoll
     // but we're not rolling, this is likely a roll-again situation
-    if (phase === "rolling" && diceRoll && !isRolling && isMyTurn && currentPlayer && !currentPlayer.inJail) {
+    if (
+      phase === "rolling" &&
+      diceRoll &&
+      !isRolling &&
+      isMyTurn &&
+      currentPlayer &&
+      !currentPlayer.inJail
+    ) {
       // Wait a moment for state to sync from server
       const timer = setTimeout(() => {
-        const currentState = useGameStore.getState();
+        const currentState = useGameStore.getState()
         // If server cleared diceRoll, it should be undefined now
         // If it's still there, it might be stale - allow rolling anyway
-        if (currentState.phase === "rolling" && 
-            currentState.currentPlayerIndex === currentPlayerIndex) {
-          console.log("[App] Roll-again after doubles: allowing roll");
-          setIsNewTurn(true); // This will make the button show
+        if (
+          currentState.phase === "rolling" &&
+          currentState.currentPlayerIndex === currentPlayerIndex
+        ) {
+          console.log("[App] Roll-again after doubles: allowing roll")
+          setIsNewTurn(true) // This will make the button show
         }
-      }, 200); // Give server time to update state
-      return () => clearTimeout(timer);
+      }, 200) // Give server time to update state
+      return () => clearTimeout(timer)
     }
-  }, [phase, diceRoll, isRolling, isMyTurn, currentPlayer, currentPlayerIndex]);
+  }, [phase, diceRoll, isRolling, isMyTurn, currentPlayer, currentPlayerIndex])
 
   // Debug logging for Roll Dice button visibility
   React.useEffect(() => {
+    console.log(
+      `[State Sync] myPlayerIndex: ${myPlayerIndex}, currentPlayerIndex: ${currentPlayerIndex}, isMyTurn: ${isMyTurn}`
+    )
     if (phase === "rolling" && currentPlayer) {
       const rollDiceConditions = {
         phase: phase,
@@ -232,7 +343,13 @@ export default function App() {
         currentPlayerInJail: currentPlayer.inJail,
         diceRoll: diceRoll,
         isRolling: isRolling,
-        shouldShowButton: phase === "rolling" && !currentPlayer.inJail && !currentPlayer.isAI && isMyTurn && !diceRoll && !isRolling,
+        shouldShowButton:
+          phase === "rolling" &&
+          !currentPlayer.inJail &&
+          !currentPlayer.isAI &&
+          isMyTurn &&
+          !diceRoll &&
+          !isRolling,
         conditionBreakdown: {
           phaseIsRolling: phase === "rolling",
           notInJail: !currentPlayer.inJail,
@@ -241,265 +358,323 @@ export default function App() {
           noDiceRoll: !diceRoll,
           notRolling: !isRolling,
         },
-      };
-      console.log("[Roll Dice Debug]", rollDiceConditions);
-      
+      }
+      console.log("[Roll Dice Debug]", rollDiceConditions)
+
       // If all conditions should be met but button isn't showing, log warning
       if (rollDiceConditions.shouldShowButton && !isMyTurn) {
-        console.warn("[Roll Dice Debug] Button should show but isMyTurn is false!", {
-          currentPlayerIndex,
-          myPlayerIndex,
-          players: players.map((p, i) => ({ index: i, name: p.name, isAI: p.isAI })),
-        });
+        console.warn(
+          "[Roll Dice Debug] Button should show but isMyTurn is false!",
+          {
+            currentPlayerIndex,
+            myPlayerIndex,
+            players: players.map((p, i) => ({
+              index: i,
+              name: p.name,
+              isAI: p.isAI,
+            })),
+          }
+        )
       }
     }
-  }, [phase, currentPlayerIndex, myPlayerIndex, isMyTurn, currentPlayer, diceRoll, isRolling, players]);
+  }, [
+    phase,
+    currentPlayerIndex,
+    myPlayerIndex,
+    isMyTurn,
+    currentPlayer,
+    diceRoll,
+    isRolling,
+    players,
+    currentPlayerIndex,
+  ])
 
   React.useEffect(() => {
     if (storePassedGo) {
-      setPassedGo(true);
+      setPassedGo(true)
       setTimeout(() => {
-        setPassedGo(false);
-      }, 2000);
+        setPassedGo(false)
+      }, 2000)
     }
-  }, [storePassedGo]);
+  }, [storePassedGo])
   // AI turn execution
   React.useEffect(() => {
-    if (!connected) return; // Wait for connection
-    if (!currentPlayer || !currentPlayer.isAI || currentPlayer.bankrupt) return;
-    if (phase === "setup" || phase === "game_over") return;
+    if (!connected) return // Wait for connection
+    if (!currentPlayer || !currentPlayer.isAI || currentPlayer.bankrupt) return
+    if (phase === "setup" || phase === "game_over") return
+
+    // Only one client should trigger AI turns to avoid duplicates on the server.
+    // We'll pick the first human player in the game.
+    const firstHumanIndex = players.findIndex((p) => !p.isAI)
+    if (myPlayerIndex !== firstHumanIndex) return
 
     // Add delay for AI actions to be visible
     const aiDelay = setTimeout(() => {
-      useGameStore.getState().executeAITurn();
-    }, 1200);
+      console.log(
+        `[App] Triggering AI turn for ${currentPlayer.name} (our player index: ${myPlayerIndex})`
+      )
+      useGameStore.getState().executeAITurn()
+    }, 1200)
 
-    return () => clearTimeout(aiDelay);
-  }, [currentPlayer, phase, auction?.activePlayerIndex, connected]);
+    return () => clearTimeout(aiDelay)
+  }, [currentPlayer, phase, auction?.activePlayerIndex, connected])
   // AI auction bid execution - separate handler for auction phase
   React.useEffect(() => {
-    if (!connected) return;
-    if (phase !== "auction" || !auction) return;
-    
-    const activeBidder = players[auction.activePlayerIndex];
-    if (!activeBidder || !activeBidder.isAI || activeBidder.bankrupt) return;
-    
+    if (!connected) return
+    if (phase !== "auction" || !auction) return
+
+    const activeBidder = players[auction.activePlayerIndex]
+    if (!activeBidder || !activeBidder.isAI || activeBidder.bankrupt) return
+
     // Add delay for AI actions to be visible
     const aiDelay = setTimeout(() => {
-      console.log(`[App] Triggering AI auction bid for ${activeBidder.name} (player ${auction.activePlayerIndex})`);
-      useGameStore.getState().executeAITurn();
-    }, 1200);
+      console.log(
+        `[App] Triggering AI auction bid for ${activeBidder.name} (player ${auction.activePlayerIndex})`
+      )
+      useGameStore.getState().executeAITurn()
+    }, 1200)
 
-    return () => clearTimeout(aiDelay);
-  }, [phase, auction?.activePlayerIndex, players, connected]);
+    return () => clearTimeout(aiDelay)
+  }, [phase, auction?.activePlayerIndex, players, connected])
   // AI trade response
   React.useEffect(() => {
-    if (!connected) return;
+    if (!connected) return
     if (phase === "trading") {
       // Handle initial trade proposals (AI is receiver)
       if (trade?.status === "pending") {
-        const receiver = players[trade.offer.toPlayer];
+        const receiver = players[trade.offer.toPlayer]
         if (receiver?.isAI) {
           const aiDelay = setTimeout(() => {
-            useGameStore.getState().executeAITradeResponse();
-          }, 2000);
-          return () => clearTimeout(aiDelay);
+            useGameStore.getState().executeAITradeResponse()
+          }, 2000)
+          return () => clearTimeout(aiDelay)
         }
       }
       // Handle counter-offers (AI is original initiator)
       if (trade?.status === "counter_pending") {
-        const originalInitiator = players[trade.offer.fromPlayer];
+        const originalInitiator = players[trade.offer.fromPlayer]
         if (originalInitiator?.isAI) {
           const aiDelay = setTimeout(() => {
-            useGameStore.getState().executeAITradeResponse();
-          }, 2000);
-          return () => clearTimeout(aiDelay);
+            useGameStore.getState().executeAITradeResponse()
+          }, 2000)
+          return () => clearTimeout(aiDelay)
         }
       }
     }
-  }, [phase, trade?.status, connected, players]);
+  }, [phase, trade?.status, connected, players])
   // AI rent negotiation response
   React.useEffect(() => {
-    if (!connected) return;
+    if (!connected) return
     if (phase === "awaiting_rent_negotiation" && pendingRentNegotiation) {
-      const creditor = players[pendingRentNegotiation.creditorIndex];
+      const creditor = players[pendingRentNegotiation.creditorIndex]
       if (creditor?.isAI && !creditor.bankrupt) {
         const aiDelay = setTimeout(() => {
-          useGameStore.getState().executeAITurn();
-        }, 2000);
-        return () => clearTimeout(aiDelay);
+          useGameStore.getState().executeAITurn()
+        }, 2000)
+        return () => clearTimeout(aiDelay)
       }
     }
-  }, [phase, pendingRentNegotiation, connected, players]);
+  }, [phase, pendingRentNegotiation, connected, players])
   // AI bankruptcy decision
   React.useEffect(() => {
-    if (!connected) return;
+    if (!connected) return
     if (phase === "awaiting_bankruptcy_decision") {
-      const pending = (useGameStore.getState() as any).pendingBankruptcy;
+      const pending = (useGameStore.getState() as any).pendingBankruptcy
       if (pending) {
-        const bankruptPlayer = players[pending.playerIndex];
+        const bankruptPlayer = players[pending.playerIndex]
         if (bankruptPlayer?.isAI && !bankruptPlayer.bankrupt) {
           const aiDelay = setTimeout(() => {
-            useGameStore.getState().executeAITurn();
-          }, 2000);
-          return () => clearTimeout(aiDelay);
+            useGameStore.getState().executeAITurn()
+          }, 2000)
+          return () => clearTimeout(aiDelay)
         }
       }
     }
-  }, [phase, connected, players]);
+  }, [phase, connected, players])
   const handleRollDice = () => {
-    if (isRolling) return;
-    setIsRolling(true);
-    audioManager.playDiceRoll();
-  };
+    if (isRolling) return
+    setIsRolling(true)
+    audioManager.playDiceRoll()
+  }
   const handleRollComplete = () => {
-    const roll = useGameStore.getState().diceRoll;
-    
+    const roll = useGameStore.getState().diceRoll
+
     // Keep showing dice for a moment after roll completes
     setTimeout(() => {
-      setIsRolling(false);
-      
+      setIsRolling(false)
+
       if (roll && currentPlayer && !currentPlayer.inJail) {
         // Move the player after a short delay
         setTimeout(() => {
-          useGameStore.getState().movePlayer(currentPlayerIndex, roll.total);
-          audioManager.playMove();
-        }, 200);
+          useGameStore.getState().movePlayer(currentPlayerIndex, roll.total)
+          audioManager.playMove()
+        }, 200)
       }
-    }, 800);
-  };
+    }, 800)
+  }
   const handleEndTurn = () => {
-    const currentRoll = useGameStore.getState().diceRoll;
-    const isDoubles = currentRoll?.isDoubles;
-    
-    useGameStore.getState().endTurn();
-    
+    const currentRoll = useGameStore.getState().diceRoll
+    const isDoubles = currentRoll?.isDoubles
+
+    useGameStore.getState().endTurn()
+
     // If it's doubles, endTurn will set phase back to "rolling" and clear diceRoll on server
     // Clear local state immediately to allow another roll
     if (isDoubles) {
-      setIsRolling(false);
+      setIsRolling(false)
       // Set isNewTurn to allow rolling again (server will clear diceRoll, but client might not update immediately)
       setTimeout(() => {
-        setIsNewTurn(true);
-      }, 100);
+        setIsNewTurn(true)
+      }, 100)
     }
-  };
+  }
   const handleBuyProperty = () => {
-    if (!currentSpace || !isProperty(currentSpace)) return;
-    useGameStore.getState().buyProperty(currentSpace.id);
-    audioManager.playPurchase();
-  };
+    if (!currentSpace || !isProperty(currentSpace)) return
+    useGameStore.getState().buyProperty(currentSpace.id)
+    audioManager.playPurchase()
+  }
   const handleDeclineProperty = () => {
-    if (!currentSpace) return;
-    useGameStore.getState().declineProperty(currentSpace.id);
-  };
+    if (!currentSpace) return
+    useGameStore.getState().declineProperty(currentSpace.id)
+  }
   // Keyboard shortcuts
   React.useEffect(() => {
     const handleKeyPress = (e: KeyboardEvent) => {
       // Don't handle shortcuts if user is typing in an input
-      if (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement) {
-        return;
+      if (
+        e.target instanceof HTMLInputElement ||
+        e.target instanceof HTMLTextAreaElement
+      ) {
+        return
       }
 
       // Only handle shortcuts when it's the player's turn (unless it's a global shortcut)
-      const playerCanAct = isMyTurn && phase !== "setup" && phase !== "game_over";
+      const playerCanAct =
+        isMyTurn && phase !== "setup" && phase !== "game_over"
 
       switch (e.key) {
         case " ": // Spacebar - Roll dice
           if (playerCanAct && phase === "rolling" && !diceRoll && !isRolling) {
-            e.preventDefault();
-            handleRollDice();
+            e.preventDefault()
+            handleRollDice()
           }
-          break;
+          break
         case "Enter": // Enter - Confirm action (buy property, end turn, etc.)
           if (playerCanAct) {
-            e.preventDefault();
-            if (phase === "awaiting_buy_decision" && currentSpace && isProperty(currentSpace)) {
-              handleBuyProperty();
+            e.preventDefault()
+            if (
+              phase === "awaiting_buy_decision" &&
+              currentSpace &&
+              isProperty(currentSpace)
+            ) {
+              handleBuyProperty()
             } else if (phase === "resolving_space" || phase === "rolling") {
-              handleEndTurn();
+              handleEndTurn()
             }
           }
-          break;
+          break
         case "Escape": // Escape - Cancel/decline or close modals
-          e.preventDefault();
+          e.preventDefault()
           // Close property details modal if open
           if (selectedProperty) {
-            setSelectedProperty(null);
-            return;
+            setSelectedProperty(null)
+            return
           }
           // Handle game actions
           if (playerCanAct) {
             if (phase === "awaiting_buy_decision" && currentSpace) {
-              handleDeclineProperty();
+              handleDeclineProperty()
             }
           }
-          break;
+          break
         case "b": // B - Buy property
         case "B":
-          if (playerCanAct && phase === "awaiting_buy_decision" && currentSpace && isProperty(currentSpace)) {
-            e.preventDefault();
-            handleBuyProperty();
+          if (
+            playerCanAct &&
+            phase === "awaiting_buy_decision" &&
+            currentSpace &&
+            isProperty(currentSpace)
+          ) {
+            e.preventDefault()
+            handleBuyProperty()
           }
-          break;
+          break
         case "d": // D - Decline property
         case "D":
-          if (playerCanAct && phase === "awaiting_buy_decision" && currentSpace) {
-            e.preventDefault();
-            handleDeclineProperty();
+          if (
+            playerCanAct &&
+            phase === "awaiting_buy_decision" &&
+            currentSpace
+          ) {
+            e.preventDefault()
+            handleDeclineProperty()
           }
-          break;
+          break
         case "e": // E - End turn
         case "E":
-          if (playerCanAct && (phase === "resolving_space" || phase === "rolling")) {
-            e.preventDefault();
-            handleEndTurn();
+          if (
+            playerCanAct &&
+            (phase === "resolving_space" || phase === "rolling")
+          ) {
+            e.preventDefault()
+            handleEndTurn()
           }
-          break;
+          break
       }
-    };
+    }
 
-    window.addEventListener("keydown", handleKeyPress);
-    return () => window.removeEventListener("keydown", handleKeyPress);
-  }, [phase, diceRoll, isRolling, currentSpace, isMyTurn, currentPlayerIndex, myPlayerIndex, selectedProperty]);
+    window.addEventListener("keydown", handleKeyPress)
+    return () => window.removeEventListener("keydown", handleKeyPress)
+  }, [
+    phase,
+    diceRoll,
+    isRolling,
+    currentSpace,
+    isMyTurn,
+    currentPlayerIndex,
+    myPlayerIndex,
+    selectedProperty,
+  ])
   const handlePayTax = () => {
-    if (!currentSpace || currentSpace.type !== "tax" || !currentPlayer) return;
-    const amount = currentSpace.name.includes("Income") ? 200 : 100;
-    useGameStore.getState().payTax(currentPlayerIndex, amount);
-    audioManager.playMoney();
-  };
+    if (!currentSpace || currentSpace.type !== "tax" || !currentPlayer) return
+    const amount = currentSpace.name.includes("Income") ? 200 : 100
+    useGameStore.getState().payTax(currentPlayerIndex, amount)
+    audioManager.playMoney()
+  }
   const handleDrawCard = (cardType: "chance" | "community_chest") => {
-    useGameStore.getState().drawCard(currentPlayerIndex, cardType);
-    audioManager.playCardDraw();
-  };
+    useGameStore.getState().drawCard(currentPlayerIndex, cardType)
+    audioManager.playCardDraw()
+  }
   const handleJailAction = (action: "card" | "pay" | "roll") => {
     if (currentPlayer) {
-      useGameStore.getState().getOutOfJail(currentPlayerIndex, action);
+      useGameStore.getState().getOutOfJail(currentPlayerIndex, action)
     }
-  };
+  }
 
   if (!connected) {
     return (
-      <div style={{ 
-        display: "flex", 
-        justifyContent: "center", 
-        alignItems: "center", 
-        height: "100vh", 
-        background: "#1a1a2a", 
-        color: "#fff",
-        fontSize: "24px"
-      }}>
+      <div
+        style={{
+          display: "flex",
+          justifyContent: "center",
+          alignItems: "center",
+          height: "100vh",
+          background: "#1a1a2a",
+          color: "#fff",
+          fontSize: "24px",
+        }}
+      >
         Connecting to server...
       </div>
-    );
+    )
   }
 
   if (!inRoom) {
-    return <ServerBrowser />;
+    return <ServerBrowser />
   }
   // Winner screen
-  if (winner !== undefined) {
-    const winnerPlayer = players.find(p => p.id === winner);
+  if (winner !== null) {
+    const winnerPlayer = players.find((p) => p.id === winner)
     return (
       <div
         style={{
@@ -536,15 +711,15 @@ export default function App() {
           </button>
         </motion.div>
       </div>
-    );
+    )
   }
   // Setup screen
   if (phase === "setup") {
-    return <PlayerSetup />;
+    return <PlayerSetup />
   }
   // Lobby screen
   if (phase === "lobby") {
-    return <MultiplayerLobby />;
+    return <MultiplayerLobby />
   }
   return (
     <div
@@ -558,14 +733,14 @@ export default function App() {
       }}
     >
       {/* Burger Menu - Consolidated menu for game controls */}
-      <BurgerMenu 
+      <BurgerMenu
         isMuted={isMuted}
         onToggleMute={() => {
-          const newMuted = !isMuted;
-          setIsMuted(newMuted);
-          audioManager.setMuted(newMuted);
+          const newMuted = !isMuted
+          setIsMuted(newMuted)
+          audioManager.setMuted(newMuted)
           if (!newMuted) {
-            audioManager.playSuccess();
+            audioManager.playSuccess()
           }
         }}
         onExit={leaveRoom}
@@ -607,10 +782,10 @@ export default function App() {
         }}
       >
         {/* Game Board Container - responsive, perfectly centered and maximized */}
-        <div 
+        <div
           id="board-container"
-          style={{ 
-            position: "relative", 
+          style={{
+            position: "relative",
             // Fill parent container completely but maintain aspect ratio
             width: "100%",
             height: "100%",
@@ -624,11 +799,13 @@ export default function App() {
             justifyContent: "center",
           }}
         >
-          <Board onPropertyClick={(property) => {
-            setSelectedProperty(property);
-          }} />
+          <Board
+            onPropertyClick={(property) => {
+              setSelectedProperty(property)
+            }}
+          />
           <PlayerTokens />
-          
+
           {/* Card Display in Center of Screen */}
           {lastCardDrawn && showCard && (
             <div
@@ -647,12 +824,12 @@ export default function App() {
                 justifyContent: "center",
               }}
             >
-              <CardDisplay 
-                card={lastCardDrawn} 
+              <CardDisplay
+                card={lastCardDrawn}
                 onClose={() => {
-                  setShowCard(false);
+                  setShowCard(false)
                   // Mark this card as shown so it doesn't reappear
-                  setLastShownCardId(lastCardDrawn.id);
+                  setLastShownCardId(lastCardDrawn.id)
                 }}
               />
             </div>
@@ -677,7 +854,11 @@ export default function App() {
             >
               <PropertyDetailsModal
                 property={selectedProperty}
-                ownerName={selectedProperty.owner !== undefined ? players[selectedProperty.owner]?.name : undefined}
+                ownerName={
+                  selectedProperty.owner !== undefined
+                    ? players[selectedProperty.owner]?.name
+                    : undefined
+                }
                 onClose={() => setSelectedProperty(null)}
               />
             </div>
@@ -705,7 +886,13 @@ export default function App() {
               >
                 Passed GO! +£{currentGoSalary}
                 {currentGoSalary > 200 && (
-                  <span style={{ fontSize: "14px", marginLeft: "8px", color: "#FFD700" }}>
+                  <span
+                    style={{
+                      fontSize: "14px",
+                      marginLeft: "8px",
+                      color: "#FFD700",
+                    }}
+                  >
                     (Inflation!)
                   </span>
                 )}
@@ -746,16 +933,29 @@ export default function App() {
       {/* Auction Modal */}
       <AnimatePresence>
         {phase === "auction" && auction && (
-          <AuctionModal 
+          <AuctionModal
             auction={auction}
-            property={spaces.find(s => s.id === auction.propertyId) as Property}
+            property={
+              spaces.find((s) => s.id === auction.propertyId) as Property
+            }
             players={players}
             myPlayerIndex={myPlayerIndex}
           />
         )}
       </AnimatePresence>
-      {/* Trade Modal */}
+      {/* Trade Modal - Only visible to players involved in the trade */}
       <AnimatePresence>
+        {phase === "trading" &&
+          trade &&
+          (myPlayerIndex === trade.offer.fromPlayer ||
+          myPlayerIndex === trade.offer.toPlayer ? (
+            <TradeModal
+              trade={trade}
+              players={players}
+              spaces={spaces}
+              myPlayerIndex={myPlayerIndex}
+            />
+          ) : null)}
         {phase === "trading" && trade && (
           <TradeModal
             trade={trade}
@@ -765,8 +965,56 @@ export default function App() {
           />
         )}
       </AnimatePresence>
-      {/* Rent Negotiation Modal - Phase 3 */}
+      {/* Rent Negotiation Modal - Phase 3 - Only visible to creditor and debtor */}
       <AnimatePresence>
+        {phase === "awaiting_rent_negotiation" &&
+          pendingRentNegotiation &&
+          (() => {
+            const debtor = players[pendingRentNegotiation.debtorIndex]
+            const creditor = players[pendingRentNegotiation.creditorIndex]
+            if (!debtor || !creditor) return null
+            // Only show to creditor or debtor
+            const isInvolved =
+              myPlayerIndex === pendingRentNegotiation.debtorIndex ||
+              myPlayerIndex === pendingRentNegotiation.creditorIndex
+            if (!isInvolved) return null
+            return (
+              <RentNegotiationModal
+                debtor={debtor}
+                creditor={creditor}
+                property={
+                  spaces.find(
+                    (s) => s.id === pendingRentNegotiation.propertyId
+                  ) as Property
+                }
+                rentAmount={pendingRentNegotiation.rentAmount}
+                debtorCanAfford={pendingRentNegotiation.debtorCanAfford}
+                myPlayerIndex={myPlayerIndex}
+              />
+            )
+          })()}
+      </AnimatePresence>
+      {/* Bankruptcy Modal - Phase 3 */}
+      <AnimatePresence>
+        {phase === "awaiting_bankruptcy_decision" &&
+          (useGameStore.getState() as any).pendingBankruptcy &&
+          (() => {
+            const pending = (useGameStore.getState() as any).pendingBankruptcy
+            const bankruptPlayer = players[pending.playerIndex]
+            const creditorPlayer =
+              pending.creditorIndex !== undefined
+                ? players[pending.creditorIndex]
+                : undefined
+            return bankruptPlayer ? (
+              <BankruptcyModal
+                player={bankruptPlayer}
+                debtAmount={pending.debtAmount}
+                creditor={creditorPlayer}
+                chapter11Turns={settings?.chapter11Turns ?? 5}
+                myPlayerIndex={myPlayerIndex}
+              />
+            ) : null
+          })()}
         {phase === "awaiting_rent_negotiation" && pendingRentNegotiation && (() => {
           const debtor = players[pendingRentNegotiation.debtorIndex];
           const creditor = players[pendingRentNegotiation.creditorIndex];
@@ -813,10 +1061,16 @@ export default function App() {
         myPlayerIndex={myPlayerIndex}
       />
 
-      <PlayerSelectionModal />
+      <PlayerSelectionModal
+        onPlayerSelected={(index) => {
+          // Optimistically update the claimed index
+          setClaimedPlayerIndex(index)
+          useGameStore.getState().assignPlayer(index, clientId)
+        }}
+      />
 
       {/* Bottom - User Panel (All Players) - Rendered LAST to ensure it's on top */}
       <UserPanel />
     </div>
-  );
+  )
 }
