@@ -290,7 +290,6 @@ export interface GameState {
   lastCardDrawn: Card | null;
   gameLog: GameLogEntry[];
   roomId: string | null; // Current room ID
-  roomId?: string; // Current room ID
 
   // Game settings
   settings: GameSettings;

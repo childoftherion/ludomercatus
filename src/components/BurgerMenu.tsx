@@ -21,7 +21,14 @@ export const BurgerMenu: React.FC<BurgerMenuProps> = ({
   const [isOpen, setIsOpen] = React.useState(false);
 
   return (
-    <div style={{ position: "fixed", top: "8px", right: "8px", zIndex: 10000 }}>
+    <div
+      style={{
+        position: "fixed",
+        top: "calc(8px + env(safe-area-inset-top))",
+        right: "8px",
+        zIndex: 10000,
+      }}
+    >
       {/* Burger Menu Button */}
       <motion.button
         whileHover={{ scale: 1.1 }}

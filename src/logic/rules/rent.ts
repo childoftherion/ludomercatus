@@ -27,7 +27,7 @@ export const calculateRent = (state: GameState, property: Property, diceTotal: n
   } else if (property.type === "utility") {
     // Check for card-triggered multiplier override (e.g., "Advance to nearest Utility" card)
     // Per official rules: when sent to utility by card, pay 10x dice roll regardless of ownership
-    if (state.utilityMultiplierOverride !== undefined) {
+    if (state.utilityMultiplierOverride !== null) {
       rent = diceTotal * state.utilityMultiplierOverride;
     } else {
       // Normal utility rent: 4x if owner has 1 utility, 10x if owner has both

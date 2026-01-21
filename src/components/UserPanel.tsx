@@ -34,7 +34,7 @@ export const UserPanel: React.FC = () => {
     <div
       style={{
         position: "fixed",
-        bottom: "8px",
+        bottom: "calc(8px + env(safe-area-inset-bottom))",
         left: "8px",
         right: "8px",
         zIndex: 20000,

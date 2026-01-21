@@ -12,7 +12,6 @@ export const PlayerSelectionModal: React.FC<PlayerSelectionModalProps> = ({
 }) => {
   const players = useGameStore((s) => s.players)
   const phase = useGameStore((s) => s.phase)
-  const assignPlayer = useGameStore((s) => s.assignPlayer)
   const { clientId } = useLocalStore()
 
   const myPlayerIndex = React.useMemo(() => {
@@ -20,17 +19,6 @@ export const PlayerSelectionModal: React.FC<PlayerSelectionModalProps> = ({
   }, [players, clientId])
 
   if (phase === "setup" || myPlayerIndex !== -1) return null
-export const PlayerSelectionModal = () => {
-  const players = useGameStore((s) => s.players);
-  const phase = useGameStore((s) => s.phase);
-  const assignPlayer = useGameStore((s) => s.assignPlayer);
-  const { clientId } = useLocalStore();
-
-  const myPlayerIndex = React.useMemo(() => {
-    return players.findIndex(p => p.clientId === clientId);
-  }, [players, clientId]);
-
-  if (phase === "setup" || myPlayerIndex !== -1) return null;
 
   return (
     <div
@@ -62,72 +50,68 @@ export const PlayerSelectionModal = () => {
       >
         <h2 style={{ marginBottom: "24px", color: "#4ECDC4" }}>Who are you?</h2>
         <div style={{ display: "flex", flexDirection: "column", gap: "12px" }}>
-          {players.map((player, index) => (
-            <motion.button
-              key={player.id}
-              whileHover={{ scale: 1.02 }}
-              whileTap={{ scale: 0.98 }}
-              onClick={() => onPlayerSelected(index)}
-              onClick={() => assignPlayer(index, clientId)}
-              disabled={player.bankrupt || player.isAI}
-              style={{
-                padding: "16px",
-                borderRadius: "8px",
-                border: "none",
-                backgroundColor: player.isAI
-                  ? "rgba(255,255,255,0.05)"
-                  : "rgba(255,255,255,0.1)",
-                backgroundColor: (player.isAI) ? "rgba(255,255,255,0.05)" : "rgba(255,255,255,0.1)",
-                color: "#fff",
-                cursor: (player.isAI) ? "not-allowed" : "pointer",
-                display: "flex",
-                alignItems: "center",
-                gap: "12px",
-                opacity: player.bankrupt ? 0.5 : 1,
-                borderLeft:
-                  player.clientId !== null && player.clientId !== clientId
-                    ? "4px solid #FF9800"
-                    : "4px solid transparent",
-                borderLeft: (player.clientId !== undefined && player.clientId !== clientId) ? "4px solid #FF9800" : "4px solid transparent",
-              }}
-            >
-              <div
+          {players.map((player, index) => {
+            const takenByOther = player.clientId !== null && player.clientId !== clientId
+            const disabled = player.bankrupt || player.isAI || takenByOther
+            const subtitle = player.isAI
+              ? "AI Player"
+              : takenByOther
+                ? "Taken"
+                : "Human Player"
+
+            return (
+              <motion.button
+                key={player.id}
+                whileHover={{ scale: 1.02 }}
+                whileTap={{ scale: 0.98 }}
+                onClick={() => onPlayerSelected(index)}
+                disabled={disabled}
                 style={{
-                  width: "32px",
-                  height: "32px",
-                  borderRadius: "50%",
-                  backgroundColor: player.color,
+                  padding: "16px",
+                  borderRadius: "8px",
+                  border: "none",
+                  backgroundColor: player.isAI
+                    ? "rgba(255,255,255,0.05)"
+                    : "rgba(255,255,255,0.1)",
+                  color: "#fff",
+                  cursor: disabled ? "not-allowed" : "pointer",
                   display: "flex",
                   alignItems: "center",
-                  justifyContent: "center",
-                  fontSize: "18px",
+                  gap: "12px",
+                  opacity: player.bankrupt ? 0.5 : 1,
+                  borderLeft: takenByOther
+                    ? "4px solid #FF9800"
+                    : "4px solid transparent",
                 }}
               >
-                {player.token}
-              </div>
-              <div style={{ flex: 1, textAlign: "left" }}>
-                <div style={{ fontWeight: "bold" }}>{player.name}</div>
-                <div style={{ fontSize: "12px", color: "#ccc" }}>
-                  {player.isAI
-                    ? "AI Player"
-                    : player.clientId
-                    ? "Occupied"
-                    : "Human Player"}
+                <div
+                  style={{
+                    width: "32px",
+                    height: "32px",
+                    borderRadius: "50%",
+                    backgroundColor: player.color,
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "center",
+                    fontSize: "18px",
+                  }}
+                >
+                  {player.token}
                 </div>
-              </div>
-              {(player.isAI ||
-                (player.clientId !== null && player.clientId !== clientId)) && (
-                <span style={{ fontSize: "12px", color: "#FF9800" }}>
-                  (Taken)
-                </span>
-                  {player.isAI ? "AI Player" : (player.clientId ? "Occupied" : "Human Player")}
+                <div style={{ flex: 1, textAlign: "left" }}>
+                  <div style={{ fontWeight: "bold" }}>{player.name}</div>
+                  <div style={{ fontSize: "12px", color: "#ccc" }}>
+                    {subtitle}
+                  </div>
                 </div>
-              </div>
-              {(player.isAI || (player.clientId !== undefined && player.clientId !== clientId)) && (
-                <span style={{ fontSize: "12px", color: "#FF9800" }}>(Taken)</span>
-              )}
-            </motion.button>
-          ))}
+                {takenByOther && (
+                  <span style={{ fontSize: "12px", color: "#FF9800" }}>
+                    (Taken)
+                  </span>
+                )}
+              </motion.button>
+            )
+          })}
         </div>
 
         <div style={{ marginTop: "24px", fontSize: "14px", color: "#666" }}>
