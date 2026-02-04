@@ -1,6 +1,7 @@
 import React from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import type { Property } from "../types/game";
+import { useGameStore } from "../store/gameStore";
 
 interface PropertyDetailsModalProps {
   property: Property | null;
@@ -9,6 +10,10 @@ interface PropertyDetailsModalProps {
 }
 
 export const PropertyDetailsModal: React.FC<PropertyDetailsModalProps> = ({ property, ownerName, onClose }) => {
+  const houseSupply = useGameStore(s => s.availableHouses);
+  const hotelSupply = useGameStore(s => s.availableHotels);
+  const enableHousingScarcity = useGameStore(s => s.settings.enableHousingScarcity);
+
   if (!property) return null;
 
   const isPropertyType = property.type === "property" || property.type === "railroad" || property.type === "utility";
@@ -112,7 +117,20 @@ export const PropertyDetailsModal: React.FC<PropertyDetailsModalProps> = ({ prop
           
           {/* Property Details */}
           <div style={{ display: "flex", flexDirection: "column", gap: "8px", fontSize: "14px", lineHeight: 1.5 }}>
-            <div><strong>Price:</strong> £{property.price}</div>
+            <div>
+              <strong>Price:</strong> £{property.price}
+              {property.valueMultiplier !== undefined && property.valueMultiplier !== 1.0 && (
+                <span style={{ 
+                  marginLeft: "8px", 
+                  color: property.valueMultiplier > 1 ? "#2e7d32" : "#d32f2f",
+                  fontWeight: "bold",
+                  fontSize: "12px"
+                }}>
+                  {property.valueMultiplier > 1 ? "📈" : "📉"} 
+                  ({Math.round(property.valueMultiplier * 100)}%)
+                </span>
+              )}
+            </div>
             <div><strong>Base Rent:</strong> £{property.baseRent}</div>
             
             {/* Regular Properties: Rent with Houses */}
@@ -151,7 +169,14 @@ export const PropertyDetailsModal: React.FC<PropertyDetailsModalProps> = ({ prop
             )}
             
             {property.buildingCost && property.buildingCost > 0 && (
-              <div><strong>Building Cost:</strong> £{property.buildingCost}</div>
+              <div>
+                <strong>Building Cost:</strong> £{property.buildingCost}
+                {enableHousingScarcity && (
+                  <div style={{ fontSize: "11px", color: "#666", marginTop: "2px" }}>
+                    Supply: {houseSupply} houses, {hotelSupply} hotels
+                  </div>
+                )}
+              </div>
             )}
             
             <div><strong>Mortgage Value:</strong> £{property.mortgageValue}</div>
@@ -172,6 +197,35 @@ export const PropertyDetailsModal: React.FC<PropertyDetailsModalProps> = ({ prop
             
             {property.hotel && (
               <div><strong>Hotel:</strong> Yes</div>
+            )}
+
+            {enableHousingScarcity && property.buildingCost && property.buildingCost > 0 && (
+              <div style={{ 
+                marginTop: "8px", 
+                padding: "8px", 
+                backgroundColor: "rgba(0,0,0,0.05)", 
+                borderRadius: "6px",
+                border: "1px solid rgba(0,0,0,0.1)"
+              }}>
+                <div style={{ fontWeight: "bold", fontSize: "12px", marginBottom: "4px" }}>Housing Scarcity Status</div>
+                <div style={{ display: "flex", justifyContent: "space-between", fontSize: "11px" }}>
+                  <span>Houses Available:</span>
+                  <span style={{ color: houseSupply === 0 ? "#d32f2f" : "#2e7d32", fontWeight: "bold" }}>
+                    {houseSupply} {houseSupply === 0 ? " (OUT OF STOCK)" : ""}
+                  </span>
+                </div>
+                <div style={{ display: "flex", justifyContent: "space-between", fontSize: "11px" }}>
+                  <span>Hotels Available:</span>
+                  <span style={{ color: hotelSupply === 0 ? "#d32f2f" : "#2e7d32", fontWeight: "bold" }}>
+                    {hotelSupply} {hotelSupply === 0 ? " (OUT OF STOCK)" : ""}
+                  </span>
+                </div>
+                {(houseSupply === 0 || hotelSupply === 0) && (
+                  <div style={{ fontSize: "10px", color: "#d32f2f", marginTop: "4px", fontStyle: "italic" }}>
+                    ⚠️ Building is currently restricted by supply!
+                  </div>
+                )}
+              </div>
             )}
             
             {property.isInsured && property.insurancePaidUntilRound > 0 && (

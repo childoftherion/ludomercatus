@@ -1,23 +1,37 @@
-import React from "react"
-import { motion } from "framer-motion"
+import React, { useMemo } from "react"
+import { motion, AnimatePresence } from "framer-motion"
 import { useGameStore } from "../store/gameStore"
 import { useIsMobile } from "../utils/useIsMobile"
+import { calculateGiniCoefficient } from "../logic/rules/economics"
 
 export const MarketPanel: React.FC = () => {
   const isMobile = useIsMobile()
+  const state = useGameStore()
   const { 
     currentGoSalary, 
     availableHouses, 
     availableHotels, 
     activeEconomicEvents,
     settings,
-    roundsCompleted
-  } = useGameStore()
+    roundsCompleted,
+    marketHistory
+  } = state
 
   if (!settings) return null
 
+  const currentGini = useMemo(() => calculateGiniCoefficient(state), [state])
+  
   const housePoolPercent = (availableHouses / 32) * 100
   const hotelPoolPercent = (availableHotels / 12) * 100
+
+  // Trend indicators
+  const giniTrend = useMemo(() => {
+    if (marketHistory.length < 1) return null
+    const prevGini = marketHistory[marketHistory.length - 1]!.gini
+    if (currentGini > prevGini + 0.01) return "📈"
+    if (currentGini < prevGini - 0.01) return "📉"
+    return null
+  }, [currentGini, marketHistory])
 
   return (
     <motion.div
@@ -52,6 +66,50 @@ export const MarketPanel: React.FC = () => {
           Round {roundsCompleted} {currentGoSalary > 200 ? "(Inflation applied)" : ""}
         </div>
       </div>
+
+      <div style={{ marginBottom: "8px" }}>
+        <div style={{ display: "flex", justifyContent: "space-between", marginBottom: "4px" }}>
+          <span>Wealth Gap</span>
+          <span style={{ 
+            color: currentGini > 0.6 ? "#ff6b6b" : currentGini > 0.4 ? "#f7dc6f" : "#4caf50", 
+            fontWeight: "bold" 
+          }}>
+            {(currentGini * 100).toFixed(0)}% {giniTrend}
+          </span>
+        </div>
+        <div style={{ fontSize: "10px", color: "#aaa" }}>
+          Gini Index: {currentGini.toFixed(2)}
+        </div>
+      </div>
+
+      {marketHistory.length > 0 && !isMobile && (
+        <div style={{ marginBottom: "12px", marginTop: "8px" }}>
+          <div style={{ fontSize: "10px", color: "#888", marginBottom: "4px" }}>HISTORICAL TRENDS</div>
+          <div style={{ 
+            height: "30px", 
+            display: "flex", 
+            alignItems: "flex-end", 
+            gap: "2px",
+            backgroundColor: "rgba(255,255,255,0.05)",
+            borderRadius: "4px",
+            padding: "4px"
+          }}>
+            {marketHistory.slice(-10).map((entry, i) => (
+              <div 
+                key={i} 
+                title={`Round ${entry.round}: Gini ${(entry.gini * 100).toFixed(1)}%`}
+                style={{
+                  flex: 1,
+                  height: `${entry.gini * 100}%`,
+                  backgroundColor: "#45B7D1",
+                  borderRadius: "1px 1px 0 0",
+                  minWidth: "4px"
+                }}
+              />
+            ))}
+          </div>
+        </div>
+      )}
 
       {settings.enableHousingScarcity && (
         <div style={{ marginBottom: "8px" }}>

@@ -64,7 +64,8 @@ const getTokenPixelPosition = (
 export const PlayerToken = ({ playerIndex }: { playerIndex: number }) => {
   const players = useGameStore((s: any) => s.players);
   const player = players[playerIndex];
-  const [position, setPosition] = React.useState({ x: 0, y: 0 });
+  const [position, setPosition] = React.useState<{ x: number | number[]; y: number | number[] }>({ x: 0, y: 0 });
+  const prevPositionRef = React.useRef<number | null>(null);
 
   // Update position when player moves or board resizes
   React.useEffect(() => {
@@ -80,13 +81,64 @@ export const PlayerToken = ({ playerIndex }: { playerIndex: number }) => {
           (p: any) => p.id === player.id
         );
         
-        const pos = getTokenPixelPosition(
+        const finalPos = getTokenPixelPosition(
           playerIndex, 
           player.position, 
           playersOnSameSpace.length,
           indexOnSpace
         );
-        setPosition(pos);
+
+        const prevPos = prevPositionRef.current;
+        const currentPos = player.position;
+        prevPositionRef.current = currentPos;
+
+        // Path animation logic
+        if (prevPos !== null && prevPos !== currentPos) {
+          // Check if it's a teleport (like Jail) or a regular move
+          // We assume regular moves follow the path. Teleports (like Go To Jail) jump.
+          // In Monopoly, "Go to Jail" usually jumps, while cards like "Advance to Boardwalk" follow the path.
+          const isJailTeleport = currentPos === 10 && (prevPos < 5 || prevPos > 15);
+          
+          if (isJailTeleport) {
+            setPosition({ x: finalPos.x, y: finalPos.y });
+          } else {
+            // Calculate intermediate spaces
+            const path = [];
+            let temp = prevPos;
+            const maxSteps = 40; // Safety break
+            let steps = 0;
+            
+            while (temp !== currentPos && steps < maxSteps) {
+              temp = (temp + 1) % 40;
+              path.push(temp);
+              steps++;
+            }
+
+            if (path.length > 1) {
+              const xKeyframes = path.map((posIndex, i) => {
+                // For intermediate steps, use a slightly offset position to avoid collision overlap
+                // but for the last step, use the exact finalPos
+                if (i === path.length - 1) return finalPos.x;
+                
+                const intermediate = getTokenPixelPosition(playerIndex, posIndex, 1, 0);
+                return intermediate.x;
+              });
+
+              const yKeyframes = path.map((posIndex, i) => {
+                if (i === path.length - 1) return finalPos.y;
+                
+                const intermediate = getTokenPixelPosition(playerIndex, posIndex, 1, 0);
+                return intermediate.y;
+              });
+
+              setPosition({ x: xKeyframes, y: yKeyframes });
+            } else {
+              setPosition({ x: finalPos.x, y: finalPos.y });
+            }
+          }
+        } else {
+          setPosition({ x: finalPos.x, y: finalPos.y });
+        }
       }
     };
     
@@ -113,7 +165,8 @@ export const PlayerToken = ({ playerIndex }: { playerIndex: number }) => {
 
   if (!player || player.bankrupt) return null;
 
-  const { x, y } = position;
+  const initialX = Array.isArray(position.x) ? position.x[0] : position.x;
+  const initialY = Array.isArray(position.y) ? position.y[0] : position.y;
 
   return (
     <motion.div
@@ -136,14 +189,18 @@ export const PlayerToken = ({ playerIndex }: { playerIndex: number }) => {
         fontSize: "16px",
         cursor: "pointer",
       }}
-      initial={{ x, y, scale: 0 }}
+      initial={{ x: initialX, y: initialY, scale: 0 }}
       animate={{ 
-        x, 
-        y, 
+        x: position.x, 
+        y: Array.isArray(position.y) 
+          ? position.y.map((yVal, i) => i % 2 === 0 ? (typeof yVal === 'number' ? yVal - 5 : yVal) : yVal) 
+          : position.y,
         scale: 1,
       }}
       transition={{ 
-        type: "spring", 
+        type: Array.isArray(position.x) ? "tween" : "spring",
+        duration: Array.isArray(position.x) ? position.x.length * 0.2 : 0.5,
+        ease: "easeInOut",
         stiffness: 120, 
         damping: 14,
         mass: 0.8,

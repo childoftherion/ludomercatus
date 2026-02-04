@@ -360,7 +360,7 @@ export default function App() {
     }, 1200)
 
     return () => clearTimeout(aiDelay)
-  }, [currentPlayer, phase, auction?.activePlayerIndex, connected])
+  }, [currentPlayer, phase, auction?.activePlayerIndex, connected, diceRoll])
   // AI auction bid execution - separate handler for auction phase
   React.useEffect(() => {
     if (!connected) return

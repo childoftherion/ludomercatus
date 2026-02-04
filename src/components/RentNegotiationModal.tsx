@@ -26,7 +26,13 @@ export const RentNegotiationModal: React.FC<Props> = ({
   const [selectedPropertyId, setSelectedPropertyId] = React.useState<number | undefined>(undefined);
   const [showPropertyTransfer, setShowPropertyTransfer] = React.useState(false);
   
-  const spaces = useGameStore((s) => s.spaces);
+  const { spaces, settings } = useGameStore((s) => ({
+    spaces: s.spaces,
+    settings: s.settings
+  }));
+  const iouInterestRate = settings?.iouInterestRate ?? 0.05;
+  const interestPercent = (iouInterestRate * 100).toFixed(0);
+  
   const debtorProperties = spaces.filter(
     (s) => s.type === "property" || s.type === "railroad" || s.type === "utility"
   ).filter((s) => (s as Property).owner === debtor.id) as Property[];
@@ -344,13 +350,29 @@ export const RentNegotiationModal: React.FC<Props> = ({
         
         <div style={{ 
           backgroundColor: "rgba(0, 0, 0, 0.3)", 
-          padding: "10px", 
+          padding: "12px", 
           borderRadius: "6px",
           marginBottom: "12px",
           fontSize: "12px",
-          color: "#888"
+          color: "#ccc",
+          border: "1px solid rgba(59, 130, 246, 0.2)"
         }}>
-          ⚠️ IOUs accrue 5% interest per turn. {debtor.name} will owe this to {creditor.name}.
+          <div style={{ fontWeight: "bold", color: "#3b82f6", marginBottom: "4px" }}>IOU TERMS</div>
+          <div style={{ display: "flex", justifyContent: "space-between", marginBottom: "2px" }}>
+            <span>Principal:</span>
+            <span>£{remainingDebt}</span>
+          </div>
+          <div style={{ display: "flex", justifyContent: "space-between", marginBottom: "2px" }}>
+            <span>Interest Rate:</span>
+            <span>{interestPercent}% per turn</span>
+          </div>
+          <div style={{ display: "flex", justifyContent: "space-between", borderTop: "1px solid #333", marginTop: "4px", paddingTop: "4px" }}>
+            <span>Due next turn:</span>
+            <span style={{ color: "#fbbf24" }}>£{Math.ceil(remainingDebt * (1 + iouInterestRate))}</span>
+          </div>
+          <p style={{ fontSize: "10px", color: "#888", marginTop: "8px", fontStyle: "italic" }}>
+            ⚠️ Failure to repay IOUs may trigger mandatory property transfers or Chapter 11 restructuring.
+          </p>
         </div>
         
         <button

@@ -70,6 +70,12 @@ const server = Bun.serve<{ roomId: string; clientId: string | null }>({
             ws.unsubscribe(ws.data.roomId)
             ws.data.roomId = roomId
             ws.subscribe(roomId)
+
+            // Notify room of reconnection if clientId matches a player
+            if (typeof (room as any).handlePlayerReconnect === "function") {
+              ;(room as any).handlePlayerReconnect(ws.data.clientId)
+            }
+
             ws.send(JSON.stringify({ type: "STATE_UPDATE", state: room.state }))
           }
           return
@@ -111,6 +117,10 @@ const server = Bun.serve<{ roomId: string; clientId: string | null }>({
     },
     close(ws: any) {
       ws.unsubscribe(ws.data.roomId)
+      const room = gameManager.getRoom(ws.data.roomId)
+      if (room && typeof (room as any).handlePlayerDisconnect === "function") {
+        ;(room as any).handlePlayerDisconnect(ws.data.clientId)
+      }
     },
   },
   development: true,

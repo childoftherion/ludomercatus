@@ -488,6 +488,15 @@ export const executeAITurn = (state: GameState, actions: GameActions) => {
 
   // Handle different phases
   switch (state.phase) {
+    case "moving": {
+      // If we're in moving phase and have a dice roll, it means we just rolled
+      if (state.diceRoll) {
+        console.log(`[AI] In moving phase with roll ${state.diceRoll.total}. Executing move...`);
+        actions.movePlayer(playerIndex, state.diceRoll.total);
+      }
+      break;
+    }
+
     case "rolling": {
       console.log(`[AI] In rolling phase. InJail: ${player.inJail}`);
       if (player.inJail) {
@@ -496,18 +505,7 @@ export const executeAITurn = (state: GameState, actions: GameActions) => {
         else actions.getOutOfJail(playerIndex, "roll");
       } else {
         console.log(`[AI] Rolling dice...`);
-        const roll = actions.rollDice();
-        console.log(`[AI] Rolled ${roll?.total}. Scheduling move in 1s...`);
-        
-        if (!roll) {
-          console.error(`[AI] rollDice returned null! Stalling.`);
-          return;
-        }
-
-        setTimeout(() => {
-          console.log(`[AI] Executing move for ${player.name}...`);
-           actions.movePlayer(playerIndex, roll.total);
-        }, 1000);
+        actions.rollDice();
       }
       break;
     }

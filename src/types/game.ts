@@ -103,6 +103,7 @@ export interface Player {
   chapter11TurnsRemaining: number; // Turns left to pay off debts
   chapter11DebtTarget: number; // Amount that must be paid off
   isMobile?: boolean; // Whether the player is on a mobile device
+  isConnected: boolean; // Whether the player is currently connected via WebSocket
 }
 
 // Restructuring plan for Chapter 11 bankruptcy
@@ -271,6 +272,12 @@ export const DEFAULT_GAME_SETTINGS: GameSettings = {
   enableProgressiveTax: true,
 };
 
+export interface MarketHistoryEntry {
+  round: number;
+  inflation: number; // currentGoSalary
+  gini: number; // Gini coefficient
+}
+
 export interface GameState {
   players: Player[];
   currentPlayerIndex: number;
@@ -333,4 +340,9 @@ export interface GameState {
   
   // Jackpot system
   jackpot: number; // Accumulated jackpot from mortgage contributions
+  
+  // Market History (Phase 2)
+  marketHistory: MarketHistoryEntry[];
+  // Multiplayer stability
+  turnStartTime?: number;
 }

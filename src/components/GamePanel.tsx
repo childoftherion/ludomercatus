@@ -236,14 +236,14 @@ export const GamePanel: React.FC<GamePanelProps> = ({
             </motion.div>
           )}
 
-          {/* Rolling phase - not in jail */}
-          {phase === "rolling" &&
+          {/* Rolling or Moving phase - not in jail */}
+          {(phase === "rolling" || phase === "moving") &&
             !currentPlayer.inJail &&
             !currentPlayer.isAI && (
               <div style={{ flexShrink: 0 }}>
                 {isMyTurn ? (
                   <>
-                    {(!diceRoll || isNewTurn) && !isRolling ? (
+                    {(phase === "rolling" && (!diceRoll || isNewTurn) && !isRolling) ? (
                       <motion.button
                         onClick={handleRollDice}
                         whileHover={{ scale: 1.05 }}
@@ -262,7 +262,7 @@ export const GamePanel: React.FC<GamePanelProps> = ({
                       >
                         Roll Dice
                       </motion.button>
-                    ) : isRolling ? (
+                    ) : (isRolling || phase === "moving") ? (
                       <Dice onRollComplete={handleRollComplete} />
                     ) : (
                       <div

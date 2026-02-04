@@ -114,18 +114,29 @@ export const Dice: React.FC<DiceProps> = ({ onRollComplete, autoRoll = true }) =
       
       {finalRoll && !rolling && (
         <motion.div
-          initial={{ opacity: 0, y: -10 }}
-          animate={{ opacity: 1, y: 0 }}
+          initial={{ opacity: 0, scale: 0.5 }}
+          animate={{ 
+            opacity: 1, 
+            scale: [1, 1.2, 1],
+            rotate: finalRoll.isDoubles ? [0, -5, 5, -5, 0] : 0
+          }}
+          transition={{ duration: 0.5 }}
           style={{
-            fontSize: "20px",
-            fontWeight: "bold",
+            fontSize: "24px",
+            fontWeight: "900",
             color: finalRoll.isDoubles ? "#4CAF50" : "#fff",
-            marginTop: "8px",
+            marginTop: "12px",
+            textShadow: "0 0 10px rgba(0,0,0,0.5), 0 0 20px rgba(76, 175, 80, 0.3)",
+            textAlign: "center",
+            letterSpacing: "1px"
           }}
         >
           {finalRoll.isDoubles 
-            ? `Doubles! ${finalRoll.total}` 
-            : `Rolled: ${finalRoll.die1} + ${finalRoll.die2} = ${finalRoll.total}`}
+            ? `DOUBLES! ${finalRoll.total}` 
+            : `TOTAL: ${finalRoll.total}`}
+          <div style={{ fontSize: "14px", fontWeight: "normal", opacity: 0.8, marginTop: "4px" }}>
+            {finalRoll.die1} + {finalRoll.die2}
+          </div>
         </motion.div>
       )}
       

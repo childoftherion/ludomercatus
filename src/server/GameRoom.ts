@@ -24,6 +24,7 @@ import {
   calculateGoSalary,
   calculateTenPercentTax,
   getOptimalTaxChoice,
+  calculateGiniCoefficient,
 } from "../logic/rules/economics"
 import {
   executeAITurn,
@@ -103,6 +104,7 @@ const createPlayer = (
   inChapter11: false,
   chapter11TurnsRemaining: 0,
   chapter11DebtTarget: 0,
+  isConnected: true,
 })
 
 export class GameRoom implements GameActions {
@@ -151,8 +153,12 @@ export class GameRoom implements GameActions {
       // Phase 3: Bankruptcy Restructuring
       pendingBankruptcy: null,
       // Jackpot system
-      jackpot: 0,
-    }
+    jackpot: 0,
+    // Market History
+    marketHistory: [],
+    // Multiplayer stability
+    turnStartTime: Date.now(),
+  }
 
     // Bind all public methods to `this`
     this.addPlayer = this.addPlayer.bind(this)
@@ -192,6 +198,8 @@ export class GameRoom implements GameActions {
     this.executeAITurn = this.executeAITurn.bind(this)
     this.executeAITradeResponse = this.executeAITradeResponse.bind(this)
     this.chooseTaxOption = this.chooseTaxOption.bind(this)
+    this.handlePlayerDisconnect = this.handlePlayerDisconnect.bind(this)
+    this.handlePlayerReconnect = this.handlePlayerReconnect.bind(this)
   }
 
   public subscribe(listener: (state: GameState) => void) {
@@ -206,7 +214,21 @@ export class GameRoom implements GameActions {
   // --- State Updates ---
   // Helper to replicate Zustand's partial update behavior
   private setState(partial: Partial<GameState>) {
+    const prevPhase = this.state.phase
+    const prevPlayer = this.state.currentPlayerIndex
+
     this.state = { ...this.state, ...partial }
+
+    // If turn or phase changed, reset timer
+    if (
+      partial.phase !== undefined &&
+      (partial.phase !== prevPhase ||
+        partial.currentPlayerIndex !== prevPlayer ||
+        partial.currentPlayerIndex !== undefined)
+    ) {
+      this.state.turnStartTime = Date.now()
+    }
+
     this.notify()
   }
 
@@ -273,6 +295,16 @@ export class GameRoom implements GameActions {
 
     if (action === "executeAITurn" || action === "executeAITradeResponse") {
       if (!isHostClient) return deny("Only host can run AI")
+      
+      // If it's an AI turn and they have already rolled but haven't moved, 
+      // block the executeAITurn action to prevent re-rolling
+      if (action === "executeAITurn") {
+        const player = this.state.players[this.state.currentPlayerIndex]
+        if (player?.isAI && this.state.phase === "rolling" && this.state.diceRoll) {
+          return deny("AI already rolled, waiting for move")
+        }
+      }
+      
       return allow(payloadArray)
     }
 
@@ -300,7 +332,10 @@ export class GameRoom implements GameActions {
       if (typeof playerIndex !== "number" || typeof steps !== "number")
         return deny("Invalid payload")
       if (playerIndex !== actorIndex) return deny("Not allowed")
-      if (this.state.phase !== "rolling") return deny("Not allowed")
+      
+      // Allow moving in "moving" phase OR "rolling" phase (for legacy/jail scenarios)
+      if (this.state.phase !== "moving" && this.state.phase !== "rolling") return deny("Not allowed")
+      
       const rollTotal = this.state.diceRoll?.total
       if (typeof rollTotal !== "number") return deny("Not allowed")
       if (steps !== rollTotal) return deny("Not allowed")
@@ -539,6 +574,69 @@ export class GameRoom implements GameActions {
     )
   }
 
+  public handlePlayerDisconnect(clientId: string) {
+    const playerIndex = this.state.players.findIndex(
+      (p) => p.clientId === clientId,
+    )
+    if (playerIndex === -1) return
+
+    const player = this.state.players[playerIndex]
+    if (!player) return
+
+    const updatedPlayers = [...this.state.players]
+    updatedPlayers[playerIndex] = { ...player, isConnected: false }
+
+    this.setState({ players: updatedPlayers })
+    this.addLogEntry(`${player.name} disconnected.`, "system")
+
+    // If it's their turn and they are not AI, start a timeout to skip their turn
+    if (this.state.currentPlayerIndex === playerIndex && !player.isAI) {
+      setTimeout(() => {
+        // Check if still disconnected and still their turn
+        const currentPlayer = this.state.players[this.state.currentPlayerIndex]
+        if (
+          currentPlayer &&
+          !currentPlayer.isConnected &&
+          this.state.currentPlayerIndex === playerIndex
+        ) {
+          this.addLogEntry(
+            `${currentPlayer.name} timed out. Converting to AI.`,
+            "system",
+          )
+
+          // Convert to AI instead of just skipping
+          const updatedPlayers = [...this.state.players]
+          updatedPlayers[playerIndex] = {
+            ...currentPlayer,
+            isAI: true,
+            aiDifficulty: "medium",
+          }
+
+          this.setState({ players: updatedPlayers })
+
+          // If it's still "rolling" and they haven't rolled, the client-side AI trigger
+          // (which runs on the first human player) will now pick this up and execute the turn.
+        }
+      }, 30000) // 30 seconds timeout
+    }
+  }
+
+  public handlePlayerReconnect(clientId: string) {
+    const playerIndex = this.state.players.findIndex(
+      (p) => p.clientId === clientId,
+    )
+    if (playerIndex === -1) return
+
+    const player = this.state.players[playerIndex]
+    if (!player) return
+
+    const updatedPlayers = [...this.state.players]
+    updatedPlayers[playerIndex] = { ...player, isConnected: true }
+
+    this.setState({ players: updatedPlayers })
+    this.addLogEntry(`${player.name} reconnected!`, "system")
+  }
+
   public updatePlayer(index: number, name: string, token: string) {
     if (this.state.phase !== "lobby") return
     const player = this.state.players[index]
@@ -667,6 +765,7 @@ export class GameRoom implements GameActions {
         diceRoll: roll,
         lastDiceRoll: roll,
         consecutiveDoubles: 0,
+        phase: "moving",
       })
       this.addLogEntry(
         `${this.state.players[this.state.currentPlayerIndex]?.name} rolled 3 consecutive doubles! GO TO JAIL!`,
@@ -677,10 +776,11 @@ export class GameRoom implements GameActions {
       return roll
     }
 
-    this.setState({ 
-      diceRoll: roll, 
+    this.setState({
+      diceRoll: roll,
       lastDiceRoll: roll,
-      consecutiveDoubles: nextConsecutiveDoubles
+      consecutiveDoubles: isDoubles ? this.state.consecutiveDoubles + 1 : 0,
+      phase: "moving",
     })
 
     const player = this.state.players[this.state.currentPlayerIndex]
@@ -1460,16 +1560,16 @@ export class GameRoom implements GameActions {
   public endTurn() {
     const roll = this.state.diceRoll
     const currentPlayer = this.state.players[this.state.currentPlayerIndex]
+    const isDoubles = roll?.isDoubles && currentPlayer && !currentPlayer.inJail
 
     if (
-      roll?.isDoubles &&
+      isDoubles &&
       currentPlayer &&
-      !currentPlayer.inJail &&
       !currentPlayer.bankrupt
     ) {
-      const newConsecutiveDoubles = this.state.consecutiveDoubles + 1
+      const newConsecutiveDoubles = this.state.consecutiveDoubles
 
-      // Three doubles in a row = go to jail (consecutiveDoubles: 0 -> 1 -> 2, then 3rd triggers jail)
+      // Three doubles in a row = go to jail (already incremented in rollDice)
       if (newConsecutiveDoubles >= 3) {
         console.log(
           `[GameRoom] ${currentPlayer.name} rolled 3 doubles in a row! Going to jail.`,
@@ -1490,6 +1590,7 @@ export class GameRoom implements GameActions {
       this.setState({
         phase: "rolling",
         diceRoll: null,
+        lastDiceRoll: null,
         consecutiveDoubles: newConsecutiveDoubles,
         lastCardDrawn: null,
       })
@@ -1508,22 +1609,42 @@ export class GameRoom implements GameActions {
       )
     }
 
-    let nextPlayerIndex =
-      (this.state.currentPlayerIndex + 1) % this.state.players.length
-    let loopCount = 0
-    while (
-      this.state.players[nextPlayerIndex]?.bankrupt &&
-      loopCount < this.state.players.length
-    ) {
-      nextPlayerIndex = (nextPlayerIndex + 1) % this.state.players.length
-      loopCount++
+    let nextPlayerIndex = this.state.currentPlayerIndex
+    let newConsecutiveDoubles = 0
+
+    if (isDoubles) {
+      // This part should theoretically not be reached due to the return above, 
+      // but keeping it consistent with the logic for safety or future refactors.
+      newConsecutiveDoubles = this.state.consecutiveDoubles
+    } else {
+      // Normal end of turn - move to next player
+      nextPlayerIndex =
+        (this.state.currentPlayerIndex + 1) % this.state.players.length
+      let loopCount = 0
+      while (
+        this.state.players[nextPlayerIndex]?.bankrupt &&
+        loopCount < this.state.players.length
+      ) {
+        nextPlayerIndex = (nextPlayerIndex + 1) % this.state.players.length
+        loopCount++
+      }
+      newConsecutiveDoubles = 0
     }
 
     // Check if we completed a full round (back to player 0 or first non-bankrupt player)
     const activePlayers = this.state.players.filter((p) => !p.bankrupt)
+
+    // Safety check: if phase is still "moving" and diceRoll exists, move the player first
+    if (this.state.phase === "moving" && this.state.diceRoll) {
+      console.log(
+        `[GameRoom] endTurn called while phase is "moving". Moving player ${this.state.currentPlayerIndex} first.`,
+      )
+      this.movePlayer(this.state.currentPlayerIndex, this.state.diceRoll.total)
+    }
+
     // Apply loan interest to the current player before ending their turn
     const endingPlayer = this.state.players[this.state.currentPlayerIndex]
-    if (endingPlayer && !endingPlayer.bankrupt) {
+    if (endingPlayer && !endingPlayer.bankrupt && !isDoubles) {
       this.applyLoanInterest(this.state.currentPlayerIndex)
       // Phase 3: Apply IOU interest at end of turn
       this.applyIOUInterest(this.state.currentPlayerIndex)
@@ -1541,6 +1662,7 @@ export class GameRoom implements GameActions {
 
     let newRoundsCompleted = this.state.roundsCompleted
     let newGoSalary = this.state.currentGoSalary
+    let newMarketHistory = [...this.state.marketHistory]
 
     if (completedRound) {
       newRoundsCompleted = this.state.roundsCompleted + 1
@@ -1558,6 +1680,13 @@ export class GameRoom implements GameActions {
       }
       newGoSalary = calculatedSalary
 
+      // Record market history
+      newMarketHistory.push({
+        round: newRoundsCompleted,
+        inflation: newGoSalary,
+        gini: calculateGiniCoefficient(this.state),
+      })
+
       // Update economic events at end of round
       this.updateEconomicEvents()
 
@@ -1570,12 +1699,14 @@ export class GameRoom implements GameActions {
       currentPlayerIndex: nextPlayerIndex,
       phase: nextPlayer?.inJail ? "jail_decision" : "rolling",
       diceRoll: null,
+      lastDiceRoll: null,
       consecutiveDoubles: 0,
       passedGo: false,
       lastCardDrawn: null,
       turn: this.state.turn + 1,
       roundsCompleted: newRoundsCompleted,
       currentGoSalary: newGoSalary,
+      marketHistory: newMarketHistory,
     })
   }
 
@@ -1591,6 +1722,7 @@ export class GameRoom implements GameActions {
       ),
       consecutiveDoubles: 0, // Reset doubles counter when going to jail
       diceRoll: null,
+      lastDiceRoll: null,
       phase: "jail_decision", // Set phase to jail decision
     })
 

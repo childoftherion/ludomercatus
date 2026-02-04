@@ -51,13 +51,19 @@ export const PlayerSelectionModal: React.FC<PlayerSelectionModalProps> = ({
         <h2 style={{ marginBottom: "24px", color: "#4ECDC4" }}>Who are you?</h2>
         <div style={{ display: "flex", flexDirection: "column", gap: "12px" }}>
           {players.map((player, index) => {
-            const takenByOther = player.clientId !== null && player.clientId !== clientId
+            const isMe = player.clientId === clientId
+            const takenByOther =
+              player.clientId !== null && !isMe && player.isConnected
             const disabled = player.bankrupt || player.isAI || takenByOther
             const subtitle = player.isAI
               ? "AI Player"
               : takenByOther
                 ? "Taken"
-                : "Human Player"
+                : isMe
+                  ? "You (Rejoin)"
+                  : player.clientId && !player.isConnected
+                    ? "Disconnected"
+                    : "Human Player"
 
             return (
               <motion.button
@@ -70,9 +76,11 @@ export const PlayerSelectionModal: React.FC<PlayerSelectionModalProps> = ({
                   padding: "16px",
                   borderRadius: "8px",
                   border: "none",
-                  backgroundColor: player.isAI
-                    ? "rgba(255,255,255,0.05)"
-                    : "rgba(255,255,255,0.1)",
+                  backgroundColor: isMe
+                    ? "rgba(78, 205, 196, 0.2)"
+                    : player.isAI
+                      ? "rgba(255,255,255,0.05)"
+                      : "rgba(255,255,255,0.1)",
                   color: "#fff",
                   cursor: disabled ? "not-allowed" : "pointer",
                   display: "flex",
@@ -81,7 +89,9 @@ export const PlayerSelectionModal: React.FC<PlayerSelectionModalProps> = ({
                   opacity: player.bankrupt ? 0.5 : 1,
                   borderLeft: takenByOther
                     ? "4px solid #FF9800"
-                    : "4px solid transparent",
+                    : isMe
+                      ? "4px solid #4ECDC4"
+                      : "4px solid transparent",
                 }}
               >
                 <div

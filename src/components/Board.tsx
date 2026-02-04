@@ -254,8 +254,16 @@ const Space = ({ space, spaceSize, onPropertyClick }: { space: { id: number; nam
             marginTop: "1px", 
             fontWeight: "normal",
             flexShrink: 0,
+            display: "flex",
+            alignItems: "center",
+            gap: "2px"
           }}>
             £{property.price}
+            {property.valueMultiplier !== undefined && property.valueMultiplier !== 1.0 && (
+              <span style={{ fontSize: `${Math.floor(priceFontSize * 0.8)}px` }}>
+                {property.valueMultiplier > 1 ? "📈" : "📉"}
+              </span>
+            )}
           </div>
         )}
         
