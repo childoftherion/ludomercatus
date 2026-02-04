@@ -377,6 +377,8 @@ export class GameRoom implements GameActions {
         if (typeof fromPlayer !== "number") return deny("Invalid payload")
         if (fromPlayer !== actorIndex) return deny("Not allowed")
         if (!isCurrentTurn) return deny("Not your turn")
+        if (this.state.phase === "auction")
+          return deny("Cannot trade during an auction")
         return allow(payloadArray)
       }
 
@@ -436,6 +438,8 @@ export class GameRoom implements GameActions {
       const [debtorIndex] = payloadArray
       if (typeof debtorIndex !== "number") return deny("Invalid payload")
       if (debtorIndex !== actorIndex) return deny("Not allowed")
+      if (this.state.phase === "auction")
+        return deny("Cannot pay IOUs during an auction")
       return allow(payloadArray)
     }
 
@@ -655,7 +659,29 @@ export class GameRoom implements GameActions {
 
     const roll: DiceRoll = { die1, die2, total, isDoubles }
 
-    this.setState({ diceRoll: roll, lastDiceRoll: roll })
+    // Phase 1: Verify Jail Rules - 3 consecutive doubles = Jail
+    let nextConsecutiveDoubles = isDoubles ? this.state.consecutiveDoubles + 1 : 0
+    
+    if (nextConsecutiveDoubles >= 3) {
+      this.setState({
+        diceRoll: roll,
+        lastDiceRoll: roll,
+        consecutiveDoubles: 0,
+      })
+      this.addLogEntry(
+        `${this.state.players[this.state.currentPlayerIndex]?.name} rolled 3 consecutive doubles! GO TO JAIL!`,
+        "jail",
+        this.state.currentPlayerIndex,
+      )
+      this.goToJail(this.state.currentPlayerIndex)
+      return roll
+    }
+
+    this.setState({ 
+      diceRoll: roll, 
+      lastDiceRoll: roll,
+      consecutiveDoubles: nextConsecutiveDoubles
+    })
 
     const player = this.state.players[this.state.currentPlayerIndex]
     if (player) {
@@ -1577,47 +1603,9 @@ export class GameRoom implements GameActions {
       )
     }
 
-    // In server mode, we probably don't want setTimeout logic INSIDE the logic class if we can avoid it.
-    // The client should probably handle the "delay" before calling endTurn, or the server handles it.
-    // For now, let's keep it sync.
-    // Actually, in the store it had setTimeout.
-    // Here, if we change state immediately, the client will see "Jail" then immediately "Next Turn".
-    // That's jarring.
-    // BUT, the server shouldn't block.
-    // We can rely on the AI/Client to trigger 'endTurn' after jail?
-    // No, 'goToJail' is often called automatically by landing on space.
-    // So we must end turn.
-    // Let's just end turn immediately here. The client animation might be skipped.
-    // We can emit an event "PLAYER_JAILED" and let the client wait?
-    // For simplicity V1, let's just end turn.
-    // Wait, the client needs time to see "Go To Jail".
-    // I will NOT call endTurn here. I will let the client (or AI controller) call it?
-    // No, 'resolveSpace' calls 'goToJail'.
-    // If I don't call endTurn, the game hangs in "resolving_space" or similar?
-    // 'goToJail' didn't set a phase in the store!
-    // It relied on `setTimeout(() => get().endTurn(), 1500)`.
-
-    // I will emulate this by not changing phase, but expecting a "endTurn" call.
-    // But who calls it?
-    // If I am a player and I land on "Go To Jail", I go to jail.
-    // The UI shows "You went to jail".
-    // Does the UI show an "End Turn" button?
-    // Currently UI shows "End Turn" if `diceRoll` exists.
-    // But `goToJail` clears `diceRoll`!
-
-    // So the user is stuck if I clear `diceRoll`.
-    // I should probably NOT clear `diceRoll` immediately if I want them to click "End Turn"?
-    // Or I should set a phase "jailed_animating"?
-
-    // Let's just assume for now I won't auto-end-turn on server.
-    // I'll leave diceRoll? No, standard rules say turn ends.
-    // I'll rely on the client to handle the animation and then maybe the server sends "turn changed" later?
-    // No, server state is truth.
-
-    // Compromise: I will NOT call endTurn. I will set phase to 'resolving_space' (or keep it).
-    // And I will leave diceRoll undefined? No.
-    // I will simply call this.endTurn(). The client will snap. That's fine for v1.
-    this.endTurn()
+    // Do NOT end turn immediately to allow client to show animation/message.
+    // The player must click "End Turn" or AI will handle it.
+    this.setState({ phase: "resolving_space" })
   }
 
   public getOutOfJail(playerIndex: number, method: "roll" | "pay" | "card") {
@@ -2720,6 +2708,13 @@ export class GameRoom implements GameActions {
       ),
       phase: "resolving_space",
       pendingBankruptcy: null,
+      // Clear trades involving this player during restructuring
+      trade:
+        this.state.trade &&
+        (this.state.trade.offer.fromPlayer === playerIndex ||
+          this.state.trade.offer.toPlayer === playerIndex)
+          ? null
+          : this.state.trade,
     })
 
     this.addLogEntry(
@@ -2820,6 +2815,18 @@ export class GameRoom implements GameActions {
     if (!player) return
 
     const playerPropertyIds = player.properties
+    let housesToReturn = 0
+    let hotelsToReturn = 0
+
+    this.state.spaces.forEach((s) => {
+      if (isProperty(s) && s.owner === playerIndex) {
+        if (s.hotel) {
+          hotelsToReturn += 1
+        } else {
+          housesToReturn += s.houses
+        }
+      }
+    })
 
     this.setState({
       players: this.state.players.map((p, i) => {
@@ -2832,6 +2839,11 @@ export class GameRoom implements GameActions {
             inChapter11: false,
             chapter11TurnsRemaining: 0,
             chapter11DebtTarget: 0,
+            // Hardening: Clear financial obligations
+            bankLoans: [],
+            totalDebt: 0,
+            iousPayable: [],
+            iousReceivable: [],
           }
         if (i === creditorIndex && creditorIndex !== undefined) {
           return {
@@ -2839,9 +2851,36 @@ export class GameRoom implements GameActions {
             cash: p.cash + Math.max(0, player.cash),
             properties: [...p.properties, ...playerPropertyIds],
             jailFreeCards: p.jailFreeCards + player.jailFreeCards,
+            // Hardening: Transfer receivables to creditor and update their creditorId
+            iousReceivable: [
+              ...p.iousReceivable.filter((iou) => iou.debtorId !== playerIndex),
+              ...player.iousReceivable.map((iou) => ({
+                ...iou,
+                creditorId: creditorIndex,
+              })),
+            ],
           }
         }
-        return p
+        // Hardening: Update other players' IOUs
+        const updatedPayable = p.iousPayable
+          .map((iou) =>
+            iou.creditorId === playerIndex && creditorIndex !== undefined
+              ? { ...iou, creditorId: creditorIndex }
+              : iou,
+          )
+          .filter(
+            (iou) => iou.creditorId !== playerIndex || creditorIndex !== undefined,
+          )
+
+        const updatedReceivable = p.iousReceivable.filter(
+          (iou) => iou.debtorId !== playerIndex,
+        )
+
+        return {
+          ...p,
+          iousPayable: updatedPayable,
+          iousReceivable: updatedReceivable,
+        }
       }),
       spaces: this.state.spaces.map((s) =>
         isProperty(s) && s.owner === playerIndex
@@ -2854,6 +2893,30 @@ export class GameRoom implements GameActions {
             }
           : s,
       ),
+      availableHouses: this.state.availableHouses + housesToReturn,
+      availableHotels: this.state.availableHotels + hotelsToReturn,
+      // Hardening: Clear trade if the bankrupt player was involved
+      trade:
+        this.state.trade &&
+        (this.state.trade.offer.fromPlayer === playerIndex ||
+          this.state.trade.offer.toPlayer === playerIndex)
+          ? null
+          : this.state.trade,
+      // Hardening: Handle auction if bankrupt player was involved
+      auction:
+        this.state.auction &&
+        (this.state.auction.highestBidder === playerIndex ||
+          this.state.auction.activePlayerIndex === playerIndex)
+          ? null // Simplest: cancel auction. Better: skip them. For now, cancel to be safe.
+          : this.state.auction,
+      // Hardening: Reset phase if we were in a sub-phase for this player
+      phase:
+        this.state.phase === "auction" ||
+        this.state.phase === "trading" ||
+        this.state.phase === "awaiting_bankruptcy_decision" ||
+        this.state.phase === "awaiting_rent_negotiation"
+          ? "resolving_space"
+          : this.state.phase,
     })
     this.addLogEntry(`${player.name} went bankrupt!`, "bankrupt", playerIndex)
 
@@ -3051,7 +3114,7 @@ export class GameRoom implements GameActions {
               }
             : p,
         ),
-        auction: undefined,
+        auction: null,
         phase: "resolving_space",
       })
       this.addLogEntry(
@@ -3060,7 +3123,7 @@ export class GameRoom implements GameActions {
       )
     } else {
       // No bids - property goes back to the bank
-      this.setState({ auction: undefined, phase: "resolving_space" })
+      this.setState({ auction: null, phase: "resolving_space" })
       this.addLogEntry(
         `No bids placed. ${property?.name} remains unowned.`,
         "auction",
@@ -3092,7 +3155,7 @@ export class GameRoom implements GameActions {
 
   public updateTradeOffer(offer: TradeOffer) {
     this.setState({
-      trade: this.state.trade ? { ...this.state.trade, offer } : undefined,
+      trade: this.state.trade ? { ...this.state.trade, offer } : null,
     })
   }
 
@@ -3108,9 +3171,87 @@ export class GameRoom implements GameActions {
     })
   }
 
+  private validateTradeOffer(offer: TradeOffer): { valid: boolean; error?: string } {
+    const fromPlayer = this.state.players[offer.fromPlayer]
+    const toPlayer = this.state.players[offer.toPlayer]
+
+    if (!fromPlayer || !toPlayer) return { valid: false, error: "Invalid players" }
+
+    // Check cash
+    if (fromPlayer.cash < offer.cashOffered)
+      return {
+        valid: false,
+        error: `${fromPlayer.name} has insufficient cash`,
+      }
+    if (toPlayer.cash < offer.cashRequested)
+      return {
+        valid: false,
+        error: `${toPlayer.name} has insufficient cash`,
+      }
+
+    // Check jail cards
+    if (fromPlayer.jailFreeCards < offer.jailCardsOffered)
+      return {
+        valid: false,
+        error: `${fromPlayer.name} doesn't have enough Jail Free cards`,
+      }
+    if (toPlayer.jailFreeCards < offer.jailCardsRequested)
+      return {
+        valid: false,
+        error: `${toPlayer.name} doesn't have enough Jail Free cards`,
+      }
+
+    // Check properties
+    for (const propId of offer.propertiesOffered) {
+      const prop = this.state.spaces.find((s) => s.id === propId) as
+        | Property
+        | undefined
+      if (!prop || prop.owner !== offer.fromPlayer)
+        return {
+          valid: false,
+          error: `${fromPlayer.name} no longer owns ${prop?.name || "property"}`,
+        }
+      if (prop.houses > 0 || prop.hotel)
+        return {
+          valid: false,
+          error: `Cannot trade ${prop.name} because it has buildings`,
+        }
+    }
+
+    for (const propId of offer.propertiesRequested) {
+      const prop = this.state.spaces.find((s) => s.id === propId) as
+        | Property
+        | undefined
+      if (!prop || prop.owner !== offer.toPlayer)
+        return {
+          valid: false,
+          error: `${toPlayer.name} no longer owns ${prop?.name || "property"}`,
+        }
+      if (prop.houses > 0 || prop.hotel)
+        return {
+          valid: false,
+          error: `Cannot trade ${prop.name} because it has buildings`,
+        }
+    }
+
+    return { valid: true }
+  }
+
   public acceptTrade() {
     const trade = this.state.trade
     if (!trade) return
+
+    const validation = this.validateTradeOffer(trade.offer)
+    if (!validation.valid) {
+      this.addLogEntry(`Trade failed: ${validation.error}`, "system")
+      this.setState({
+        trade: null,
+        phase: this.state.previousPhase ?? "resolving_space",
+        previousPhase: null,
+      })
+      return
+    }
+
     const { offer } = trade
     this.setState({
       players: this.state.players.map((p, i) => {
@@ -3156,9 +3297,9 @@ export class GameRoom implements GameActions {
           return { ...s, owner: offer.fromPlayer }
         return s
       }),
-      trade: undefined,
+      trade: null,
       phase: this.state.previousPhase ?? "resolving_space",
-      previousPhase: undefined,
+      previousPhase: null,
     })
     this.addLogEntry(`Trade completed!`, "trade")
   }
@@ -3207,7 +3348,7 @@ export class GameRoom implements GameActions {
     }
 
     this.setState({
-      trade: undefined,
+      trade: null,
       phase: this.state.previousPhase ?? "resolving_space",
       previousPhase: null,
     })
@@ -3215,7 +3356,7 @@ export class GameRoom implements GameActions {
 
   public cancelTrade() {
     this.setState({
-      trade: undefined,
+      trade: null,
       phase: this.state.previousPhase ?? "resolving_space",
       previousPhase: null,
     })
@@ -3324,6 +3465,17 @@ export class GameRoom implements GameActions {
     if (!trade || trade.status !== "counter_pending" || !trade.counterOffer)
       return
 
+    const validation = this.validateTradeOffer(trade.counterOffer)
+    if (!validation.valid) {
+      this.addLogEntry(`Counter-offer failed: ${validation.error}`, "system")
+      this.setState({
+        trade: null,
+        phase: this.state.previousPhase ?? "resolving_space",
+        previousPhase: null,
+      })
+      return
+    }
+
     // The original initiator accepts the counter-offer
     // Execute the counter-offer (roles are reversed)
     const counterOffer = trade.counterOffer
@@ -3345,6 +3497,12 @@ export class GameRoom implements GameActions {
               p.jailFreeCards -
               counterOffer.jailCardsOffered +
               counterOffer.jailCardsRequested,
+            properties: [
+              ...p.properties.filter(
+                (id) => !counterOffer.propertiesOffered.includes(id),
+              ),
+              ...counterOffer.propertiesRequested,
+            ],
           }
         }
         if (i === counterOffer.toPlayer) {
@@ -3357,17 +3515,22 @@ export class GameRoom implements GameActions {
               p.jailFreeCards -
               counterOffer.jailCardsRequested +
               counterOffer.jailCardsOffered,
+            properties: [
+              ...p.properties.filter(
+                (id) => !counterOffer.propertiesRequested.includes(id),
+              ),
+              ...counterOffer.propertiesOffered,
+            ],
           }
         }
         return p
       }),
       spaces: this.state.spaces.map((s) => {
-        if (counterOffer.propertiesOffered.includes(s.id)) {
+        if (!isProperty(s)) return s
+        if (counterOffer.propertiesOffered.includes(s.id))
           return { ...s, owner: counterOffer.toPlayer }
-        }
-        if (counterOffer.propertiesRequested.includes(s.id)) {
+        if (counterOffer.propertiesRequested.includes(s.id))
           return { ...s, owner: counterOffer.fromPlayer }
-        }
         return s
       }),
       trade: null,

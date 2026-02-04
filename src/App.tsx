@@ -19,6 +19,7 @@ import { UserPanel } from "./components/UserPanel"
 import type { Property } from "./types/game"
 import { BurgerMenu } from "./components/BurgerMenu"
 import { GamePanel } from "./components/GamePanel"
+import { MarketPanel } from "./components/MarketPanel"
 import { isProperty } from "./utils/helpers"
 import { useIsMobile } from "./utils/useIsMobile"
 
@@ -690,6 +691,7 @@ export default function App() {
         showLog={showMobileLog}
         onToggleLog={() => setShowMobileLog(!showMobileLog)}
       />
+      <MarketPanel />
       {/* Left Side - Game Log (Fixed) - Expanded to fill screen */}
       {(!isMobile || showMobileLog) && (
         <div
@@ -907,7 +909,7 @@ export default function App() {
           />
         )}
       </AnimatePresence>
-      {/* Rent Negotiation Modal - Phase 3 - Only visible to creditor and debtor */}
+      {/* Financial Modals (Rent Negotiation & Bankruptcy) */}
       <AnimatePresence>
         {phase === "awaiting_rent_negotiation" &&
           pendingRentNegotiation &&
@@ -935,52 +937,7 @@ export default function App() {
               />
             )
           })()}
-      </AnimatePresence>
-      {/* Bankruptcy Modal - Phase 3 */}
-      <AnimatePresence>
-        {phase === "awaiting_bankruptcy_decision" &&
-          (useGameStore.getState() as any).pendingBankruptcy &&
-          (() => {
-            const pending = (useGameStore.getState() as any).pendingBankruptcy
-            const bankruptPlayer = players[pending.playerIndex]
-            const creditorPlayer =
-              pending.creditorIndex !== undefined
-                ? players[pending.creditorIndex]
-                : undefined
-            return bankruptPlayer ? (
-              <BankruptcyModal
-                player={bankruptPlayer}
-                debtAmount={pending.debtAmount}
-                creditor={creditorPlayer}
-                chapter11Turns={settings?.chapter11Turns ?? 5}
-                myPlayerIndex={myPlayerIndex}
-              />
-            ) : null
-          })()}
-        {phase === "awaiting_rent_negotiation" &&
-          pendingRentNegotiation &&
-          (() => {
-            const debtor = players[pendingRentNegotiation.debtorIndex]
-            const creditor = players[pendingRentNegotiation.creditorIndex]
-            if (!debtor || !creditor) return null
-            return (
-              <RentNegotiationModal
-                debtor={debtor}
-                creditor={creditor}
-                property={
-                  spaces.find(
-                    (s) => s.id === pendingRentNegotiation.propertyId,
-                  ) as Property
-                }
-                rentAmount={pendingRentNegotiation.rentAmount}
-                debtorCanAfford={pendingRentNegotiation.debtorCanAfford}
-                myPlayerIndex={myPlayerIndex}
-              />
-            )
-          })()}
-      </AnimatePresence>
-      {/* Bankruptcy Modal - Phase 3 */}
-      <AnimatePresence>
+
         {phase === "awaiting_bankruptcy_decision" &&
           (useGameStore.getState() as any).pendingBankruptcy &&
           (() => {

@@ -52,5 +52,12 @@ export const calculateRent = (state: GameState, property: Property, diceTotal: n
     rent = Math.floor(rent * property.valueMultiplier);
   }
 
+  // Phase 3: Chapter 11 Rent Reduction
+  // Players in Chapter 11 restructuring collect reduced rent (typically 50%)
+  const owner = state.players[property.owner];
+  if (owner?.inChapter11) {
+    rent = Math.floor(rent * 0.5);
+  }
+
   return rent;
 };

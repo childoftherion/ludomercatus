@@ -436,6 +436,10 @@ export const PlayerPropertiesPanel = ({ playerIndex, myPlayerIndex }: PlayerProp
                   : (!settings?.enableHousingScarcity || availableHotels > 0);
                 const isDisabled = !canAfford || !hasSupply;
                 
+                let tooltip = "";
+                if (!canAfford) tooltip = `Insufficient funds (Need £${selectedProperty.buildingCost})`;
+                else if (!hasSupply) tooltip = isHouse ? "Housing shortage: No houses available in market!" : "Hotel shortage: No hotels available in market!";
+                
                 return (
                   <button
                     onClick={() => {
@@ -450,14 +454,15 @@ export const PlayerPropertiesPanel = ({ playerIndex, myPlayerIndex }: PlayerProp
                     style={{
                       padding: "6px",
                       fontSize: "10px",
-                      background: hasSupply ? "#2E8B57" : "#666",
+                      background: !isDisabled ? "#2E8B57" : "#666",
                       border: "none",
                       borderRadius: "4px",
                       color: "#fff",
                       cursor: isDisabled ? "not-allowed" : "pointer",
                       opacity: isDisabled ? 0.5 : 1,
+                      position: "relative",
                     }}
-                    title={!hasSupply ? "No supply available!" : undefined}
+                    title={tooltip}
                   >
                     {selectedProperty.houses === 4 
                       ? `Build Hotel (£${selectedProperty.buildingCost})${!hasSupply ? " ⚠️" : ""}` 
@@ -628,6 +633,37 @@ export const PlayerPropertiesPanel = ({ playerIndex, myPlayerIndex }: PlayerProp
       )}
 
       {/* IOUs Section - Phase 3 */}
+      {player.inChapter11 && (
+        <div
+          style={{
+            marginTop: "8px",
+            padding: "10px",
+            background: "rgba(247, 220, 111, 0.15)",
+            borderRadius: "8px",
+            border: "1px solid rgba(247, 220, 111, 0.4)",
+          }}
+        >
+          <div style={{ display: "flex", alignItems: "center", gap: "6px", marginBottom: "4px" }}>
+            <span style={{ fontSize: "12px", fontWeight: "bold", color: "#F7DC6F" }}>
+              ⚖️ Chapter 11 Restructuring
+            </span>
+          </div>
+          <div style={{ fontSize: "10px", color: "#ddd" }}>
+            <div style={{ display: "flex", justifyContent: "space-between", marginBottom: "2px" }}>
+              <span>Debt Target:</span>
+              <span style={{ fontWeight: "bold" }}>£{player.chapter11DebtTarget.toLocaleString()}</span>
+            </div>
+            <div style={{ display: "flex", justifyContent: "space-between" }}>
+              <span>Turns Left:</span>
+              <span style={{ fontWeight: "bold" }}>{player.chapter11TurnsRemaining}</span>
+            </div>
+            <div style={{ marginTop: "6px", fontSize: "9px", color: "rgba(255,255,255,0.5)", fontStyle: "italic" }}>
+              Collecting 50% rent until debt is cleared.
+            </div>
+          </div>
+        </div>
+      )}
+
       {settings?.enableRentNegotiation && (player.iousPayable?.length > 0 || player.iousReceivable?.length > 0) && (
         <div
           style={{

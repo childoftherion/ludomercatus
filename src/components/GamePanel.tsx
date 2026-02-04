@@ -41,6 +41,13 @@ export const GamePanel: React.FC<GamePanelProps> = ({
     lastCardDrawn,
     awaitingTaxDecision,
     chooseTaxOption,
+    pendingRentNegotiation,
+    pendingBankruptcy,
+    forgiveRent,
+    createRentIOU,
+    demandImmediatePaymentOrProperty,
+    enterChapter11,
+    declineRestructuring,
   } = useGameStore()
 
   const currentPlayer =
@@ -554,6 +561,191 @@ export const GamePanel: React.FC<GamePanelProps> = ({
               </div>
             )}
 
+          {/* Rent Negotiation phase */}
+          {phase === "awaiting_rent_negotiation" && pendingRentNegotiation && (
+            <div
+              style={{
+                backgroundColor: "#333",
+                padding: cardPadding,
+                borderRadius: "8px",
+                border: "2px solid #FF9800",
+              }}
+            >
+              <h3 style={{ marginBottom: "12px", color: "#FF9800" }}>
+                Rent Negotiation
+              </h3>
+              <p
+                style={{
+                  fontSize: "14px",
+                  marginBottom: "16px",
+                  color: "#ccc",
+                  lineHeight: "1.4",
+                }}
+              >
+                {players[pendingRentNegotiation.debtorIndex]?.name} cannot
+                afford £{pendingRentNegotiation.rentAmount} rent for{" "}
+                {(spaces.find(
+                  (s) => s.id === pendingRentNegotiation.propertyId
+                ) as Property)?.name || "property"}.
+                <br />
+                They have £{pendingRentNegotiation.debtorCanAfford} available.
+              </p>
+
+              {/* Creditor (Owner) Decision Panel */}
+              {myPlayerIndex === pendingRentNegotiation.creditorIndex ? (
+                <div
+                  style={{
+                    display: "flex",
+                    flexDirection: "column",
+                    gap: "10px",
+                  }}
+                >
+                  <motion.button
+                    onClick={() => createRentIOU(pendingRentNegotiation.debtorCanAfford)}
+                    whileHover={{ scale: 1.02 }}
+                    whileTap={{ scale: 0.98 }}
+                    style={{
+                      padding: "12px",
+                      backgroundColor: "#4CAF50",
+                      color: "#fff",
+                      border: "none",
+                      borderRadius: "6px",
+                      cursor: "pointer",
+                      fontSize: "13px",
+                    }}
+                  >
+                    Accept £{pendingRentNegotiation.debtorCanAfford} + IOU for £
+                    {pendingRentNegotiation.rentAmount -
+                      pendingRentNegotiation.debtorCanAfford}
+                  </motion.button>
+
+                  <motion.button
+                    onClick={() => demandImmediatePaymentOrProperty()}
+                    whileHover={{ scale: 1.02 }}
+                    whileTap={{ scale: 0.98 }}
+                    style={{
+                      padding: "12px",
+                      backgroundColor: "#f44336",
+                      color: "#fff",
+                      border: "none",
+                      borderRadius: "6px",
+                      cursor: "pointer",
+                      fontSize: "13px",
+                    }}
+                  >
+                    Demand Full Payment or Bankruptcy
+                  </motion.button>
+
+                  <motion.button
+                    onClick={() => forgiveRent()}
+                    whileHover={{ scale: 1.02 }}
+                    whileTap={{ scale: 0.98 }}
+                    style={{
+                      padding: "12px",
+                      backgroundColor: "#555",
+                      color: "#fff",
+                      border: "none",
+                      borderRadius: "6px",
+                      cursor: "pointer",
+                      fontSize: "13px",
+                    }}
+                  >
+                    Forgive Debt Entirely
+                  </motion.button>
+                </div>
+              ) : (
+                <div style={{ textAlign: "center", padding: "10px" }}>
+                  <p style={{ color: "#FF9800", fontStyle: "italic" }}>
+                    Waiting for {players[pendingRentNegotiation.creditorIndex]?.name} to decide...
+                  </p>
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* Bankruptcy Restructuring phase */}
+          {phase === "awaiting_bankruptcy_decision" && pendingBankruptcy && (
+            <div
+              style={{
+                backgroundColor: "#333",
+                padding: cardPadding,
+                borderRadius: "8px",
+                border: "2px solid #FF6B6B",
+              }}
+            >
+              <h3 style={{ marginBottom: "12px", color: "#FF6B6B" }}>
+                Financial Distress
+              </h3>
+              <p
+                style={{
+                  fontSize: "14px",
+                  marginBottom: "16px",
+                  color: "#ccc",
+                  lineHeight: "1.4",
+                }}
+              >
+                You owe £{pendingBankruptcy.debtAmount} and cannot afford it.
+                You can choose to liquidate everything or enter Chapter 11 Restructuring.
+              </p>
+
+              {myPlayerIndex === pendingBankruptcy.playerIndex ? (
+                <div
+                  style={{
+                    display: "flex",
+                    flexDirection: "column",
+                    gap: "10px",
+                  }}
+                >
+                  <motion.button
+                    onClick={() => enterChapter11()}
+                    whileHover={{ scale: 1.02 }}
+                    whileTap={{ scale: 0.98 }}
+                    style={{
+                      padding: "12px",
+                      backgroundColor: "#2196F3",
+                      color: "#fff",
+                      border: "none",
+                      borderRadius: "6px",
+                      cursor: "pointer",
+                      fontSize: "13px",
+                    }}
+                  >
+                    Enter Chapter 11 Restructuring
+                    <div style={{ fontSize: "10px", marginTop: "4px", opacity: 0.8 }}>
+                      Keep properties, but 50% rent penalty and 5-turn debt target
+                    </div>
+                  </motion.button>
+
+                  <motion.button
+                    onClick={() => declineRestructuring()}
+                    whileHover={{ scale: 1.02 }}
+                    whileTap={{ scale: 0.98 }}
+                    style={{
+                      padding: "12px",
+                      backgroundColor: "#f44336",
+                      color: "#fff",
+                      border: "none",
+                      borderRadius: "6px",
+                      cursor: "pointer",
+                      fontSize: "13px",
+                    }}
+                  >
+                    Declare Full Bankruptcy
+                    <div style={{ fontSize: "10px", marginTop: "4px", opacity: 0.8 }}>
+                      Eliminate from game and transfer all assets
+                    </div>
+                  </motion.button>
+                </div>
+              ) : (
+                <div style={{ textAlign: "center", padding: "10px" }}>
+                  <p style={{ color: "#FF6B6B", fontStyle: "italic" }}>
+                    Waiting for {players[pendingBankruptcy.playerIndex]?.name} to decide...
+                  </p>
+                </div>
+              )}
+            </div>
+          )}
+
           {/* Buy decision phase */}
           {phase === "awaiting_buy_decision" &&
             currentSpace &&
@@ -719,6 +911,43 @@ export const GamePanel: React.FC<GamePanelProps> = ({
                     >
                       Paid £{currentSpace.name.includes("Income") ? 200 : 100}{" "}
                       tax automatically
+                    </p>
+                    {!currentPlayer.isAI && isMyTurn && (
+                      <motion.button
+                        onClick={handleEndTurn}
+                        whileHover={{ scale: 1.05 }}
+                        whileTap={{ scale: 0.95 }}
+                        style={{
+                          padding: "12px 24px",
+                          fontSize: buttonFontSize,
+                          backgroundColor: "#2196F3",
+                          color: "#fff",
+                          border: "none",
+                          borderRadius: "8px",
+                          cursor: "pointer",
+                          width: "100%",
+                        }}
+                      >
+                        End Turn
+                      </motion.button>
+                    )}
+                  </div>
+                )}
+
+                {currentPlayer.inJail && (
+                  <div style={{ padding: "12px" }}>
+                    <p
+                      style={{
+                        color: "#ff6b6b",
+                        fontSize: "18px",
+                        fontWeight: "bold",
+                        marginBottom: "12px",
+                      }}
+                    >
+                      ⛓️ YOU ARE IN JAIL
+                    </p>
+                    <p style={{ color: "#ccc", fontSize: "14px", marginBottom: "16px" }}>
+                      Your turn ends now. You will be able to attempt to leave on your next turn.
                     </p>
                     {!currentPlayer.isAI && isMyTurn && (
                       <motion.button

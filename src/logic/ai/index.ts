@@ -622,6 +622,51 @@ export const executeAITurn = (state: GameState, actions: GameActions) => {
       break;
     }
 
+    case "awaiting_rent_negotiation": {
+      if (!state.pendingRentNegotiation) break;
+      const { creditorIndex, debtorIndex, rentAmount } = state.pendingRentNegotiation;
+      if (creditorIndex !== playerIndex) break;
+
+      const debtor = state.players[debtorIndex];
+      if (!debtor) break;
+      const difficulty = player.aiDifficulty || "medium";
+
+      // AI as creditor: decide whether to forgive, IOU, or demand property
+      if (difficulty === "easy") {
+        // Easy AI is generous
+        if (actions.forgiveRent) actions.forgiveRent();
+      } else if (difficulty === "hard") {
+        // Hard AI is ruthless - demand immediate payment or property transfer
+        if (actions.demandImmediatePaymentOrProperty) actions.demandImmediatePaymentOrProperty();
+      } else {
+        // Medium AI: Accept IOU if debtor has some assets
+        const debtorNetWorth = calculateNetWorth(state, debtorIndex);
+        if (debtorNetWorth > rentAmount * 2 && actions.createRentIOU) {
+          actions.createRentIOU(Math.min(debtor.cash, rentAmount * 0.2));
+        } else if (actions.demandImmediatePaymentOrProperty) {
+          actions.demandImmediatePaymentOrProperty();
+        }
+      }
+      break;
+    }
+
+    case "awaiting_bankruptcy_decision": {
+      if (!state.pendingBankruptcy) break;
+      const { playerIndex: bankruptIndex, debtAmount } = state.pendingBankruptcy;
+      if (bankruptIndex !== playerIndex) break;
+
+      // AI as debtor: decide whether to enter Chapter 11 or decline
+      const netWorth = calculateNetWorth(state, playerIndex);
+
+      // If net worth is significantly higher than debt, try to restructure
+      if (netWorth > debtAmount * 1.5 && actions.enterChapter11) {
+        actions.enterChapter11();
+      } else if (actions.declineRestructuring) {
+        actions.declineRestructuring();
+      }
+      break;
+    }
+
     case "resolving_space": {
       actions.endTurn();
       break;
