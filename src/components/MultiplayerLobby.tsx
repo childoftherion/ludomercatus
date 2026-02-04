@@ -5,7 +5,11 @@ import { useGameStore } from "../store/gameStore";
 const TOKENS = ["🚗", "🚙", "🚕", "🏎", "🚁", "✈️", "⛵", "🎭"];
 
 export const MultiplayerLobby = () => {
-  const { players, addPlayer, startGame, leaveRoom, clientId } = useGameStore();
+  const players = useGameStore((s) => s.players);
+  const addPlayer = useGameStore((s) => s.addPlayer);
+  const startGame = useGameStore((s) => s.startGame);
+  const leaveRoom = useGameStore((s) => s.leaveRoom);
+  const clientId = useGameStore((s) => s.clientId);
   
   const myPlayer = players.find(p => p.clientId === clientId);
 

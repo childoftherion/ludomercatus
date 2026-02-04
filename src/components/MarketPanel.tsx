@@ -6,20 +6,23 @@ import { calculateGiniCoefficient } from "../logic/rules/economics"
 
 export const MarketPanel: React.FC = () => {
   const isMobile = useIsMobile()
-  const state = useGameStore()
-  const { 
-    currentGoSalary, 
-    availableHouses, 
-    availableHotels, 
-    activeEconomicEvents,
-    settings,
-    roundsCompleted,
-    marketHistory
-  } = state
+  
+  const currentGoSalary = useGameStore(s => s.currentGoSalary)
+  const availableHouses = useGameStore(s => s.availableHouses)
+  const availableHotels = useGameStore(s => s.availableHotels)
+  const activeEconomicEvents = useGameStore(s => s.activeEconomicEvents)
+  const settings = useGameStore(s => s.settings)
+  const roundsCompleted = useGameStore(s => s.roundsCompleted)
+  const marketHistory = useGameStore(s => s.marketHistory)
+  const players = useGameStore(s => s.players)
+  const spaces = useGameStore(s => s.spaces)
 
   if (!settings) return null
 
-  const currentGini = useMemo(() => calculateGiniCoefficient(state), [state])
+  const currentGini = useMemo(() => {
+    // We only need players and spaces for Gini
+    return calculateGiniCoefficient({ players, spaces } as any)
+  }, [players, spaces])
   
   const housePoolPercent = (availableHouses / 32) * 100
   const hotelPoolPercent = (availableHotels / 12) * 100

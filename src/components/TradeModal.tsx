@@ -54,16 +54,14 @@ export const TradeModal: React.FC<Props> = ({ trade, players, spaces, myPlayerIn
       window.removeEventListener('resize', updatePosition);
     };
   }, []);
-  const { 
-    updateTradeOffer, 
-    proposeTrade, 
-    acceptTrade, 
-    rejectTrade, 
-    cancelTrade,
-    counterOffer,
-    acceptCounterOffer,
-    getPlayerProperties
-  } = useGameStore();
+  const updateTradeOffer = useGameStore((s) => s.updateTradeOffer);
+  const proposeTrade = useGameStore((s) => s.proposeTrade);
+  const acceptTrade = useGameStore((s) => s.acceptTrade);
+  const rejectTrade = useGameStore((s) => s.rejectTrade);
+  const cancelTrade = useGameStore((s) => s.cancelTrade);
+  const counterOffer = useGameStore((s) => s.counterOffer);
+  const acceptCounterOffer = useGameStore((s) => s.acceptCounterOffer);
+  const getPlayerProperties = useGameStore((s) => s.getPlayerProperties);
   
   const { offer, status, counterOffer: counterOfferData, counterOfferMadeBy } = trade;
   const fromPlayer = players[offer.fromPlayer]!;

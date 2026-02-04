@@ -26,10 +26,8 @@ export const RentNegotiationModal: React.FC<Props> = ({
   const [selectedPropertyId, setSelectedPropertyId] = React.useState<number | undefined>(undefined);
   const [showPropertyTransfer, setShowPropertyTransfer] = React.useState(false);
   
-  const { spaces, settings } = useGameStore((s) => ({
-    spaces: s.spaces,
-    settings: s.settings
-  }));
+  const spaces = useGameStore((s) => s.spaces);
+  const settings = useGameStore((s) => s.settings);
   const iouInterestRate = settings?.iouInterestRate ?? 0.05;
   const interestPercent = (iouInterestRate * 100).toFixed(0);
   

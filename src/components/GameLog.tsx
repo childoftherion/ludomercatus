@@ -38,7 +38,8 @@ const getLogColor = (type: GameLogEntry["type"]): string => {
 };
 
 export const GameLog = () => {
-  const { gameLog, players } = useGameStore();
+  const gameLog = useGameStore((s) => s.gameLog);
+  const players = useGameStore((s) => s.players);
   const logContainerRef = useRef<HTMLDivElement>(null);
 
   // Auto-scroll to top when new entries are added (newest at top)

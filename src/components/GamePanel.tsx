@@ -32,23 +32,23 @@ export const GamePanel: React.FC<GamePanelProps> = ({
   myPlayerIndex,
 }) => {
   const isMobile = useIsMobile()
-  const {
-    phase,
-    diceRoll,
-    currentPlayerIndex,
-    players,
-    spaces,
-    lastCardDrawn,
-    awaitingTaxDecision,
-    chooseTaxOption,
-    pendingRentNegotiation,
-    pendingBankruptcy,
-    forgiveRent,
-    createRentIOU,
-    demandImmediatePaymentOrProperty,
-    enterChapter11,
-    declineRestructuring,
-  } = useGameStore()
+  const phase = useGameStore((s) => s.phase)
+  const diceRoll = useGameStore((s) => s.diceRoll)
+  const currentPlayerIndex = useGameStore((s) => s.currentPlayerIndex)
+  const players = useGameStore((s) => s.players)
+  const spaces = useGameStore((s) => s.spaces)
+  const lastCardDrawn = useGameStore((s) => s.lastCardDrawn)
+  const awaitingTaxDecision = useGameStore((s) => s.awaitingTaxDecision)
+  const chooseTaxOption = useGameStore((s) => s.chooseTaxOption)
+  const pendingRentNegotiation = useGameStore((s) => s.pendingRentNegotiation)
+  const pendingBankruptcy = useGameStore((s) => s.pendingBankruptcy)
+  const forgiveRent = useGameStore((s) => s.forgiveRent)
+  const createRentIOU = useGameStore((s) => s.createRentIOU)
+  const demandImmediatePaymentOrProperty = useGameStore(
+    (s) => s.demandImmediatePaymentOrProperty,
+  )
+  const enterChapter11 = useGameStore((s) => s.enterChapter11)
+  const declineRestructuring = useGameStore((s) => s.declineRestructuring)
 
   const currentPlayer =
     currentPlayerIndex >= 0 && currentPlayerIndex < players.length

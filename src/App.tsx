@@ -25,27 +25,25 @@ import { useIsMobile } from "./utils/useIsMobile"
 
 export default function App() {
   const isMobile = useIsMobile()
-  const {
-    phase,
-    currentPlayerIndex,
-    players,
-    passedGo: storePassedGo,
-    winner,
-    spaces,
-    auction,
-    trade,
-    lastCardDrawn,
-    connect,
-    connected,
-    inRoom,
-    leaveRoom,
-    currentGoSalary,
-    pendingRentNegotiation,
-    settings,
-    roomId,
-    joinRoom,
-    clientId,
-  } = useGameStore()
+  const phase = useGameStore((s) => s.phase)
+  const currentPlayerIndex = useGameStore((s) => s.currentPlayerIndex)
+  const players = useGameStore((s) => s.players)
+  const storePassedGo = useGameStore((s) => s.passedGo)
+  const winner = useGameStore((s) => s.winner)
+  const spaces = useGameStore((s) => s.spaces)
+  const auction = useGameStore((s) => s.auction)
+  const trade = useGameStore((s) => s.trade)
+  const lastCardDrawn = useGameStore((s) => s.lastCardDrawn)
+  const connect = useGameStore((s) => s.connect)
+  const connected = useGameStore((s) => s.connected)
+  const inRoom = useGameStore((s) => s.inRoom)
+  const leaveRoom = useGameStore((s) => s.leaveRoom)
+  const currentGoSalary = useGameStore((s) => s.currentGoSalary)
+  const pendingRentNegotiation = useGameStore((s) => s.pendingRentNegotiation)
+  const settings = useGameStore((s) => s.settings)
+  const roomId = useGameStore((s) => s.roomId)
+  const joinRoom = useGameStore((s) => s.joinRoom)
+  const clientId = useGameStore((s) => s.clientId)
 
   React.useEffect(() => {
     connect()
@@ -182,7 +180,7 @@ export default function App() {
       prevPlayerIndexRef.current = currentPlayerIndex
     }
   }, [currentPlayerIndex, phase])
-  const { diceRoll } = useGameStore()
+  const diceRoll = useGameStore((s) => s.diceRoll)
   // Detect new turns and handle stale diceRoll
   React.useEffect(() => {
     const detectedNewTurn =

@@ -3,7 +3,10 @@ import { motion } from "framer-motion";
 import { useGameStore } from "../store/gameStore";
 
 export const ServerBrowser = () => {
-  const { rooms, listRooms, createRoom, joinRoom } = useGameStore();
+  const rooms = useGameStore((s) => s.rooms);
+  const listRooms = useGameStore((s) => s.listRooms);
+  const createRoom = useGameStore((s) => s.createRoom);
+  const joinRoom = useGameStore((s) => s.joinRoom);
 
   useEffect(() => {
     // Poll for rooms

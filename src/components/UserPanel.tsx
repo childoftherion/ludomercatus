@@ -8,7 +8,10 @@ import { useIsMobile } from "../utils/useIsMobile"
 
 export const UserPanel: React.FC = () => {
   const isMobile = useIsMobile()
-  const { players, currentPlayerIndex, settings, spaces } = useGameStore()
+  const players = useGameStore((s) => s.players)
+  const currentPlayerIndex = useGameStore((s) => s.currentPlayerIndex)
+  const settings = useGameStore((s) => s.settings)
+  const spaces = useGameStore((s) => s.spaces)
   const { clientId } = useLocalStore()
   
   const myPlayerIndex = React.useMemo(() => {

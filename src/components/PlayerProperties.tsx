@@ -22,28 +22,25 @@ interface PlayerPropertiesPanelProps {
 }
 
 export const PlayerPropertiesPanel = ({ playerIndex, myPlayerIndex }: PlayerPropertiesPanelProps) => {
-  const state = useGameStore();
-  const { 
-    players, 
-    spaces, 
-    currentPlayerIndex, 
-    buildHouse, 
-    buildHotel, 
-    sellHouse, 
-    sellHotel, 
-    mortgageProperty, 
-    unmortgageProperty,
-    startTrade,
-    hasMonopoly,
-    settings,
-    availableHouses,
-    availableHotels,
-    takeLoan,
-    repayLoan,
-    payIOU,
-    buyPropertyInsurance,
-    roundsCompleted,
-  } = state;
+  const players = useGameStore((s) => s.players);
+  const spaces = useGameStore((s) => s.spaces);
+  const currentPlayerIndex = useGameStore((s) => s.currentPlayerIndex);
+  const buildHouse = useGameStore((s) => s.buildHouse);
+  const buildHotel = useGameStore((s) => s.buildHotel);
+  const sellHouse = useGameStore((s) => s.sellHouse);
+  const sellHotel = useGameStore((s) => s.sellHotel);
+  const mortgageProperty = useGameStore((s) => s.mortgageProperty);
+  const unmortgageProperty = useGameStore((s) => s.unmortgageProperty);
+  const startTrade = useGameStore((s) => s.startTrade);
+  const hasMonopoly = useGameStore((s) => s.hasMonopoly);
+  const settings = useGameStore((s) => s.settings);
+  const availableHouses = useGameStore((s) => s.availableHouses);
+  const availableHotels = useGameStore((s) => s.availableHotels);
+  const takeLoan = useGameStore((s) => s.takeLoan);
+  const repayLoan = useGameStore((s) => s.repayLoan);
+  const payIOU = useGameStore((s) => s.payIOU);
+  const buyPropertyInsurance = useGameStore((s) => s.buyPropertyInsurance);
+  const roundsCompleted = useGameStore((s) => s.roundsCompleted);
   
   const [selectedPropertyId, setSelectedPropertyId] = useState<number | null>(null);
   const [showLoanModal, setShowLoanModal] = useState(false);
@@ -64,8 +61,8 @@ export const PlayerPropertiesPanel = ({ playerIndex, myPlayerIndex }: PlayerProp
   // Calculate net worth
   const netWorth = useMemo(() => {
     if (!player || player.bankrupt) return 0;
-    return calculateNetWorth(state, playerIndex);
-  }, [state, playerIndex, player]);
+    return calculateNetWorth({ players, spaces } as any, playerIndex);
+  }, [players, spaces, playerIndex, player]);
 
   if (!player) return null;
 
