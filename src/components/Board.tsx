@@ -2,6 +2,7 @@ import React from "react";
 import { motion } from "framer-motion";
 import { useGameStore } from "../store/gameStore";
 import type { Property } from "../types/game";
+import { BoardMarketStatus } from "./BoardMarketStatus";
 
 // Responsive space size based on viewport - maximize board size for readability
 const getSpaceSize = () => {
@@ -198,14 +199,13 @@ const Space = ({ space, spaceSize, onPropertyClick }: { space: { id: number; nam
               width: "100%",
               display: "flex",
               justifyContent: "center",
-              gap: "1px",
-              zIndex: 5
+              gap: "2px",
             }}>
               {property.hotel ? (
-                <span style={{ fontSize: `${Math.floor(spaceSize * 0.2)}px`, filter: "drop-shadow(0 1px 1px rgba(0,0,0,0.5))" }}>🏨</span>
+                <div style={{ fontSize: `${Math.max(10, Math.floor(spaceSize * 0.2))}px` }}>🏨</div>
               ) : (
                 Array.from({ length: property.houses }).map((_, i) => (
-                  <span key={i} style={{ fontSize: `${Math.floor(spaceSize * 0.15)}px`, filter: "drop-shadow(0 1px 1px rgba(0,0,0,0.5))" }}>🏠</span>
+                  <div key={i} style={{ fontSize: `${Math.max(8, Math.floor(spaceSize * 0.15))}px` }}>🏠</div>
                 ))
               )}
             </div>
@@ -213,36 +213,22 @@ const Space = ({ space, spaceSize, onPropertyClick }: { space: { id: number; nam
         </div>
       )}
 
-      {/* Content */}
+      {/* Content Area */}
       <div style={{ 
-        flex: 1, 
+        padding: "2px", 
         display: "flex", 
         flexDirection: "column", 
         alignItems: "center", 
         justifyContent: "center",
-        padding: "3px 2px",
+        height: isPropertyType ? "70%" : "100%",
         width: "100%",
-        overflow: "hidden",
       }}>
-        {/* Icon for non-properties */}
-        {icon && !isPropertyType && (
-          <div style={{ fontSize: `${iconSize}px`, marginBottom: "2px", flexShrink: 0 }}>{icon}</div>
-        )}
-        
-        {/* Property name with word wrapping */}
         <div style={{ 
-          lineHeight: 1.1, 
-          fontSize: `${fontSize}px`, 
-          padding: "1px 2px", 
-          fontWeight: "bold",
-          textAlign: "center",
+          marginBottom: "1px", 
+          lineHeight: 1.1,
           wordBreak: "break-word",
-          overflow: "hidden",
-          display: "-webkit-box",
-          WebkitLineClamp: isPropertyType ? 2 : 3,
-          WebkitBoxOrient: "vertical",
-          maxHeight: isPropertyType ? `${fontSize * 2.2}px` : `${fontSize * 3.3}px`,
-          width: "100%",
+          maxHeight: "60%",
+          overflow: "hidden"
         }}>
           {space.name}
         </div>
@@ -347,55 +333,41 @@ export const Board = ({ onPropertyClick }: { onPropertyClick?: (property: Proper
     // Initial calculation
     updateSpaceSize();
     
-    // Update on window resize
-    const handleResize = () => {
-      updateSpaceSize();
-    };
-    
-    // Use ResizeObserver to watch container size changes
-    let resizeObserver: ResizeObserver | null = null;
-    if (containerRef.current && typeof ResizeObserver !== 'undefined') {
-      resizeObserver = new ResizeObserver(updateSpaceSize);
-      resizeObserver.observe(containerRef.current);
-    }
-    
-    window.addEventListener("resize", handleResize);
-    
-    return () => {
-      window.removeEventListener("resize", handleResize);
-      if (resizeObserver) {
-        resizeObserver.disconnect();
-      }
-    };
+    // Listen for resize
+    window.addEventListener("resize", updateSpaceSize);
+    return () => window.removeEventListener("resize", updateSpaceSize);
   }, []);
-  
+
   const boardWidth = BOARD_SIZE * (spaceSize + SPACE_GAP) + BOARD_PADDING * 2;
   const boardHeight = BOARD_SIZE * (spaceSize + SPACE_GAP) + BOARD_PADDING * 2;
-  
-  // Calculate center area (smaller - about 2.5 spaces worth for better property visibility)
-  const centerSize = (spaceSize + SPACE_GAP) * 2.5;
-  const centerLeft = (boardWidth - centerSize) / 2;
-  const centerTop = (boardHeight - centerSize) / 2;
+  const centerSize = (BOARD_SIZE - 2) * (spaceSize + SPACE_GAP);
+  const centerTop = spaceSize + BOARD_PADDING;
+  const centerLeft = spaceSize + BOARD_PADDING;
 
   return (
     <div
       ref={containerRef}
       style={{
+        position: "relative",
         width: "100%",
         height: "100%",
-        position: "relative",
-        overflow: "visible", // Allow hover tooltips to overflow
+        display: "flex",
+        alignItems: "flex-start",
+        justifyContent: "flex-start",
+        backgroundColor: "transparent",
+        overflow: "visible",
       }}
     >
-      {/* LUDOMERCATUS Title at Top Center - Above Board */}
+      {/* Background Text */}
       <div
         style={{
           position: "absolute",
-          top: "-45px",
+          top: "50%",
           left: "50%",
-          transform: "translateX(-50%)",
-          fontSize: `${Math.max(20, Math.floor(spaceSize * 0.35))}px`,
+          transform: "translate(-50%, -50%) rotate(-45deg)",
+          fontSize: `${Math.floor(spaceSize * 1.5)}px`,
           fontWeight: "900",
+          opacity: 0.05,
           color: "#2E8B57",
           letterSpacing: "3px",
           textShadow: "2px 2px 4px rgba(0,0,0,0.3)",
@@ -437,7 +409,7 @@ export const Board = ({ onPropertyClick }: { onPropertyClick?: (property: Proper
         />
       ))}
 
-      {/* Center board area - Reduced size for card display */}
+      {/* Center board area - Cover full inner area */}
       <div
         style={{
           position: "absolute",
@@ -448,33 +420,54 @@ export const Board = ({ onPropertyClick }: { onPropertyClick?: (property: Proper
           backgroundColor: "#F0F8F0",
           borderRadius: "8px",
           border: "3px solid #2E8B57",
-          display: "flex",
-          flexDirection: "column",
-          alignItems: "center",
-          justifyContent: "center",
           boxShadow: "inset 0 2px 8px rgba(0,0,0,0.1)",
         }}
       >
+        <BoardMarketStatus centerSize={centerSize} />
+        
+        {/* Jackpot Display - Center between card stacks */}
+        <div style={{
+          position: "absolute",
+          top: "65%",
+          left: "50%",
+          transform: "translate(-50%, -50%)",
+          backgroundColor: "rgba(255, 215, 0, 0.15)",
+          border: "2px solid #FFD700",
+          borderRadius: "20px",
+          padding: "8px 20px",
+          display: "flex",
+          alignItems: "center",
+          gap: "10px",
+          zIndex: 5,
+          boxShadow: "0 2px 10px rgba(255, 215, 0, 0.3)",
+          pointerEvents: "none",
+          whiteSpace: "nowrap",
+        }}>
+          <span style={{ fontSize: `${Math.floor(centerSize * 0.04)}px` }}>💰</span>
+          <span style={{ color: "#DAA520", fontWeight: "bold", fontSize: `${Math.floor(centerSize * 0.035)}px` }}>JACKPOT: £{jackpot}</span>
+        </div>
+
         {/* Card Stacks - Chance and Community Chest with dashed borders */}
         <div style={{
           position: "absolute",
-          display: "flex",
-          gap: `${centerSize * 0.2}px`,
-          alignItems: "center",
-          justifyContent: "center",
+          top: 0,
+          left: 0,
           width: "100%",
           height: "100%",
           zIndex: 2,
         }}>
-          {/* Community Chest Card Stack - Top Left */}
+          {/* Community Chest Card Stack - Center Left */}
           <motion.div
             initial={{ scale: 0.8, opacity: 0 }}
             animate={{ scale: 1, opacity: 1 }}
             transition={{ delay: 0.3, type: "spring", stiffness: 200 }}
             style={{
-              position: "relative",
-              width: `${centerSize * 0.28}px`,
-              height: `${centerSize * 0.28}px`,
+              position: "absolute",
+              top: "50%",
+              left: "15%",
+              transform: "translateY(-50%)",
+              width: `${centerSize * 0.18}px`,
+              height: `${centerSize * 0.22}px`,
               display: "flex",
               flexDirection: "column",
               alignItems: "center",
@@ -491,8 +484,8 @@ export const Board = ({ onPropertyClick }: { onPropertyClick?: (property: Proper
                 key={offset}
                 style={{
                   position: "absolute",
-                  width: `${centerSize * 0.22}px`,
-                  height: `${centerSize * 0.30}px`,
+                  width: `${centerSize * 0.14}px`,
+                  height: `${centerSize * 0.18}px`,
                   backgroundColor: "#4169E1",
                   borderRadius: "6px",
                   border: "2px solid rgba(255,255,255,0.3)",
@@ -507,9 +500,9 @@ export const Board = ({ onPropertyClick }: { onPropertyClick?: (property: Proper
               >
                 {offset === 0 && (
                   <>
-                    <div style={{ fontSize: `${Math.floor(centerSize * 0.10)}px`, marginBottom: "4px" }}>📦</div>
+                    <div style={{ fontSize: `${Math.floor(centerSize * 0.05)}px`, marginBottom: "4px" }}>📦</div>
                     <div style={{ 
-                      fontSize: `${Math.floor(centerSize * 0.055)}px`, 
+                      fontSize: `${Math.floor(centerSize * 0.015)}px`, 
                       fontWeight: "bold",
                       color: "#fff",
                       textAlign: "center",
@@ -524,15 +517,18 @@ export const Board = ({ onPropertyClick }: { onPropertyClick?: (property: Proper
             ))}
           </motion.div>
 
-          {/* Chance Card Stack - Bottom Right */}
+          {/* Chance Card Stack - Center Right */}
           <motion.div
             initial={{ scale: 0.8, opacity: 0 }}
             animate={{ scale: 1, opacity: 1 }}
             transition={{ delay: 0.5, type: "spring", stiffness: 200 }}
             style={{
-              position: "relative",
-              width: `${centerSize * 0.28}px`,
-              height: `${centerSize * 0.28}px`,
+              position: "absolute",
+              top: "50%",
+              right: "15%",
+              transform: "translateY(-50%)",
+              width: `${centerSize * 0.18}px`,
+              height: `${centerSize * 0.22}px`,
               display: "flex",
               flexDirection: "column",
               alignItems: "center",
@@ -549,8 +545,8 @@ export const Board = ({ onPropertyClick }: { onPropertyClick?: (property: Proper
                 key={offset}
                 style={{
                   position: "absolute",
-                  width: `${centerSize * 0.22}px`,
-                  height: `${centerSize * 0.30}px`,
+                  width: `${centerSize * 0.14}px`,
+                  height: `${centerSize * 0.18}px`,
                   backgroundColor: "#FF8C00",
                   borderRadius: "6px",
                   border: "2px solid rgba(255,255,255,0.3)",
@@ -565,14 +561,12 @@ export const Board = ({ onPropertyClick }: { onPropertyClick?: (property: Proper
               >
                 {offset === 0 && (
                   <>
-                    <div style={{ fontSize: `${Math.floor(centerSize * 0.10)}px`, marginBottom: "4px" }}>❓</div>
+                    <div style={{ fontSize: `${Math.floor(centerSize * 0.06)}px`, color: "#fff", fontWeight: "bold" }}>?</div>
                     <div style={{ 
-                      fontSize: `${Math.floor(centerSize * 0.055)}px`, 
+                      fontSize: `${Math.floor(centerSize * 0.018)}px`, 
                       fontWeight: "bold",
                       color: "#fff",
-                      textAlign: "center",
-                      padding: "0 4px",
-                      lineHeight: 1.1,
+                      marginTop: "2px"
                     }}>
                       CHANCE
                     </div>
@@ -582,57 +576,10 @@ export const Board = ({ onPropertyClick }: { onPropertyClick?: (property: Proper
             ))}
           </motion.div>
         </div>
-        
-        {/* Jackpot Display */}
-        {jackpot > 0 && (
-          <motion.div
-            initial={{ scale: 0, opacity: 0 }}
-            animate={{ scale: 1, opacity: 1 }}
-            style={{
-              position: "absolute",
-              bottom: `${centerSize * 0.08}px`,
-              left: "50%",
-              transform: "translateX(-50%)",
-              backgroundColor: "#FFD700",
-              borderRadius: "8px",
-              padding: `${Math.floor(centerSize * 0.04)}px ${Math.floor(centerSize * 0.06)}px`,
-              border: "2px solid #FFA500",
-              boxShadow: "0 4px 12px rgba(0,0,0,0.3)",
-              zIndex: 4,
-              display: "flex",
-              flexDirection: "column",
-              alignItems: "center",
-              gap: "2px",
-            }}
-          >
-            <div style={{
-              fontSize: `${Math.floor(centerSize * 0.05)}px`,
-              fontWeight: "bold",
-              color: "#8B4513",
-              textTransform: "uppercase",
-              letterSpacing: "1px",
-            }}>
-              🎰 Free Parking Jackpot
-            </div>
-            <div style={{
-              fontSize: `${Math.floor(centerSize * 0.08)}px`,
-              fontWeight: "900",
-              color: "#8B4513",
-            }}>
-              £{jackpot.toLocaleString()}
-            </div>
-          </motion.div>
-        )}
-        
-        {/* Card display area will be rendered here by App.tsx */}
-        <div id="board-center-card-area" style={{ 
-          position: "relative", 
-          width: "100%", 
-          height: "100%",
-          zIndex: 5 
-        }} />
       </div>
-    </div>
+
+
+      </div>
     </div>
   );
 };

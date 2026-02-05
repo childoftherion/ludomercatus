@@ -13,7 +13,7 @@ export const ServerBrowser = () => {
     const interval = setInterval(listRooms, 2000);
     listRooms();
     return () => clearInterval(interval);
-  }, []);
+  }, [listRooms]); // Added listRooms to dependency array
 
   return (
     <div

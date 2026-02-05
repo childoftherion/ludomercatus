@@ -19,7 +19,6 @@ import { UserPanel } from "./components/UserPanel"
 import type { Property } from "./types/game"
 import { BurgerMenu } from "./components/BurgerMenu"
 import { GamePanel } from "./components/GamePanel"
-import { MarketPanel } from "./components/MarketPanel"
 import { isProperty } from "./utils/helpers"
 import { useIsMobile } from "./utils/useIsMobile"
 
@@ -576,12 +575,6 @@ export default function App() {
     myPlayerIndex,
     selectedProperty,
   ])
-  const handlePayTax = () => {
-    if (!currentSpace || currentSpace.type !== "tax" || !currentPlayer) return
-    const amount = currentSpace.name.includes("Income") ? 200 : 100
-    useGameStore.getState().payTax(currentPlayerIndex, amount)
-    audioManager.playMoney()
-  }
   const handleDrawCard = (cardType: "chance" | "community_chest") => {
     useGameStore.getState().drawCard(currentPlayerIndex, cardType)
     audioManager.playCardDraw()
@@ -689,7 +682,6 @@ export default function App() {
         showLog={showMobileLog}
         onToggleLog={() => setShowMobileLog(!showMobileLog)}
       />
-      <MarketPanel />
       {/* Left Side - Game Log (Fixed) - Expanded to fill screen */}
       {(!isMobile || showMobileLog) && (
         <div
@@ -874,87 +866,20 @@ export default function App() {
       {/* All Modals - Rendered outside board container for proper fixed positioning */}
       {/* Auction Modal */}
       <AnimatePresence>
-        {phase === "auction" && auction && (
-          <AuctionModal
-            auction={auction}
-            property={
-              spaces.find((s) => s.id === auction.propertyId) as Property
-            }
-            players={players}
-            myPlayerIndex={myPlayerIndex}
-          />
-        )}
+        {phase === "auction" && <AuctionModal />}
       </AnimatePresence>
       {/* Trade Modal - Only visible to players involved in the trade */}
       <AnimatePresence>
-        {phase === "trading" &&
-          trade &&
-          (myPlayerIndex === trade.offer.fromPlayer ||
-          myPlayerIndex === trade.offer.toPlayer ? (
-            <TradeModal
-              trade={trade}
-              players={players}
-              spaces={spaces}
-              myPlayerIndex={myPlayerIndex}
-            />
-          ) : null)}
-        {phase === "trading" && trade && (
-          <TradeModal
-            trade={trade}
-            players={players}
-            spaces={spaces}
-            myPlayerIndex={myPlayerIndex}
-          />
-        )}
+        {phase === "trading" && <TradeModal />}
       </AnimatePresence>
-      {/* Financial Modals (Rent Negotiation & Bankruptcy) */}
+      {/* Rent Negotiation Modal */}
       <AnimatePresence>
-        {phase === "awaiting_rent_negotiation" &&
-          pendingRentNegotiation &&
-          (() => {
-            const debtor = players[pendingRentNegotiation.debtorIndex]
-            const creditor = players[pendingRentNegotiation.creditorIndex]
-            if (!debtor || !creditor) return null
-            // Only show to creditor or debtor
-            const isInvolved =
-              myPlayerIndex === pendingRentNegotiation.debtorIndex ||
-              myPlayerIndex === pendingRentNegotiation.creditorIndex
-            if (!isInvolved) return null
-            return (
-              <RentNegotiationModal
-                debtor={debtor}
-                creditor={creditor}
-                property={
-                  spaces.find(
-                    (s) => s.id === pendingRentNegotiation.propertyId,
-                  ) as Property
-                }
-                rentAmount={pendingRentNegotiation.rentAmount}
-                debtorCanAfford={pendingRentNegotiation.debtorCanAfford}
-                myPlayerIndex={myPlayerIndex}
-              />
-            )
-          })()}
+        {phase === "awaiting_rent_negotiation" && <RentNegotiationModal />}
+      </AnimatePresence>
 
-        {phase === "awaiting_bankruptcy_decision" &&
-          (useGameStore.getState() as any).pendingBankruptcy &&
-          (() => {
-            const pending = (useGameStore.getState() as any).pendingBankruptcy
-            const bankruptPlayer = players[pending.playerIndex]
-            const creditorPlayer =
-              pending.creditorIndex !== undefined
-                ? players[pending.creditorIndex]
-                : undefined
-            return bankruptPlayer ? (
-              <BankruptcyModal
-                player={bankruptPlayer}
-                debtAmount={pending.debtAmount}
-                creditor={creditorPlayer}
-                chapter11Turns={settings?.chapter11Turns ?? 5}
-                myPlayerIndex={myPlayerIndex}
-              />
-            ) : null
-          })()}
+      {/* Bankruptcy Decision Modal */}
+      <AnimatePresence>
+        {phase === "awaiting_bankruptcy_decision" && <BankruptcyModal />}
       </AnimatePresence>
       <GamePanel
         isRolling={isRolling}
@@ -978,7 +903,7 @@ export default function App() {
       />
 
       {/* Bottom - User Panel (All Players) - Rendered LAST to ensure it's on top */}
-      <UserPanel />
+      <UserPanel myPlayerIndex={myPlayerIndex ?? -1} />
     </div>
   )
 }

@@ -1,5 +1,5 @@
 import React from "react"
-import { motion } from "framer-motion"
+import { motion, AnimatePresence } from "framer-motion"
 import { useGameStore } from "../store/gameStore"
 import { Dice, DiceDisplay } from "./Dice"
 import type { Property } from "../types/game"
@@ -37,6 +37,20 @@ export const GamePanel: React.FC<GamePanelProps> = ({
   const currentPlayerIndex = useGameStore((s) => s.currentPlayerIndex)
   const players = useGameStore((s) => s.players)
   const spaces = useGameStore((s) => s.spaces)
+
+  // Select only the current player and current space to avoid unnecessary re-renders
+  const currentPlayer = useGameStore((s) =>
+    s.currentPlayerIndex >= 0 && s.currentPlayerIndex < s.players.length
+      ? s.players[s.currentPlayerIndex]
+      : null
+  )
+  const currentSpace = useGameStore((s) => {
+    const player = s.currentPlayerIndex >= 0 && s.currentPlayerIndex < s.players.length
+      ? s.players[s.currentPlayerIndex]
+      : null;
+    return player ? s.spaces[player.position] : null;
+  })
+
   const lastCardDrawn = useGameStore((s) => s.lastCardDrawn)
   const awaitingTaxDecision = useGameStore((s) => s.awaitingTaxDecision)
   const chooseTaxOption = useGameStore((s) => s.chooseTaxOption)
@@ -44,16 +58,9 @@ export const GamePanel: React.FC<GamePanelProps> = ({
   const pendingBankruptcy = useGameStore((s) => s.pendingBankruptcy)
   const forgiveRent = useGameStore((s) => s.forgiveRent)
   const createRentIOU = useGameStore((s) => s.createRentIOU)
-  const demandImmediatePaymentOrProperty = useGameStore(
-    (s) => s.demandImmediatePaymentOrProperty,
-  )
+  const demandImmediatePaymentOrProperty = useGameStore((s) => s.demandImmediatePaymentOrProperty)
   const enterChapter11 = useGameStore((s) => s.enterChapter11)
   const declineRestructuring = useGameStore((s) => s.declineRestructuring)
-
-  const currentPlayer =
-    currentPlayerIndex >= 0 && currentPlayerIndex < players.length
-      ? players[currentPlayerIndex]
-      : null
 
   const isMyTurn = currentPlayerIndex === myPlayerIndex
 
@@ -71,11 +78,9 @@ export const GamePanel: React.FC<GamePanelProps> = ({
   const cardPadding = isMobile ? "10px" : "16px"
   const buttonFontSize = isMobile ? "14px" : "16px"
 
-  if (!currentPlayer || phase === "auction" || phase === "trading") {
+  if (!currentPlayer || phase === "auction" || phase === "trading" || phase === "game_over") {
     return null
   }
-
-  const currentSpace = spaces[currentPlayer.position] ?? null
 
   return (
     <motion.div
@@ -205,15 +210,19 @@ export const GamePanel: React.FC<GamePanelProps> = ({
         )}
       </div>
 
-      {(!isMobile || isExpanded) && (
-        <div
-          style={{
-            padding: isMobile ? "10px 12px 12px" : "12px",
-            flex: 1,
-            minHeight: 0,
-            overflowY: "auto",
-          }}
-        >
+      <AnimatePresence>
+        {(!isMobile || isExpanded) && (
+          <motion.div
+            initial={isMobile ? { height: 0, opacity: 0 } : undefined}
+            animate={{ height: "auto", opacity: 1 }}
+            exit={isMobile ? { height: 0, opacity: 0 } : undefined}
+            style={{
+              padding: isMobile ? "10px 12px 12px" : "12px",
+              flex: 1,
+              minHeight: 0,
+              overflowY: "auto",
+            }}
+          >
           {/* AI Thinking Indicator */}
           {currentPlayer.isAI && (
             <motion.div
@@ -601,7 +610,7 @@ export const GamePanel: React.FC<GamePanelProps> = ({
                   }}
                 >
                   <motion.button
-                    onClick={() => createRentIOU(pendingRentNegotiation.debtorCanAfford)}
+                    onClick={() => createRentIOU(Math.floor(pendingRentNegotiation.debtorCanAfford))}
                     whileHover={{ scale: 1.02 }}
                     whileTap={{ scale: 0.98 }}
                     style={{
@@ -614,9 +623,9 @@ export const GamePanel: React.FC<GamePanelProps> = ({
                       fontSize: "13px",
                     }}
                   >
-                    Accept £{pendingRentNegotiation.debtorCanAfford} + IOU for £
-                    {pendingRentNegotiation.rentAmount -
-                      pendingRentNegotiation.debtorCanAfford}
+                    Accept £{Math.floor(pendingRentNegotiation.debtorCanAfford)} + IOU for £
+                    {Math.round(pendingRentNegotiation.rentAmount -
+                      pendingRentNegotiation.debtorCanAfford)}
                   </motion.button>
 
                   <motion.button
@@ -1037,8 +1046,9 @@ export const GamePanel: React.FC<GamePanelProps> = ({
                 )}
             </div>
           )}
-        </div>
-      )}
+          </motion.div>
+        )}
+      </AnimatePresence>
     </motion.div>
   )
 }

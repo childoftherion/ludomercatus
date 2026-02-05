@@ -6,33 +6,32 @@ import { useLocalStore } from "../store/localStore"
 import { calculateNetWorth } from "../logic/rules/economics"
 import { useIsMobile } from "../utils/useIsMobile"
 
-export const UserPanel: React.FC = () => {
+interface UserPanelProps {
+  myPlayerIndex: number
+}
+
+export const UserPanel: React.FC<UserPanelProps> = ({ myPlayerIndex }) => {
   const isMobile = useIsMobile()
   const players = useGameStore((s) => s.players)
   const currentPlayerIndex = useGameStore((s) => s.currentPlayerIndex)
   const settings = useGameStore((s) => s.settings)
-  const spaces = useGameStore((s) => s.spaces)
-  const { clientId } = useLocalStore()
   
-  const myPlayerIndex = React.useMemo(() => {
-    return players.findIndex(p => p.clientId === clientId);
-  }, [players, clientId]);
   const [expandedPlayerIndex, setExpandedPlayerIndex] = useState<number | null>(
     null
   )
   const [activeTab, setActiveTab] = useState<"properties" | "financials">("properties")
   
-  // Calculate net worth for each player
-  const getNetWorth = (playerIndex: number) => {
-    const state = useGameStore.getState()
-    return calculateNetWorth(state, playerIndex)
-  }
-
-  if (!players || players.length === 0) return null
+  // Memoize net worth for each player to prevent recalculation on every render
+  const netWorths = React.useMemo(() => {
+    const state = useGameStore.getState();
+    return players.map((_, index) => calculateNetWorth(state, index));
+  }, [players]);
 
   // Filter out bankrupt players for layout calculation
   const activePlayers = players.filter((p, i) => p && !p.bankrupt)
   const playerCount = activePlayers.length
+
+  if (!players || players.length === 0) return null
 
   return (
     <div
@@ -208,7 +207,7 @@ export const UserPanel: React.FC = () => {
                                 marginTop: "2px",
                               }}
                             >
-                              Net: £{getNetWorth(index).toLocaleString()}
+                              Net: £{netWorths[index]?.toLocaleString()}
                             </div>
                           )}
                         </>

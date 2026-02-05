@@ -3,59 +3,29 @@ import { motion, AnimatePresence } from "framer-motion";
 import { useGameStore } from "../store/gameStore";
 import type { Property, Player } from "../types/game";
 
-interface Props {
-  debtor: Player;
-  creditor: Player;
-  property: Property;
-  rentAmount: number;
-  debtorCanAfford: number;
-  myPlayerIndex: number;
-}
+export const RentNegotiationModal: React.FC = () => {
+  const pendingRentNegotiation = useGameStore(s => s.pendingRentNegotiation);
+  const players = useGameStore(s => s.players);
+  const spaces = useGameStore(s => s.spaces);
+  const clientId = useGameStore(s => s.clientId);
+  const settings = useGameStore((s) => s.settings);
+  
+  const myPlayerIndex = React.useMemo(() => {
+    return players.findIndex(p => p.clientId === clientId);
+  }, [players, clientId]);
 
-export const RentNegotiationModal: React.FC<Props> = ({
-  debtor,
-  creditor,
-  property,
-  rentAmount,
-  debtorCanAfford,
-  myPlayerIndex,
-}) => {
-  const isCreditor = myPlayerIndex === creditor.id;
-  const isDebtor = myPlayerIndex === debtor.id;
-  const [partialPayment, setPartialPayment] = React.useState(debtorCanAfford);
+  const [partialPayment, setPartialPayment] = React.useState(0);
   const [selectedPropertyId, setSelectedPropertyId] = React.useState<number | undefined>(undefined);
   const [showPropertyTransfer, setShowPropertyTransfer] = React.useState(false);
-  
-  const spaces = useGameStore((s) => s.spaces);
-  const settings = useGameStore((s) => s.settings);
-  const iouInterestRate = settings?.iouInterestRate ?? 0.05;
-  const interestPercent = (iouInterestRate * 100).toFixed(0);
-  
-  const debtorProperties = spaces.filter(
-    (s) => s.type === "property" || s.type === "railroad" || s.type === "utility"
-  ).filter((s) => (s as Property).owner === debtor.id) as Property[];
-  
-  const remainingDebt = rentAmount - partialPayment;
-  
-  const handleForgive = () => {
-    useGameStore.getState().forgiveRent();
-  };
-  
-  const handleCreateIOU = () => {
-    useGameStore.getState().createRentIOU(partialPayment);
-  };
-  
-  const handleDemandProperty = () => {
-    useGameStore.getState().demandImmediatePaymentOrProperty(selectedPropertyId);
-  };
-  
-  const handleForceBankruptcy = () => {
-    useGameStore.getState().demandImmediatePaymentOrProperty(undefined);
-  };
-
-  // Use ref to measure actual modal size and center properly
-  const modalRef = useRef<HTMLDivElement>(null);
   const [position, setPosition] = useState({ x: 0, y: 0 });
+  const modalRef = useRef<HTMLDivElement>(null);
+
+  // Sync partialPayment when negotiation changes
+  React.useEffect(() => {
+    if (pendingRentNegotiation) {
+      setPartialPayment(pendingRentNegotiation.debtorCanAfford);
+    }
+  }, [pendingRentNegotiation]);
 
   useEffect(() => {
     const updatePosition = () => {
@@ -63,18 +33,12 @@ export const RentNegotiationModal: React.FC<Props> = ({
         requestAnimationFrame(() => {
           if (modalRef.current) {
             const rect = modalRef.current.getBoundingClientRect();
-            // Position modal on the right side (where GameLog used to be)
-            // Modals should be positioned at top: 12px, right: 12px, width: 320px
             const modalAreaWidth = 320;
             const modalAreaTop = 12;
             const rightMargin = 12;
-            const spacing = 20; // Space for multiple modals if needed
-            // Position on the right side
             const modalX = window.innerWidth - modalAreaWidth - rightMargin;
-            // Position at top of modal area
             const modalY = modalAreaTop;
-            // Ensure modal doesn't extend below viewport
-            const maxY = window.innerHeight - rect.height - 20; // 20px margin from bottom
+            const maxY = window.innerHeight - rect.height - 20;
             const adjustedY = Math.min(modalY, maxY);
             setPosition({ x: modalX, y: adjustedY });
           }
@@ -93,6 +57,44 @@ export const RentNegotiationModal: React.FC<Props> = ({
       window.removeEventListener('resize', updatePosition);
     };
   }, []);
+
+  if (!pendingRentNegotiation) return null;
+
+  const { debtorIndex, creditorIndex, propertyId, rentAmount, debtorCanAfford } = pendingRentNegotiation;
+  const debtor = players[debtorIndex];
+  const creditor = players[creditorIndex];
+  const property = spaces.find(s => s.id === propertyId) as Property;
+
+  if (!debtor || !creditor || !property) return null;
+
+  const isCreditor = myPlayerIndex === creditorIndex;
+  const isDebtor = myPlayerIndex === debtorIndex;
+  
+  const iouInterestRate = settings?.iouInterestRate ?? 0.05;
+   const interestPercent = (iouInterestRate * 100).toFixed(0);
+
+   const debtorProperties = spaces.filter(
+     (s) => s.type === "property" || s.type === "railroad" || s.type === "utility"
+   ).filter((s) => (s as Property).owner === debtor.id) as Property[];
+   
+  const remainingDebt = Math.round(rentAmount - partialPayment);
+  
+  const handleForgive = () => {
+    useGameStore.getState().forgiveRent();
+  };
+  
+  const handleCreateIOU = () => {
+    // Round partial payment to ensure integer currency
+    useGameStore.getState().createRentIOU(Math.floor(partialPayment));
+  };
+   
+   const handleDemandProperty = () => {
+     useGameStore.getState().demandImmediatePaymentOrProperty(selectedPropertyId);
+   };
+   
+   const handleForceBankruptcy = () => {
+     useGameStore.getState().demandImmediatePaymentOrProperty(undefined);
+   };
 
   return (
     <AnimatePresence>

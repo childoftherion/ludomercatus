@@ -1,4 +1,4 @@
-// Authored by childoftherion
+
 import type {
   GameState,
   Player,
@@ -1300,8 +1300,8 @@ export class GameRoom implements GameActions {
     if (!debtor || !creditor) return
 
     // Ensure partial payment doesn't exceed what debtor has
-    const actualPayment = Math.min(partialPayment, debtor.cash)
-    const remainingDebt = rentAmount - actualPayment
+    const actualPayment = Math.floor(Math.min(partialPayment, debtor.cash))
+    const remainingDebt = Math.round(rentAmount - actualPayment)
 
     // Create IOU for remaining amount
     const newIOU: IOU = {
@@ -1356,22 +1356,27 @@ export class GameRoom implements GameActions {
     const creditor = this.state.players[iou.creditorId]
     if (!creditor) return
 
-    // Ensure payment is a whole number and at least $1
+    // Calculate interest based on rounds passed since turnCreated
+    const roundsPassed = Math.max(0, this.state.roundsCompleted - (iou.turnCreated || 0))
+    const totalInterest = Math.round(iou.originalAmount * (iou.interestRate || 0) * roundsPassed)
+    const currentTotalOwed = Math.round(iou.originalAmount + totalInterest)
+
+    // Ensure payment is a whole number and at least £1
     const rawPaymentAmount = amount
-      ? Math.min(amount, iou.currentAmount, debtor.cash)
-      : Math.min(iou.currentAmount, debtor.cash)
-    // Round down to whole number and ensure minimum of $1
+      ? Math.min(amount, currentTotalOwed, debtor.cash)
+      : Math.min(currentTotalOwed, debtor.cash)
+    // Round down to whole number and ensure minimum of £1
     const paymentAmount = Math.max(1, Math.floor(rawPaymentAmount))
 
     // Validate payment amount
     if (
       paymentAmount <= 0 ||
       paymentAmount > debtor.cash ||
-      paymentAmount > iou.currentAmount
+      paymentAmount > currentTotalOwed
     )
       return
 
-    const remainingDebt = iou.currentAmount - paymentAmount
+    const remainingDebt = Math.round(currentTotalOwed - paymentAmount)
     const iouPaidOff = remainingDebt <= 0
 
     this.setState({
@@ -1426,39 +1431,12 @@ export class GameRoom implements GameActions {
     const player = this.state.players[playerIndex]
     if (!player || player.iousPayable.length === 0) return
 
-    const updatedIOUs = player.iousPayable.map((iou) => ({
-      ...iou,
-      currentAmount: Math.round(iou.currentAmount * (1 + iou.interestRate)),
-    }))
-
-    // Also update the creditor's receivable records
-    const creditorUpdates: Map<number, IOU[]> = new Map()
-    updatedIOUs.forEach((iou) => {
-      if (!creditorUpdates.has(iou.creditorId)) {
-        const creditor = this.state.players[iou.creditorId]
-        creditorUpdates.set(iou.creditorId, creditor?.iousReceivable || [])
-      }
-    })
-
-    this.setState({
-      players: this.state.players.map((p, i) => {
-        if (i === playerIndex) {
-          return { ...p, iousPayable: updatedIOUs }
-        }
-        // Update creditor's receivables
-        const creditorIOUs = creditorUpdates.get(i)
-        if (creditorIOUs) {
-          return {
-            ...p,
-            iousReceivable: p.iousReceivable.map((iou) => {
-              const updated = updatedIOUs.find((u) => u.id === iou.id)
-              return updated || iou
-            }),
-          }
-        }
-        return p
-      }),
-    })
+    // Simply log that interest is accruing (it's calculated on-the-fly during payment)
+    this.addLogEntry(
+      `Interest is accruing on ${player.name}'s IOUs.`,
+      "system",
+      playerIndex,
+    )
   }
 
   // Creditor demands immediate payment or property transfer
@@ -1480,10 +1458,10 @@ export class GameRoom implements GameActions {
       if (!propertyToTransfer || propertyToTransfer.owner !== debtorIndex)
         return
 
-      // Calculate property value (price minus mortgage if mortgaged)
+      // Calculate property value using precision-safe effective value
       const propertyValue = propertyToTransfer.mortgaged
-        ? propertyToTransfer.mortgageValue
-        : propertyToTransfer.price
+        ? this.getEffectiveMortgageValue(propertyToTransfer.id)
+        : this.getEffectivePropertyValue(propertyToTransfer.id)
 
       // Transfer property and settle difference
       const difference = rentAmount - propertyValue
@@ -2315,10 +2293,14 @@ export class GameRoom implements GameActions {
 
     const updatedSpaces = this.state.spaces.map((s) => {
       if (isProperty(s) && s.colorGroup === colorGroup) {
-        const newMultiplier = Math.min(2.0, s.valueMultiplier + rate) // Cap at 2x
-        if (newMultiplier !== s.valueMultiplier) {
+        // Use precision to avoid floating point issues
+        const newMultiplier =
+          Math.round((s.valueMultiplier + rate) * 100) / 100
+        const cappedMultiplier = Math.min(2.0, newMultiplier) // Cap at 2x
+
+        if (cappedMultiplier !== s.valueMultiplier) {
           appreciatedProperties.push(s.name)
-          return { ...s, valueMultiplier: newMultiplier } as Property
+          return { ...s, valueMultiplier: cappedMultiplier } as Property
         }
       }
       return s
@@ -2343,10 +2325,14 @@ export class GameRoom implements GameActions {
 
     const updatedSpaces = this.state.spaces.map((s) => {
       if (isProperty(s) && s.colorGroup === colorGroup) {
-        const newMultiplier = Math.max(0.5, s.valueMultiplier - rate) // Floor at 0.5x
-        if (newMultiplier !== s.valueMultiplier) {
+        // Use precision to avoid floating point issues
+        const newMultiplier =
+          Math.round((s.valueMultiplier - rate) * 100) / 100
+        const cappedMultiplier = Math.max(0.5, newMultiplier) // Floor at 0.5x
+
+        if (cappedMultiplier !== s.valueMultiplier) {
           depreciatedProperties.push(s.name)
-          return { ...s, valueMultiplier: newMultiplier } as Property
+          return { ...s, valueMultiplier: cappedMultiplier } as Property
         }
       }
       return s
@@ -2370,11 +2356,13 @@ export class GameRoom implements GameActions {
 
     const updatedSpaces = this.state.spaces.map((s) => {
       if (isProperty(s)) {
-        const newMultiplier = Math.max(
-          0.5,
-          Math.min(2.0, s.valueMultiplier + rate),
-        )
-        return { ...s, valueMultiplier: newMultiplier } as Property
+        // Use precision to avoid floating point issues
+        const newMultiplier =
+          Math.round((s.valueMultiplier + rate) * 100) / 100
+        return {
+          ...s,
+          valueMultiplier: Math.max(0.5, Math.min(2.0, newMultiplier)),
+        } as Property
       }
       return s
     })
@@ -2435,11 +2423,12 @@ export class GameRoom implements GameActions {
     this.state.spaces.forEach((space) => {
       if (isProperty(space) && space.owner === playerIndex) {
         if (!space.mortgaged) {
-          netWorth += space.price
+          // Use precision-safe effective value
+          netWorth += this.getEffectivePropertyValue(space.id)
           // Add building values at half cost (liquidation value)
           const buildingCost = space.buildingCost ?? 0
-          netWorth += space.houses * (buildingCost / 2)
-          if (space.hotel) netWorth += buildingCost / 2
+          netWorth += Math.floor(space.houses * (buildingCost / 2))
+          if (space.hotel) netWorth += Math.floor(buildingCost / 2)
         }
       }
     })
@@ -2447,7 +2436,7 @@ export class GameRoom implements GameActions {
     // Subtract existing debt
     netWorth -= player.totalDebt
 
-    return Math.max(0, netWorth)
+    return Math.max(0, Math.round(netWorth))
   }
 
   // Get maximum loan amount a player can take

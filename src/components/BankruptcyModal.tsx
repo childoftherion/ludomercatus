@@ -3,37 +3,19 @@ import { motion, AnimatePresence } from "framer-motion";
 import { useGameStore } from "../store/gameStore";
 import type { Player, Property } from "../types/game";
 
-interface Props {
-  player: Player;
-  debtAmount: number;
-  creditor?: Player;
-  chapter11Turns: number;
-  myPlayerIndex: number;
-}
-
-export const BankruptcyModal: React.FC<Props> = ({
-  player,
-  debtAmount,
-  creditor,
-  chapter11Turns,
-  myPlayerIndex,
-}) => {
-  const isMyBankruptcy = myPlayerIndex === player.id;
-  const spaces = useGameStore((s) => s.spaces);
+export const BankruptcyModal: React.FC = () => {
+  const auction = useGameStore(s => s.auction);
+  const players = useGameStore(s => s.players);
+  const spaces = useGameStore(s => s.spaces);
+  const clientId = useGameStore(s => s.clientId);
   const enterChapter11 = useGameStore((s) => s.enterChapter11);
   const declineRestructuring = useGameStore((s) => s.declineRestructuring);
-  
-  // Calculate player's assets
-  const playerProperties = spaces.filter(
-    (s): s is Property => 
-      (s.type === "property" || s.type === "railroad" || s.type === "utility") &&
-      (s as Property).owner === player.id
-  );
-  
-  const totalAssetValue = playerProperties.reduce((sum, prop) => {
-    if (prop.mortgaged) return sum + prop.mortgageValue;
-    return sum + prop.price + (prop.houses * (prop.buildingCost ?? 0));
-  }, 0);
+  const pendingBankruptcy = useGameStore(s => s.pendingBankruptcy);
+  const chapter11Turns = useGameStore(s => s.settings.chapter11Turns);
+
+  const myPlayerIndex = React.useMemo(() => {
+    return players.findIndex(p => p.clientId === clientId);
+  }, [players, clientId]);
 
   // Use ref to measure actual modal size and center properly
   const modalRef = useRef<HTMLDivElement>(null);
@@ -50,7 +32,6 @@ export const BankruptcyModal: React.FC<Props> = ({
             const modalAreaWidth = 320;
             const modalAreaTop = 12;
             const rightMargin = 12;
-            const spacing = 20; // Space for multiple modals if needed
             // Position on the right side
             const modalX = window.innerWidth - modalAreaWidth - rightMargin;
             // Position at top of modal area
@@ -75,6 +56,41 @@ export const BankruptcyModal: React.FC<Props> = ({
       window.removeEventListener('resize', updatePosition);
     };
   }, []);
+
+  if (!pendingBankruptcy) return null;
+
+  const player = players[pendingBankruptcy.playerIndex];
+  if (!player) return null;
+
+  const { debtAmount, creditorIndex } = pendingBankruptcy;
+  const creditor = creditorIndex !== undefined ? players[creditorIndex] : undefined;
+  
+  const isMyBankruptcy = myPlayerIndex === player.id;
+  
+  // Get all properties owned by this player
+  const playerProperties = spaces.filter(
+    (s): s is Property => 
+      (s.type === "property" || s.type === "railroad" || s.type === "utility") &&
+      (s as Property).owner === player.id
+  );
+
+  // Calculate player's assets (Liquidation Value)
+  const totalAssetValue = playerProperties.reduce((sum: number, prop: Property) => {
+    // Property value (adjusted for market fluctuations)
+    const propValue = Math.round(prop.price * (prop.valueMultiplier || 1.0));
+    
+    if (prop.mortgaged) {
+      // Mortgaged property: only worth its mortgage value if we were to sell it back to bank? 
+      // Actually, in Monopoly, you get mortgage value immediately.
+      // For bankruptcy, we show the equity or the cash value.
+      return sum + prop.mortgageValue;
+    }
+    
+    // Buildings are worth 50% of cost
+    const buildingValue = Math.floor((prop.houses + (prop.hotel ? 1 : 0)) * (prop.buildingCost ?? 0) / 2);
+    
+    return sum + propValue + buildingValue;
+  }, 0);
 
   return (
     <AnimatePresence>

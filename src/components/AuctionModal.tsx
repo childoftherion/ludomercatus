@@ -4,50 +4,59 @@ import { useGameStore } from "../store/gameStore";
 import { audioManager } from "../utils/audio";
 import type { AuctionState, Property, Player } from "../types/game";
 
-interface Props {
-  auction: AuctionState;
-  property: Property;
-  players: Player[];
-  myPlayerIndex: number;
-}
+export const AuctionModal: React.FC = () => {
+  const auction = useGameStore(s => s.auction);
+  const players = useGameStore(s => s.players);
+  const spaces = useGameStore(s => s.spaces);
+  const clientId = useGameStore(s => s.clientId);
+  
+  const myPlayerIndex = React.useMemo(() => {
+    return players.findIndex(p => p.clientId === clientId);
+  }, [players, clientId]);
 
-export const AuctionModal: React.FC<Props> = ({ auction, property, players, myPlayerIndex }) => {
+  const [bidAmount, setBidAmount] = React.useState(0);
+  const modalRef = React.useRef<HTMLDivElement>(null);
+  const [position, setPosition] = React.useState({ x: 0, y: 0 });
+
+  const property = auction ? (spaces.find(s => s.id === auction.propertyId) as Property) : null;
   
   // Calculate minimum bid: 10% increment or £10, whichever is higher
-  const minIncrement = Math.max(10, Math.floor(auction.currentBid * 0.1));
-  const minimumBid = auction.currentBid === 0 
-    ? Math.max(10, Math.floor((property?.price ?? 100) * 0.1)) // Opening bid: 10% of property value
-    : auction.currentBid + minIncrement;
-  
-  const [bidAmount, setBidAmount] = React.useState(minimumBid);
+  const minIncrement = auction ? Math.max(10, Math.floor(auction.currentBid * 0.1)) : 0;
+  const minimumBid = auction 
+    ? (auction.currentBid === 0 
+      ? Math.max(10, Math.floor((property?.price ?? 100) * 0.1)) // Opening bid: 10% of property value
+      : auction.currentBid + minIncrement)
+    : 0;
   
   // Update bid amount when minimum changes
   React.useEffect(() => {
-    setBidAmount(minimumBid);
-  }, [minimumBid]);
+    if (auction && bidAmount < minimumBid) {
+      setBidAmount(minimumBid);
+    }
+  }, [minimumBid, auction, bidAmount]);
   
-  const activePlayer = players[auction.activePlayerIndex];
-  const highestBidder = auction.highestBidder !== null 
+  const activePlayer = auction ? players[auction.activePlayerIndex] : null;
+  const highestBidder = (auction && auction.highestBidder !== null)
     ? players[auction.highestBidder] 
     : null;
 
   // Only allow human player to bid for themselves
-  const isMyTurn = auction.activePlayerIndex === myPlayerIndex;
+  const isMyTurn = (auction && activePlayer) ? auction.activePlayerIndex === myPlayerIndex : false;
   const canBid = isMyTurn && activePlayer && !activePlayer.isAI && !activePlayer.bankrupt;
 
   const handleBid = () => {
-    if (!canBid) {
+    if (!canBid || !auction) {
       console.warn("[AuctionModal] Attempted to bid for non-human player or not your turn");
       return;
     }
-    if (bidAmount >= minimumBid && activePlayer && bidAmount <= activePlayer.cash) {
+    if (activePlayer && bidAmount >= minimumBid && bidAmount <= activePlayer.cash) {
       useGameStore.getState().placeBid(auction.activePlayerIndex, bidAmount);
       audioManager.playBid();
     }
   };
 
   const handlePass = () => {
-    if (!canBid) {
+    if (!canBid || !auction) {
       console.warn("[AuctionModal] Attempted to pass for non-human player or not your turn");
       return;
     }
@@ -55,16 +64,12 @@ export const AuctionModal: React.FC<Props> = ({ auction, property, players, myPl
   };
 
   // Quick bid buttons based on minimum bid
-  const quickBids = [
+  const quickBids = activePlayer ? [
     minimumBid,
     minimumBid + Math.max(10, Math.floor(minimumBid * 0.25)),
     minimumBid + Math.max(20, Math.floor(minimumBid * 0.5)),
-  ].filter(b => b <= (activePlayer?.cash ?? 0));
+  ].filter(b => b <= activePlayer.cash) : [];
 
-  // Use ref to measure actual modal size and center properly
-  const modalRef = React.useRef<HTMLDivElement>(null);
-  const [position, setPosition] = React.useState({ x: 0, y: 0 });
-  
   React.useEffect(() => {
     const updatePosition = () => {
       if (modalRef.current) {
@@ -77,7 +82,6 @@ export const AuctionModal: React.FC<Props> = ({ auction, property, players, myPl
             const modalAreaWidth = 320;
             const modalAreaTop = 12;
             const rightMargin = 12;
-            const spacing = 20; // Space for multiple modals if needed
             // Position on the right side
             const modalX = window.innerWidth - modalAreaWidth - rightMargin;
             // Position at top of modal area
@@ -103,6 +107,8 @@ export const AuctionModal: React.FC<Props> = ({ auction, property, players, myPl
       window.removeEventListener('resize', updatePosition);
     };
   }, []);
+
+  if (!auction || !property) return null;
 
   return (
     <AnimatePresence>

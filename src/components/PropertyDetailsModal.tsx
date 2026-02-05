@@ -162,8 +162,17 @@ export const PropertyDetailsModal: React.FC<PropertyDetailsModalProps> = ({ prop
               <div>
                 <strong>Rent Calculation:</strong>
                 <div style={{ marginLeft: "12px", marginTop: "4px", fontSize: "13px" }}>
-                  <div>1 utility owned: 4× dice roll</div>
-                  <div>2 utilities owned: 10× dice roll</div>
+                  <div>
+                    1 utility owned: {(4 * (property.valueMultiplier ?? 1)).toFixed(1)}× dice roll
+                  </div>
+                  <div>
+                    2 utilities owned: {(10 * (property.valueMultiplier ?? 1)).toFixed(1)}× dice roll
+                  </div>
+                  {property.valueMultiplier !== 1.0 && (
+                    <div style={{ fontSize: "11px", color: "#666", marginTop: "2px" }}>
+                      (Adjusted for market value: {Math.round(property.valueMultiplier * 100)}%)
+                    </div>
+                  )}
                 </div>
               </div>
             )}

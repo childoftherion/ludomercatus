@@ -64,6 +64,36 @@ export const PlayerPropertiesPanel = ({ playerIndex, myPlayerIndex }: PlayerProp
     return calculateNetWorth({ players, spaces } as any, playerIndex);
   }, [players, spaces, playerIndex, player]);
 
+  const selectedProperty = selectedPropertyId !== null 
+    ? spaces.find(s => s.id === selectedPropertyId) as Property 
+    : null;
+
+  const canBuild = selectedProperty && 
+                  selectedProperty.type === "property" && 
+                  selectedProperty.colorGroup &&
+                  hasMonopoly(playerIndex, selectedProperty.colorGroup) &&
+                  !selectedProperty.mortgaged;
+
+  // Debug logging for build availability
+  React.useEffect(() => {
+    if (isYou && selectedProperty && player) {
+      const buildDebug = {
+        selectedProperty: selectedProperty.name,
+        type: selectedProperty.type,
+        colorGroup: selectedProperty.colorGroup,
+        hasMonopoly: selectedProperty.colorGroup ? hasMonopoly(playerIndex, selectedProperty.colorGroup) : false,
+        mortgaged: selectedProperty.mortgaged,
+        canBuild: canBuild,
+        houses: selectedProperty.houses,
+        hotel: selectedProperty.hotel,
+        buildingCost: selectedProperty.buildingCost,
+        playerCash: player.cash,
+        canAfford: player.cash >= (selectedProperty.buildingCost ?? 0),
+      };
+      console.log("[Build Debug]", buildDebug);
+    }
+  }, [isYou, selectedProperty, canBuild, playerIndex, player]);
+
   if (!player) return null;
 
   // Get all properties owned by this player
@@ -92,36 +122,6 @@ export const PlayerPropertiesPanel = ({ playerIndex, myPlayerIndex }: PlayerProp
     if (myPlayerIndex === null || myPlayerIndex === playerIndex) return;
     startTrade(myPlayerIndex, playerIndex);
   };
-
-  const selectedProperty = selectedPropertyId !== null 
-    ? spaces.find(s => s.id === selectedPropertyId) as Property 
-    : null;
-
-  const canBuild = selectedProperty && 
-                  selectedProperty.type === "property" && 
-                  selectedProperty.colorGroup &&
-                  hasMonopoly(playerIndex, selectedProperty.colorGroup) &&
-                  !selectedProperty.mortgaged;
-
-  // Debug logging for build availability
-  React.useEffect(() => {
-    if (isYou && selectedProperty) {
-      const buildDebug = {
-        selectedProperty: selectedProperty.name,
-        type: selectedProperty.type,
-        colorGroup: selectedProperty.colorGroup,
-        hasMonopoly: selectedProperty.colorGroup ? hasMonopoly(playerIndex, selectedProperty.colorGroup) : false,
-        mortgaged: selectedProperty.mortgaged,
-        canBuild: canBuild,
-        houses: selectedProperty.houses,
-        hotel: selectedProperty.hotel,
-        buildingCost: selectedProperty.buildingCost,
-        playerCash: player.cash,
-        canAfford: player.cash >= (selectedProperty.buildingCost ?? 0),
-      };
-      console.log("[Build Debug]", buildDebug);
-    }
-  }, [isYou, selectedProperty, canBuild, playerIndex, player]);
 
   return (
     <div

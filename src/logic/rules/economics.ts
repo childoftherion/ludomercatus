@@ -33,10 +33,12 @@ export const calculateNetWorth = (state: GameState, playerIndex: number): number
       // The mortgage value is what they'd get if they mortgage, but if already mortgaged,
       // they have that cash already. The property's "value" in net worth is the unmortgage cost.
       // Simpler approach: property value = price, minus mortgage value if mortgaged
-      netWorth += property.price - property.mortgageValue
+      const effectivePrice = Math.round(property.price * property.valueMultiplier)
+      netWorth += effectivePrice - property.mortgageValue
     } else {
-      // Unmortgaged property at full price
-      netWorth += property.price
+      // Unmortgaged property at full price (adjusted for value fluctuation)
+      const effectivePrice = Math.round(property.price * property.valueMultiplier)
+      netWorth += effectivePrice
     }
 
     // Add building values at liquidation price (50% of cost)
@@ -53,7 +55,7 @@ export const calculateNetWorth = (state: GameState, playerIndex: number): number
   // Add value of jail free cards (estimated at £50 each)
   netWorth += player.jailFreeCards * 50
 
-  return netWorth
+  return Math.round(netWorth)
 }
 
 /**

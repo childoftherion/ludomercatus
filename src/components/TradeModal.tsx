@@ -3,14 +3,19 @@ import { motion, AnimatePresence } from "framer-motion";
 import { useGameStore } from "../store/gameStore";
 import type { TradeState, Player, Space, Property, TradeOffer } from "../types/game";
 
-interface Props {
-  trade: TradeState;
-  players: Player[];
-  spaces: Space[];
-  myPlayerIndex: number;
-}
-
-export const TradeModal: React.FC<Props> = ({ trade, players, spaces, myPlayerIndex }) => {
+export const TradeModal: React.FC = () => {
+  const trade = useGameStore(s => s.trade);
+  const players = useGameStore(s => s.players);
+  const spaces = useGameStore(s => s.spaces);
+  const clientId = useGameStore(s => s.clientId);
+  const updateTradeOffer = useGameStore((s) => s.updateTradeOffer);
+  const proposeTrade = useGameStore((s) => s.proposeTrade);
+  const acceptTrade = useGameStore((s) => s.acceptTrade);
+  const rejectTrade = useGameStore((s) => s.rejectTrade);
+  const cancelTrade = useGameStore((s) => s.cancelTrade);
+  const counterOffer = useGameStore((s) => s.counterOffer);
+  const acceptCounterOffer = useGameStore((s) => s.acceptCounterOffer);
+  const getPlayerProperties = useGameStore((s) => s.getPlayerProperties);
   
   // Use ref to measure actual modal size and center properly
   const modalRef = React.useRef<HTMLDivElement>(null);
@@ -28,7 +33,6 @@ export const TradeModal: React.FC<Props> = ({ trade, players, spaces, myPlayerIn
             const modalAreaWidth = 320;
             const modalAreaTop = 12;
             const rightMargin = 12;
-            const spacing = 20; // Space for multiple modals if needed
             // Position on the right side
             const modalX = window.innerWidth - modalAreaWidth - rightMargin;
             // Position at top of modal area
@@ -54,33 +58,28 @@ export const TradeModal: React.FC<Props> = ({ trade, players, spaces, myPlayerIn
       window.removeEventListener('resize', updatePosition);
     };
   }, []);
-  const updateTradeOffer = useGameStore((s) => s.updateTradeOffer);
-  const proposeTrade = useGameStore((s) => s.proposeTrade);
-  const acceptTrade = useGameStore((s) => s.acceptTrade);
-  const rejectTrade = useGameStore((s) => s.rejectTrade);
-  const cancelTrade = useGameStore((s) => s.cancelTrade);
-  const counterOffer = useGameStore((s) => s.counterOffer);
-  const acceptCounterOffer = useGameStore((s) => s.acceptCounterOffer);
-  const getPlayerProperties = useGameStore((s) => s.getPlayerProperties);
-  
-  const { offer, status, counterOffer: counterOfferData, counterOfferMadeBy } = trade;
-  const fromPlayer = players[offer.fromPlayer]!;
-  const toPlayer = players[offer.toPlayer]!;
-  
-  // Who is viewing the modal?
-  const isInitiator = myPlayerIndex === offer.fromPlayer;
-  const isReceiver = myPlayerIndex === offer.toPlayer;
-  
-  // Check if counter-offer has been made
-  const hasCounterOffer = status === "counter_pending" && counterOfferData !== null;
-  const canMakeCounterOffer = status === "pending" && isReceiver && counterOfferMadeBy !== myPlayerIndex;
-  
-  const fromPlayerOwnedProps = getPlayerProperties(offer.fromPlayer).filter(p => p.houses === 0 && !p.hotel);
-  const toPlayerOwnedProps = getPlayerProperties(offer.toPlayer).filter(p => p.houses === 0 && !p.hotel);
-  
+
+  const myPlayerIndex = React.useMemo(() => {
+    return players.findIndex(p => p.clientId === clientId);
+  }, [players, clientId]);
+
   // State for counter-offer creation
   const [isCreatingCounterOffer, setIsCreatingCounterOffer] = React.useState(false);
   const [counterOfferDraft, setCounterOfferDraft] = React.useState<TradeOffer | null>(null);
+
+  if (!trade) return null;
+  
+  const { offer, status, counterOffer: counterOfferData, counterOfferMadeBy } = trade;
+
+  const fromPlayer = players.find(p => p.id === offer.fromPlayer)!;
+  const toPlayer = players.find(p => p.id === offer.toPlayer)!;
+  const isInitiator = fromPlayer.clientId === clientId;
+  const isReceiver = toPlayer.clientId === clientId;
+  const hasCounterOffer = !!counterOfferData;
+  const canMakeCounterOffer = isReceiver && !hasCounterOffer && status === "pending";
+
+  const fromPlayerOwnedProps = getPlayerProperties(fromPlayer.id);
+  const toPlayerOwnedProps = getPlayerProperties(toPlayer.id);
 
   const handleToggleProperty = (propId: number, side: "from" | "to") => {
     if (status !== "draft") return;

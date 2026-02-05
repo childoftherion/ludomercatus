@@ -41,23 +41,23 @@ export const calculateRent = (state: GameState, property: Property, diceTotal: n
   // Apply economic event modifiers
   if (isEconomicEventActive(state, "recession")) {
     // Recession: 25% rent reduction
-    rent = Math.floor(rent * 0.75);
+    rent = Math.round(rent * 0.75);
   } else if (isEconomicEventActive(state, "bull_market")) {
     // Bull Market: 20% rent increase
-    rent = Math.floor(rent * 1.20);
+    rent = Math.round(rent * 1.20);
   }
   
   // Phase 3: Apply property value multiplier (appreciation/depreciation)
   if (state.settings?.enablePropertyValueFluctuation && property.valueMultiplier !== 1.0) {
-    rent = Math.floor(rent * property.valueMultiplier);
+    rent = Math.round(rent * property.valueMultiplier);
   }
 
   // Phase 3: Chapter 11 Rent Reduction
   // Players in Chapter 11 restructuring collect reduced rent (typically 50%)
   const owner = state.players[property.owner];
   if (owner?.inChapter11) {
-    rent = Math.floor(rent * 0.5);
+    rent = Math.round(rent * 0.5);
   }
 
-  return rent;
+  return Math.max(0, Math.round(rent));
 };

@@ -11,7 +11,7 @@ export const MultiplayerLobby = () => {
   const leaveRoom = useGameStore((s) => s.leaveRoom);
   const clientId = useGameStore((s) => s.clientId);
   
-  const myPlayer = players.find(p => p.clientId === clientId);
+  const myPlayer = React.useMemo(() => players.find(p => p.clientId === clientId), [players, clientId]);
 
   const [name, setName] = React.useState("");
   const [token, setToken] = React.useState("");

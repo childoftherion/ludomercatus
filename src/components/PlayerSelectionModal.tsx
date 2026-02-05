@@ -1,7 +1,6 @@
 import React from "react"
 import { motion } from "framer-motion"
 import { useGameStore } from "../store/gameStore"
-import { useLocalStore } from "../store/localStore"
 
 interface PlayerSelectionModalProps {
   onPlayerSelected: (index: number) => void
@@ -12,7 +11,8 @@ export const PlayerSelectionModal: React.FC<PlayerSelectionModalProps> = ({
 }) => {
   const players = useGameStore((s) => s.players)
   const phase = useGameStore((s) => s.phase)
-  const { clientId } = useLocalStore()
+  const clientId = useGameStore((s) => s.clientId)
+  const assignPlayer = useGameStore((s) => s.assignPlayer)
 
   const myPlayerIndex = React.useMemo(() => {
     return players.findIndex((p) => p.clientId === clientId)
@@ -70,7 +70,7 @@ export const PlayerSelectionModal: React.FC<PlayerSelectionModalProps> = ({
                 key={player.id}
                 whileHover={{ scale: 1.02 }}
                 whileTap={{ scale: 0.98 }}
-                onClick={() => onPlayerSelected(index)}
+                onClick={() => assignPlayer(index, clientId)}
                 disabled={disabled}
                 style={{
                   padding: "16px",
