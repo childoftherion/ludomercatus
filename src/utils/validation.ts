@@ -230,7 +230,7 @@ export function validateTradeOffer(
   }
   
   // Validate cash
-  if (offer.cashOffered > fromPlayer.cash) {
+  if (offer.cashOffered > 0 && offer.cashOffered > fromPlayer.cash) {
     return { valid: false, error: "Insufficient cash for trade" };
   }
   

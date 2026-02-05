@@ -3299,15 +3299,17 @@ export class GameRoom implements GameActions {
     if (!fromPlayer || !toPlayer) return { valid: false, error: "Invalid players" }
 
     // Check cash
-    if (fromPlayer.cash < offer.cashOffered)
+    // ALLOW negative cash for receiving player if it's a gift or beneficial trade
+    // BUT forbid giving more cash than they currently have if they are already negative
+    if (offer.cashOffered > 0 && fromPlayer.cash < offer.cashOffered)
       return {
         valid: false,
-        error: `${fromPlayer.name} has insufficient cash`,
+        error: `${fromPlayer.name} has insufficient cash to offer`,
       }
-    if (toPlayer.cash < offer.cashRequested)
+    if (offer.cashRequested > 0 && toPlayer.cash < offer.cashRequested)
       return {
         valid: false,
-        error: `${toPlayer.name} has insufficient cash`,
+        error: `${toPlayer.name} has insufficient cash to give`,
       }
 
     // Check jail cards
@@ -3506,7 +3508,7 @@ export class GameRoom implements GameActions {
     if (!receiver || !originalInitiator) return
 
     // Validate cash amounts
-    if (counterOffer.cashOffered > receiver.cash) {
+    if (counterOffer.cashOffered > 0 && counterOffer.cashOffered > receiver.cash) {
       this.addLogEntry(
         `${receiver.name} doesn't have enough cash for counter-offer`,
         "system",
@@ -3515,7 +3517,7 @@ export class GameRoom implements GameActions {
       return
     }
 
-    if (counterOffer.cashRequested > originalInitiator.cash) {
+    if (counterOffer.cashRequested > 0 && counterOffer.cashRequested > originalInitiator.cash) {
       this.addLogEntry(
         `${originalInitiator.name} doesn't have enough cash for this counter-offer`,
         "system",
