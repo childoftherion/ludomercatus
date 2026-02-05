@@ -28,6 +28,9 @@ export interface GameActions {
   getMaxLoanAmount?: (playerIndex: number) => number;
   // Phase 3: Rent Negotiation
   forgiveRent?: () => void;
+  offerPaymentPlan?: (partialPayment: number, interestRate: number) => void;
+  acceptPaymentPlan?: () => void;
+  rejectPaymentPlan?: () => void;
   createRentIOU?: (partialPayment: number) => void;
   payIOU?: (debtorIndex: number, iouId: number, amount?: number) => void;
   demandImmediatePaymentOrProperty?: (propertyIdToTransfer?: number) => void;
@@ -205,54 +208,66 @@ export const executeAITurn = (state: GameState, actions: GameActions) => {
 
   // --- Phase 3: Handle Rent Negotiation (as creditor or debtor) ---
   if (state.phase === "awaiting_rent_negotiation" && state.pendingRentNegotiation) {
-    const { creditorIndex, debtorIndex, rentAmount, debtorCanAfford } = state.pendingRentNegotiation;
+    const negotiation = state.pendingRentNegotiation;
+    const { creditorIndex, debtorIndex, rentAmount, debtorCanAfford, status, proposedIOU } = negotiation;
     
     // AI is the creditor - decide what to do
-    if (creditorIndex === playerIndex) {
+    if (creditorIndex === playerIndex && status === "creditor_decision") {
       const debtor = state.players[debtorIndex];
       if (!debtor) return;
       
-      // Check if debtor has valuable properties
-      const debtorProperties = state.spaces.filter(
-        (s): s is Property => 
-          isProperty(s) && 
-          s.owner === debtorIndex && 
-          !s.mortgaged &&
-          s.houses === 0 && 
-          !s.hotel
-      );
-      
-      // Calculate total property value
-      const totalPropertyValue = debtorProperties.reduce((sum, prop) => sum + prop.price, 0);
-      
-      // Strategy: If debtor can pay at least 50% OR has properties worth more than the debt, accept IOU
-      // Otherwise, demand property transfer or force bankruptcy
-      if (debtorCanAfford >= rentAmount * 0.5 || totalPropertyValue >= rentAmount) {
-        // Debtor can pay at least half OR has valuable properties - accept IOU
-        if (actions.createRentIOU) {
-          actions.createRentIOU(debtorCanAfford);
-          return;
-        }
-      } else if (debtorProperties.length > 0) {
-        // Debtor has properties but can't pay much - demand best property
-        // Find the most valuable property
-        const bestProperty = debtorProperties.reduce((best, prop) => 
-          prop.price > (best?.price ?? 0) ? prop : best
-        );
+      // Strategy: 
+      // 1. If we haven't offered a plan yet, try to offer one with interest
+      // 2. If a plan was rejected, try fallback (seize property or forgive)
+
+      // If no plan has been offered or a previous one was rejected (proposedIOU is undefined in creditor_decision)
+      if (!proposedIOU && actions.offerPaymentPlan) {
+        // AI prefers a payment plan if the debtor has some assets or cash
+        const debtorNetWorth = calculateNetWorth(state, debtorIndex);
         
-        if (bestProperty && actions.demandImmediatePaymentOrProperty) {
-          actions.demandImmediatePaymentOrProperty(bestProperty.id);
+        if (debtorNetWorth > rentAmount * 0.5) {
+          // Offer a plan: pay what they have, rest as IOU
+          // Medium/Hard AI uses standard rate, Easy AI might offer 0% (forgive partially)
+          const interestRate = difficulty === "easy" ? 0 : (state.settings?.iouInterestRate ?? 0.05);
+          actions.offerPaymentPlan(debtorCanAfford, interestRate);
           return;
-        }
-      } else {
-        // Debtor can't pay much and has no properties - force bankruptcy
-        if (actions.demandImmediatePaymentOrProperty) {
-          actions.demandImmediatePaymentOrProperty(undefined);
-          return;
+        } else {
+          // Debtor is too poor for a plan, try to seize property
+          const debtorProperties = state.spaces.filter(
+            (s): s is Property => isProperty(s) && s.owner === debtorIndex && !s.mortgaged
+          );
+
+          if (debtorProperties.length > 0 && actions.demandImmediatePaymentOrProperty) {
+            const bestProperty = debtorProperties.reduce((best, prop) => 
+              prop.price > (best?.price ?? 0) ? prop : best
+            );
+            actions.demandImmediatePaymentOrProperty(bestProperty.id);
+            return;
+          } else if (actions.forgiveRent) {
+            // Nothing to take, just forgive or force bankruptcy
+            // AI is more likely to forgive if "easy" or if rent is small
+            if (difficulty === "easy" || rentAmount < 100) {
+              actions.forgiveRent();
+            } else if (actions.demandImmediatePaymentOrProperty) {
+              actions.demandImmediatePaymentOrProperty(undefined); // Force bankruptcy
+            }
+            return;
+          }
         }
       }
     }
-    // Note: When AI is the debtor, they don't need to do anything - the creditor makes all decisions
+    
+    // AI is the debtor - decide whether to accept the offered plan
+    if (debtorIndex === playerIndex && status === "debtor_decision" && proposedIOU) {
+      // AI almost always accepts a payment plan as it's better than immediate bankruptcy
+      // Only reject if the interest rate is absurdly high (e.g. > 50% - not currently possible via UI but for future proofing)
+      if (proposedIOU.interestRate <= 0.5 && actions.acceptPaymentPlan) {
+        actions.acceptPaymentPlan();
+      } else if (actions.rejectPaymentPlan) {
+        actions.rejectPaymentPlan();
+      }
+      return;
+    }
   }
 
   // --- Phase 2: Smart Loan Management ---

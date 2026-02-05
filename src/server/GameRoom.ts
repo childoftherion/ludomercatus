@@ -1256,6 +1256,7 @@ export class GameRoom implements GameActions {
         propertyId,
         rentAmount,
         debtorCanAfford: debtor.cash,
+        status: "creditor_decision",
       },
     })
 
@@ -1285,6 +1286,114 @@ export class GameRoom implements GameActions {
       `${creditor?.name} forgave £${negotiation.rentAmount} rent owed by ${debtor?.name}`,
       "rent",
       negotiation.creditorIndex,
+    )
+  }
+
+  // Creditor proposes an IOU (payment plan)
+  public offerPaymentPlan(partialPayment: number, interestRate: number) {
+    const negotiation = this.state.pendingRentNegotiation
+    if (!negotiation || negotiation.status !== "creditor_decision") return
+
+    const creditor = this.state.players[negotiation.creditorIndex]
+    const debtor = this.state.players[negotiation.debtorIndex]
+    if (!creditor || !debtor) return
+
+    this.setState({
+      pendingRentNegotiation: {
+        ...negotiation,
+        status: "debtor_decision",
+        proposedIOU: {
+          partialPayment: Math.floor(partialPayment),
+          interestRate,
+        },
+      },
+    })
+
+    this.addLogEntry(
+      `${creditor.name} offered a payment plan to ${debtor.name}: £${partialPayment} now, rest as IOU at ${interestRate * 100}% interest`,
+      "rent",
+      negotiation.creditorIndex,
+    )
+  }
+
+  // Debtor accepts the proposed payment plan
+  public acceptPaymentPlan() {
+    const negotiation = this.state.pendingRentNegotiation
+    if (!negotiation || negotiation.status !== "debtor_decision" || !negotiation.proposedIOU) return
+
+    const { debtorIndex, creditorIndex, rentAmount, proposedIOU } = negotiation
+    const { partialPayment, interestRate } = proposedIOU
+    const debtor = this.state.players[debtorIndex]
+    const creditor = this.state.players[creditorIndex]
+
+    if (!debtor || !creditor) return
+
+    // Ensure partial payment doesn't exceed what debtor has
+    const actualPayment = Math.floor(Math.min(partialPayment, debtor.cash))
+    const remainingDebt = Math.round(rentAmount - actualPayment)
+
+    // Create IOU for remaining amount
+    const newIOU: IOU = {
+      id: Date.now(),
+      debtorId: debtorIndex,
+      creditorId: creditorIndex,
+      originalAmount: remainingDebt,
+      currentAmount: remainingDebt,
+      interestRate: interestRate,
+      turnCreated: this.state.turn,
+      reason: `Rent for ${(this.state.spaces.find((s) => s.id === negotiation.propertyId) as Property)?.name || "property"}`,
+    }
+
+    this.setState({
+      players: this.state.players.map((p, i) => {
+        if (i === debtorIndex) {
+          return {
+            ...p,
+            cash: p.cash - actualPayment,
+            iousPayable: [...p.iousPayable, newIOU],
+          }
+        }
+        if (i === creditorIndex) {
+          return {
+            ...p,
+            cash: p.cash + actualPayment,
+            iousReceivable: [...p.iousReceivable, newIOU],
+          }
+        }
+        return p
+      }),
+      phase: "resolving_space",
+      pendingRentNegotiation: null,
+      utilityMultiplierOverride: null,
+    })
+
+    this.addLogEntry(
+      `${debtor.name} accepted the payment plan from ${creditor.name}`,
+      "rent",
+      debtorIndex,
+    )
+  }
+
+  // Debtor rejects the proposed payment plan
+  public rejectPaymentPlan() {
+    const negotiation = this.state.pendingRentNegotiation
+    if (!negotiation || negotiation.status !== "debtor_decision") return
+
+    const creditor = this.state.players[negotiation.creditorIndex]
+    const debtor = this.state.players[negotiation.debtorIndex]
+
+    this.setState({
+      pendingRentNegotiation: {
+        ...negotiation,
+        status: "creditor_decision",
+        proposedIOU: undefined,
+      },
+    })
+
+    this.addLogEntry(
+      `${debtor?.name} rejected the payment plan. ${creditor?.name} must choose another option.`,
+      "rent",
+      negotiation.debtorIndex,
     )
   }
 

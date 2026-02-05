@@ -329,6 +329,11 @@ export interface GameState {
     propertyId: number;
     rentAmount: number;
     debtorCanAfford: number;
+    status: "creditor_decision" | "debtor_decision";
+    proposedIOU?: {
+      partialPayment: number;
+      interestRate: number;
+    };
   } | null;
   
   // Phase 3: Bankruptcy Restructuring

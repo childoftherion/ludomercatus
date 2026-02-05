@@ -60,6 +60,9 @@ type GameStore = GameState & {
   
   // Phase 3: Rent Negotiation
   forgiveRent: () => void;
+  offerPaymentPlan: (partialPayment: number, interestRate: number) => void;
+  acceptPaymentPlan: () => void;
+  rejectPaymentPlan: () => void;
   createRentIOU: (partialPayment: number) => void;
   payIOU: (debtorIndex: number, iouId: number, amount?: number) => void;
   demandImmediatePaymentOrProperty: (propertyIdToTransfer?: number) => void;
@@ -244,7 +247,7 @@ export const useGameStore = create<GameStore>((set, get) => ({
     "rejectTrade", "cancelTrade", "counterOffer", "acceptCounterOffer",
     "executeAITurn", "executeAITradeResponse",
     "chooseTaxOption", "updateSettings", "takeLoan", "repayLoan", "getMaxLoanAmount",
-    "forgiveRent", "createRentIOU", "payIOU", "demandImmediatePaymentOrProperty",
+    "forgiveRent", "offerPaymentPlan", "acceptPaymentPlan", "rejectPaymentPlan", "createRentIOU", "payIOU", "demandImmediatePaymentOrProperty",
     "buyPropertyInsurance", "getInsuranceCost",
     "enterChapter11", "declineRestructuring",
     "appreciateColorGroup", "depreciateColorGroup", "assignPlayer"
