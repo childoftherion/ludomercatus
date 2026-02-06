@@ -41,6 +41,9 @@ export interface GameActions {
   // Phase 3: Bankruptcy
   enterChapter11?: () => void;
   declineRestructuring?: () => void;
+  // Phase 3: Debt Service & Foreclosure
+  payDebtService?: () => void;
+  handleForeclosureDecision?: (outcome: "restructure" | "foreclose", propertyId?: number) => void;
 }
 
 const isProperty = (space: any): space is Property => {
@@ -157,6 +160,55 @@ export const executeAITurn = (state: GameState, actions: GameActions) => {
   // Calculate AI's net worth for economic decisions
   const netWorth = calculateNetWorth(state, playerIndex);
   const cashReserve = Math.max(200, netWorth * modifiers.cashReserveMultiplier);
+
+  // --- Phase 3: Handle Debt Service ---
+  if (state.phase === "awaiting_debt_service" && state.pendingDebtService) {
+    if (state.pendingDebtService.playerIndex === playerIndex && actions.payDebtService) {
+      console.log(`[AI] ${player.name} paying debt service of ${state.pendingDebtService.totalInterestDue}`);
+      actions.payDebtService();
+      return;
+    }
+  }
+
+  // --- Phase 3: Handle Foreclosure Decision ---
+  if (state.phase === "awaiting_foreclosure_decision" && state.pendingForeclosure) {
+    const foreclosure = state.pendingForeclosure;
+    if (foreclosure.creditorIndex === playerIndex && actions.handleForeclosureDecision) {
+      const debtor = state.players[foreclosure.debtorIndex];
+      if (!debtor) return;
+
+      // Strategy: 
+      // 1. If debtor has properties, seize the best one
+      // 2. Otherwise restructure unless we are mean (hard AI)
+      
+      const debtorProperties = state.spaces.filter(
+        (s): s is Property => isProperty(s) && s.owner === foreclosure.debtorIndex && !s.mortgaged
+      );
+
+      if (debtorProperties.length > 0) {
+        // Seize most valuable property
+        const bestProperty = debtorProperties.reduce((best, prop) => 
+          prop.price > (best?.price ?? 0) ? prop : best
+        );
+        console.log(`[AI] ${player.name} seizing property ${bestProperty.name} from ${debtor.name}`);
+        actions.handleForeclosureDecision("foreclose", bestProperty.id);
+      } else {
+        // No properties to seize
+        // Check if IOU is due before forcing liquidation
+        const iou = debtor.iousPayable.find(i => i.id === foreclosure.iouId);
+        const isDue = iou && iou.roundsRemaining === 0;
+
+        if (difficulty === "hard" && isDue) {
+          console.log(`[AI] ${player.name} forcing foreclosure on ${debtor.name}`);
+          actions.handleForeclosureDecision("foreclose");
+        } else {
+          console.log(`[AI] ${player.name} restructuring debt for ${debtor.name}`);
+          actions.handleForeclosureDecision("restructure");
+        }
+      }
+      return;
+    }
+  }
 
   // --- Phase 3: Handle Bankruptcy Decision ---
   if (state.phase === "awaiting_bankruptcy_decision") {
@@ -464,20 +516,11 @@ export const executeAITurn = (state: GameState, actions: GameActions) => {
 
   // Aggressive Building
   if (player.cash > 500 && state.phase === "rolling") {
-    const budget = player.cash * 0.8;
+    const budget = player.cash - 500;
     let spent = 0;
-    let iterations = 0;
     
-    // NOTE: This loop logic relies on state updates being reflected.
-    // If we pass a static 'state' object, this loop will infinite loop or fail to see updates.
-    // Store refactoring for this is tricky.
-    // Ideally the AI controller should return a SEQUENCE of actions, or perform one action per tick.
-    // For now, let's just do ONE building action per executeAITurn call.
-    // The App.tsx useEffect calls executeAITurn every 1.2s.
-    // So if we build once, we return. Next tick we build again.
-    // This is actually better for UX (seeing houses pop up one by one).
-    
-    const monopolies = state.spaces.filter(
+    // Get all properties that can be built upon
+    const buildableProps = state.spaces.filter(
       (s): s is Property => 
         isProperty(s) &&
         s.type === "property" && 
@@ -488,15 +531,49 @@ export const executeAITurn = (state: GameState, actions: GameActions) => {
         !s.hotel
     );
 
-    if (monopolies.length > 0) {
-      monopolies.sort((a, b) => a.houses - b.houses);
-      const propToBuild = monopolies[0]!;
-      const cost = propToBuild.buildingCost ?? 0;
+    if (buildableProps.length > 0) {
+      // Sort to prioritize cheaper properties first or based on some strategy
+      // To ensure even building, we'll sort by current house count
+      buildableProps.sort((a, b) => a.houses - b.houses);
+      
+      let actionsTaken = 0;
+      // Track virtual house counts to respect even building in a single turn
+      const virtualHouses = new Map<number, number>();
+      buildableProps.forEach(p => virtualHouses.set(p.id, p.houses));
 
-      if (player.cash > cost + 500) {
-        if (propToBuild.houses === 4) actions.buildHotel(propToBuild.id);
-        else actions.buildHouse(propToBuild.id);
-        return; // Return to let UI update and wait for next tick
+      // Attempt to build as many as possible in this tick
+      let canStillBuild = true;
+      while (canStillBuild && actionsTaken < 10) { // Limit to 10 actions per tick for safety
+        canStillBuild = false;
+        
+        // Re-sort buildableProps based on virtual houses to maintain even building
+        buildableProps.sort((a, b) => (virtualHouses.get(a.id) ?? 0) - (virtualHouses.get(b.id) ?? 0));
+        
+        for (const prop of buildableProps) {
+          const currentHouses = virtualHouses.get(prop.id) ?? 0;
+          if (currentHouses >= 5) continue; // Already has hotel
+
+          const cost = prop.buildingCost ?? 0;
+          if (spent + cost <= budget) {
+            if (currentHouses === 4) {
+              actions.buildHotel(prop.id);
+            } else {
+              actions.buildHouse(prop.id);
+            }
+            
+            spent += cost;
+            virtualHouses.set(prop.id, currentHouses + 1);
+            actionsTaken++;
+            canStillBuild = true;
+            // After building one, we break to re-sort and ensure even building across the group
+            break; 
+          }
+        }
+      }
+
+      if (actionsTaken > 0) {
+        console.log(`[AI] Performed ${actionsTaken} building upgrades for ${player.name}`);
+        return;
       }
     }
   }
@@ -687,8 +764,52 @@ export const executeAITurn = (state: GameState, actions: GameActions) => {
   }
 };
 
+const calculateValuation = (state: GameState, ownerIndex: number, cash: number, propertyIds: number[], jailCards: number) => {
+  let value = cash + (jailCards * 50);
+  
+  propertyIds.forEach(id => {
+    const p = state.spaces.find(s => s.id === id);
+    if (p && isProperty(p)) {
+      let propValue = p.price;
+      
+      if (p.colorGroup) {
+         const groupProps = state.spaces.filter((s): s is Property => isProperty(s) && s.colorGroup === p.colorGroup);
+         const ownedByAI = groupProps.filter(s => s.owner === ownerIndex && s.id !== id);
+         
+         // Monopoly completion is extremely valuable (4x)
+         if (ownedByAI.length === groupProps.length - 1) {
+            propValue *= 4.0; 
+         } 
+         // Having more than half of a group is also good
+         else if (ownedByAI.length > 0) {
+            propValue *= 1.5;
+         }
+         
+         // Blocking logic: If another player owns most of this group, 
+         // it's also valuable for the AI to keep it to prevent them from completing it
+         const otherOwners = groupProps
+           .map(s => s.owner)
+           .filter((owner): owner is number => owner !== undefined && owner !== ownerIndex);
+         
+         if (otherOwners.length > 0) {
+           const counts = new Map<number, number>();
+           otherOwners.forEach(o => counts.set(o, (counts.get(o) ?? 0) + 1));
+           const maxOwnedByOther = Math.max(...Array.from(counts.values()));
+           
+           if (maxOwnedByOther === groupProps.length - 1) {
+             // This property is the last one an opponent needs!
+             propValue *= 2.5; 
+           }
+         }
+      }
+      value += propValue;
+    }
+  });
+  return value;
+};
+
 export const executeAITradeResponse = (state: GameState, actions: GameActions) => {
-  const { trade, spaces } = state;
+  const { trade } = state;
   if (!trade) return;
   
   // Handle counter-offers: AI is the original initiator responding to a counter-offer
@@ -701,41 +822,18 @@ export const executeAITradeResponse = (state: GameState, actions: GameActions) =
     // Only process if this is an AI player
     if (!aiPlayer || !aiPlayer.isAI) return;
     
-    const calculateValuation = (ownerIndex: number, cash: number, propertyIds: number[], jailCards: number) => {
-      let value = cash + (jailCards * 50);
-      
-      propertyIds.forEach(id => {
-        const p = spaces.find(s => s.id === id);
-        if (p && isProperty(p)) {
-          let propValue = p.price;
-          
-          if (p.colorGroup) {
-             const groupProps = spaces.filter((s): s is Property => isProperty(s) && s.colorGroup === p.colorGroup);
-             const ownedByPlayer = groupProps.filter(s => s.owner === ownerIndex && s.id !== id);
-             
-             if (ownedByPlayer.length === groupProps.length - 1) {
-                propValue *= 3.0; 
-             } else if (ownedByPlayer.length > 0) {
-                propValue *= 1.2;
-             }
-          }
-          value += propValue;
-        }
-      });
-      return value;
-    };
-
     // In a counter-offer, roles are reversed:
     // - counterOffer.fromPlayer (original receiver) is offering things
     // - counterOffer.toPlayer (original initiator/AI) is receiving things
-    // So for the AI: valueReceived = what they get, valueGiven = what they give
     const valueReceived = calculateValuation(
+      state,
       aiPlayerIndex, 
       counterOffer.cashRequested,  // AI receives cash
       counterOffer.propertiesRequested,  // AI receives properties
       counterOffer.jailCardsRequested  // AI receives jail cards
     );
     const valueGiven = calculateValuation(
+      state,
       aiPlayerIndex,
       counterOffer.cashOffered,  // AI gives cash
       counterOffer.propertiesOffered,  // AI gives properties
@@ -745,7 +843,6 @@ export const executeAITradeResponse = (state: GameState, actions: GameActions) =
     if (valueReceived >= valueGiven * 0.95) {
       actions.acceptCounterOffer();
     } else {
-      // Reject the counter-offer (goes back to original offer)
       actions.rejectTrade();
     }
     return;
@@ -757,32 +854,8 @@ export const executeAITradeResponse = (state: GameState, actions: GameActions) =
   const { offer } = trade;
   const aiPlayerIndex = offer.toPlayer;
   
-  const calculateValuation = (ownerIndex: number, cash: number, propertyIds: number[], jailCards: number) => {
-    let value = cash + (jailCards * 50);
-    
-    propertyIds.forEach(id => {
-      const p = spaces.find(s => s.id === id);
-      if (p && isProperty(p)) {
-        let propValue = p.price;
-        
-        if (p.colorGroup) {
-           const groupProps = spaces.filter((s): s is Property => isProperty(s) && s.colorGroup === p.colorGroup);
-           const ownedByPlayer = groupProps.filter(s => s.owner === ownerIndex && s.id !== id);
-           
-           if (ownedByPlayer.length === groupProps.length - 1) {
-              propValue *= 3.0; 
-           } else if (ownedByPlayer.length > 0) {
-              propValue *= 1.2;
-           }
-        }
-        value += propValue;
-      }
-    });
-    return value;
-  };
-
-  const valueReceived = calculateValuation(aiPlayerIndex, offer.cashOffered, offer.propertiesOffered, offer.jailCardsOffered);
-  const valueGiven = calculateValuation(aiPlayerIndex, offer.cashRequested, offer.propertiesRequested, offer.jailCardsRequested);
+  const valueReceived = calculateValuation(state, aiPlayerIndex, offer.cashOffered, offer.propertiesOffered, offer.jailCardsOffered);
+  const valueGiven = calculateValuation(state, aiPlayerIndex, offer.cashRequested, offer.propertiesRequested, offer.jailCardsRequested);
   
   if (valueReceived >= valueGiven * 0.95) actions.acceptTrade();
   else actions.rejectTrade();

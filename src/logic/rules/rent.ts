@@ -7,7 +7,7 @@ const isEconomicEventActive = (state: GameState, type: string): boolean => {
 };
 
 export const calculateRent = (state: GameState, property: Property, diceTotal: number): number => {
-  if (property.owner === undefined || property.mortgaged) return 0;
+  if (property.owner === undefined) return 0;
 
   let rent = 0;
 

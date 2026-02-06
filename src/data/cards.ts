@@ -177,6 +177,30 @@ export const createChanceDeck = (): Card[] => {
         cashChange: 100,
       }),
     },
+    {
+      id: 100,
+      type: "chance",
+      text: "🎟️ Won the Lottery! Collect 10% of the Jackpot holdings",
+      getEffect: () => ({
+        jackpotPercentage: 0.10,
+      }),
+    },
+    {
+      id: 101,
+      type: "chance",
+      text: "🎟️ Won the Lottery! Collect 25% of the Jackpot holdings",
+      getEffect: () => ({
+        jackpotPercentage: 0.25,
+      }),
+    },
+    {
+      id: 102,
+      type: "chance",
+      text: "🌟 Won the Lottery! Collect 50% of the Jackpot holdings",
+      getEffect: () => ({
+        jackpotPercentage: 0.5,
+      }),
+    },
   ];
 };
 

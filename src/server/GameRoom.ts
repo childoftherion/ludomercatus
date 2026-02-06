@@ -23,6 +23,7 @@ import { hasMonopoly, getPlayerProperties } from "../logic/rules/monopoly"
 import {
   calculateGoSalary,
   calculateTenPercentTax,
+  calculateNetWorth,
   getOptimalTaxChoice,
   calculateGiniCoefficient,
 } from "../logic/rules/economics"
@@ -152,6 +153,10 @@ export class GameRoom implements GameActions {
       pendingRentNegotiation: null,
       // Phase 3: Bankruptcy Restructuring
       pendingBankruptcy: null,
+      // Phase 3: Debt Service
+      pendingDebtService: null,
+      // Phase 3: Foreclosure
+      pendingForeclosure: null,
       // Jackpot system
     jackpot: 0,
     // Market History
@@ -195,6 +200,8 @@ export class GameRoom implements GameActions {
     this.cancelTrade = this.cancelTrade.bind(this)
     this.counterOffer = this.counterOffer.bind(this)
     this.acceptCounterOffer = this.acceptCounterOffer.bind(this)
+    this.payDebtService = this.payDebtService.bind(this)
+    this.handleForeclosureDecision = this.handleForeclosureDecision.bind(this)
     this.executeAITurn = this.executeAITurn.bind(this)
     this.executeAITradeResponse = this.executeAITradeResponse.bind(this)
     this.chooseTaxOption = this.chooseTaxOption.bind(this)
@@ -703,7 +710,7 @@ export class GameRoom implements GameActions {
     this.setState({
       players,
       currentPlayerIndex: 0,
-      spaces: boardSpaces as Space[],
+      spaces: JSON.parse(JSON.stringify(boardSpaces)) as Space[],
       chanceDeck: shuffleDeck(createChanceDeck()),
       communityChestDeck: shuffleDeck(createCommunityChestDeck()),
       phase: "rolling",
@@ -811,19 +818,97 @@ export class GameRoom implements GameActions {
     // Use dynamic GO salary (inflation mechanic)
     const goSalary = this.state.currentGoSalary
 
+    // Apply GO salary immediately
+    const updatedPlayersWithSalary = this.state.players.map((p, i) =>
+      i === playerIndex
+        ? {
+            ...p,
+            position: newPosition,
+            cash: p.cash + (passedGo ? goSalary : 0),
+          }
+        : p,
+    )
+
     this.setState({
-      players: this.state.players.map((p, i) =>
-        i === playerIndex
-          ? {
-              ...p,
-              position: newPosition,
-              cash: p.cash + (passedGo ? goSalary : 0),
-            }
-          : p,
-      ),
+      players: updatedPlayersWithSalary,
       passedGo,
       phase: "resolving_space",
     })
+
+    const updatedPlayer = updatedPlayersWithSalary[playerIndex]
+    if (passedGo && updatedPlayer && updatedPlayer.iousPayable.length > 0) {
+      // Check for both current interestDue AND expired IOUs
+      const interestDue = updatedPlayer.iousPayable.reduce((sum, iou) => sum + (iou.interestDue || 0), 0)
+      const expiredIOUs = updatedPlayer.iousPayable.filter(iou => (iou.roundsRemaining || 0) <= 0)
+      const totalDueAmount = interestDue + expiredIOUs.reduce((sum, iou) => sum + iou.currentAmount, 0)
+
+      if (totalDueAmount > 0) {
+        // If player has enough cash AFTER passing GO, they must pay interest immediately
+        if (updatedPlayer.cash >= interestDue && expiredIOUs.length === 0) {
+          // Auto-pay interest if no IOUs are expired and cash is sufficient
+          this.setState({
+            phase: "awaiting_debt_service",
+            pendingDebtService: {
+              playerIndex,
+              totalInterestDue: interestDue,
+              ious: updatedPlayer.iousPayable.map(iou => ({ id: iou.id, interestDue: iou.interestDue || 0 }))
+            }
+          })
+          
+          this.addLogEntry(
+            `💰 ${updatedPlayer.name} passed GO and must settle £${interestDue} in interest.`,
+            "system",
+            playerIndex
+          )
+          // We don't return here yet, we'll call payDebtService or similar if needed, 
+          // but for now let's use the phase to trigger the UI/AI.
+          return
+        } else {
+          // Player cannot afford interest OR has expired IOUs
+          // Identify the "Lead Creditor" - the one owed the most (principal + interest) across all their IOUs from this debtor
+          const creditorTotals: Record<number, number> = {}
+          updatedPlayer.iousPayable.forEach(iou => {
+            const amount = iou.currentAmount + (iou.interestDue || 0)
+            creditorTotals[iou.creditorId] = (creditorTotals[iou.creditorId] || 0) + amount
+          })
+
+          let leadCreditorId = -1
+          let maxOwed = -1
+          for (const [cId, total] of Object.entries(creditorTotals)) {
+            if (total > maxOwed) {
+              maxOwed = total
+              leadCreditorId = parseInt(cId)
+            }
+          }
+
+          if (leadCreditorId !== -1) {
+            // Find an IOU to serve as the "representative" IOU for foreclosure (ideally an expired one)
+            const representativeIou = expiredIOUs.find(iou => iou.creditorId === leadCreditorId) || 
+                                    updatedPlayer.iousPayable.find(iou => iou.creditorId === leadCreditorId)
+
+            if (representativeIou) {
+               this.setState({
+                 phase: "awaiting_foreclosure_decision",
+                 pendingForeclosure: {
+                   debtorIndex: playerIndex,
+                   creditorIndex: leadCreditorId,
+                   iouId: representativeIou.id,
+                   amountOwed: maxOwed
+                 }
+               })
+
+              const leadCreditor = this.state.players[leadCreditorId]
+              this.addLogEntry(
+                `🛑 ${updatedPlayer.name} cannot meet obligations! Lead creditor ${leadCreditor?.name} (owed £${maxOwed}) will decide how to proceed.`,
+                "system",
+                playerIndex
+              )
+              return
+            }
+          }
+        }
+      }
+    }
 
     const space = this.state.spaces[newPosition]
     const goBonus = passedGo ? ` (collected £${goSalary} passing GO)` : ""
@@ -852,7 +937,7 @@ export class GameRoom implements GameActions {
         const property = space as Property
         if (property.owner === undefined) {
           this.setState({ phase: "awaiting_buy_decision" })
-        } else if (property.owner !== playerIndex && !property.mortgaged) {
+        } else if (property.owner !== playerIndex) {
           const diceTotal = this.state.diceRoll?.total ?? 7
           this.payRent(playerIndex, property.id, diceTotal)
         }
@@ -922,8 +1007,8 @@ export class GameRoom implements GameActions {
         if (this.state.settings.enableEconomicEvents) {
           this.triggerEconomicEvent(playerIndex)
         }
-        // Check for jackpot win (30% chance if jackpot > 0)
-        if (this.state.jackpot > 0 && Math.random() < 0.3) {
+        // Check for jackpot win (15% chance if jackpot > 0)
+        if (this.state.jackpot > 0 && Math.random() < 0.15) {
           const jackpotAmount = this.state.jackpot
           this.setState({
             players: this.state.players.map((p, i) =>
@@ -1206,22 +1291,34 @@ export class GameRoom implements GameActions {
     }
 
     if (payer.cash >= rent) {
+      const jackpotShare = property.mortgaged ? Math.floor(rent * 0.2) : 0
+      const ownerShare = rent - jackpotShare
+
       this.setState({
         players: this.state.players.map((p, i) => {
           if (i === playerIndex) return { ...p, cash: p.cash - rent }
-          if (i === property.owner) return { ...p, cash: p.cash + rent }
+          if (i === property.owner) return { ...p, cash: p.cash + ownerShare }
           return p
         }),
+        jackpot: this.state.jackpot + jackpotShare,
         // Clear utility multiplier override after rent is paid
         utilityMultiplierOverride: null,
       })
 
       const owner = this.state.players[property.owner]
-      this.addLogEntry(
-        `${payer.name} paid £${rent} rent to ${owner?.name}`,
-        "rent",
-        playerIndex,
-      )
+      if (jackpotShare > 0) {
+        this.addLogEntry(
+          `${payer.name} paid £${rent} rent for mortgaged ${property.name} (£${ownerShare} to ${owner?.name}, £${jackpotShare} to Jackpot)`,
+          "rent",
+          playerIndex,
+        )
+      } else {
+        this.addLogEntry(
+          `${payer.name} paid £${rent} rent to ${owner?.name}`,
+          "rent",
+          playerIndex,
+        )
+      }
     } else if (this.state.settings.enableRentNegotiation) {
       // Phase 3: Initiate rent negotiation instead of immediate bankruptcy
       this.initiateRentNegotiation(
@@ -1332,6 +1429,13 @@ export class GameRoom implements GameActions {
     const actualPayment = Math.floor(Math.min(partialPayment, debtor.cash))
     const remainingDebt = Math.round(rentAmount - actualPayment)
 
+    const property = this.state.spaces.find((s) => s.id === negotiation.propertyId) as Property
+    const isMortgaged = property?.mortgaged || false
+    const jackpotCutRate = isMortgaged ? 0.2 : 0
+
+    const jackpotShare = Math.floor(actualPayment * jackpotCutRate)
+    const creditorShare = actualPayment - jackpotShare
+
     // Create IOU for remaining amount
     const newIOU: IOU = {
       id: Date.now(),
@@ -1341,7 +1445,11 @@ export class GameRoom implements GameActions {
       currentAmount: remainingDebt,
       interestRate: interestRate,
       turnCreated: this.state.turn,
-      reason: `Rent for ${(this.state.spaces.find((s) => s.id === negotiation.propertyId) as Property)?.name || "property"}`,
+      reason: `Rent for ${property?.name || "property"}`,
+      jackpotCutRate: jackpotCutRate > 0 ? jackpotCutRate : undefined,
+      interestDue: 0,
+      durationRounds: this.state.settings.iouDurationRounds,
+      roundsRemaining: this.state.settings.iouDurationRounds,
     }
 
     this.setState({
@@ -1356,12 +1464,13 @@ export class GameRoom implements GameActions {
         if (i === creditorIndex) {
           return {
             ...p,
-            cash: p.cash + actualPayment,
+            cash: p.cash + creditorShare,
             iousReceivable: [...p.iousReceivable, newIOU],
           }
         }
         return p
       }),
+      jackpot: this.state.jackpot + jackpotShare,
       phase: "resolving_space",
       pendingRentNegotiation: null,
       utilityMultiplierOverride: null,
@@ -1412,6 +1521,13 @@ export class GameRoom implements GameActions {
     const actualPayment = Math.floor(Math.min(partialPayment, debtor.cash))
     const remainingDebt = Math.round(rentAmount - actualPayment)
 
+    const property = this.state.spaces.find((s) => s.id === negotiation.propertyId) as Property
+    const isMortgaged = property?.mortgaged || false
+    const jackpotCutRate = isMortgaged ? 0.2 : 0
+
+    const jackpotShare = Math.floor(actualPayment * jackpotCutRate)
+    const creditorShare = actualPayment - jackpotShare
+
     // Create IOU for remaining amount
     const newIOU: IOU = {
       id: Date.now(),
@@ -1421,7 +1537,11 @@ export class GameRoom implements GameActions {
       currentAmount: remainingDebt,
       interestRate: this.state.settings.iouInterestRate,
       turnCreated: this.state.turn,
-      reason: `Rent for ${(this.state.spaces.find((s) => s.id === negotiation.propertyId) as Property)?.name || "property"}`,
+      reason: `Rent for ${property?.name || "property"}`,
+      jackpotCutRate: jackpotCutRate > 0 ? jackpotCutRate : undefined,
+      interestDue: 0,
+      durationRounds: this.state.settings.iouDurationRounds,
+      roundsRemaining: this.state.settings.iouDurationRounds,
     }
 
     this.setState({
@@ -1436,12 +1556,13 @@ export class GameRoom implements GameActions {
         if (i === creditorIndex) {
           return {
             ...p,
-            cash: p.cash + actualPayment,
+            cash: p.cash + creditorShare,
             iousReceivable: [...p.iousReceivable, newIOU],
           }
         }
         return p
       }),
+      jackpot: this.state.jackpot + jackpotShare,
       phase: "resolving_space",
       pendingRentNegotiation: null,
       utilityMultiplierOverride: null,
@@ -1465,15 +1586,15 @@ export class GameRoom implements GameActions {
     const creditor = this.state.players[iou.creditorId]
     if (!creditor) return
 
-    // Calculate interest based on rounds passed since turnCreated
-    const roundsPassed = Math.max(0, this.state.roundsCompleted - (iou.turnCreated || 0))
-    const totalInterest = Math.round(iou.originalAmount * (iou.interestRate || 0) * roundsPassed)
-    const currentTotalOwed = Math.round(iou.originalAmount + totalInterest)
+    // Total amount that can be paid includes principal and interestDue
+    const currentPrincipal = iou.currentAmount
+    const interestDue = iou.interestDue || 0
+    const totalOwed = currentPrincipal + interestDue
 
     // Ensure payment is a whole number and at least £1
     const rawPaymentAmount = amount
-      ? Math.min(amount, currentTotalOwed, debtor.cash)
-      : Math.min(currentTotalOwed, debtor.cash)
+      ? Math.min(amount, totalOwed, debtor.cash)
+      : Math.min(totalOwed, debtor.cash)
     // Round down to whole number and ensure minimum of £1
     const paymentAmount = Math.max(1, Math.floor(rawPaymentAmount))
 
@@ -1481,12 +1602,21 @@ export class GameRoom implements GameActions {
     if (
       paymentAmount <= 0 ||
       paymentAmount > debtor.cash ||
-      paymentAmount > currentTotalOwed
+      paymentAmount > totalOwed
     )
       return
 
-    const remainingDebt = Math.round(currentTotalOwed - paymentAmount)
-    const iouPaidOff = remainingDebt <= 0
+    // Pay interest first, then principal
+    const paymentTowardsInterest = Math.min(paymentAmount, interestDue)
+    const paymentTowardsPrincipal = paymentAmount - paymentTowardsInterest
+
+    const remainingInterest = interestDue - paymentTowardsInterest
+    const remainingPrincipal = currentPrincipal - paymentTowardsPrincipal
+    const iouPaidOff = remainingPrincipal <= 0
+
+    const jackpotCutRate = iou.jackpotCutRate || 0
+    const jackpotShare = Math.floor(paymentTowardsPrincipal * jackpotCutRate)
+    const creditorShare = paymentAmount - jackpotShare
 
     this.setState({
       players: this.state.players.map((p, i) => {
@@ -1498,7 +1628,7 @@ export class GameRoom implements GameActions {
               ? p.iousPayable.filter((io) => io.id !== iouId)
               : p.iousPayable.map((io) =>
                   io.id === iouId
-                    ? { ...io, currentAmount: remainingDebt }
+                    ? { ...io, currentAmount: remainingPrincipal, interestDue: remainingInterest }
                     : io,
                 ),
           }
@@ -1506,46 +1636,408 @@ export class GameRoom implements GameActions {
         if (i === iou.creditorId) {
           return {
             ...p,
-            cash: p.cash + paymentAmount,
+            cash: p.cash + creditorShare,
             iousReceivable: iouPaidOff
               ? p.iousReceivable.filter((io) => io.id !== iouId)
               : p.iousReceivable.map((io) =>
                   io.id === iouId
-                    ? { ...io, currentAmount: remainingDebt }
+                    ? { ...io, currentAmount: remainingPrincipal, interestDue: remainingInterest }
                     : io,
                 ),
           }
         }
         return p
       }),
+      jackpot: this.state.jackpot + jackpotShare,
     })
 
     if (iouPaidOff) {
       this.addLogEntry(
-        `${debtor.name} paid off IOU of £${paymentAmount} to ${creditor.name}`,
+        `${debtor.name} paid off IOU of £${paymentAmount} to ${creditor.name}${jackpotShare > 0 ? ` (£${jackpotShare} added to Jackpot)` : ""}`,
         "rent",
         debtorIndex,
       )
     } else {
+      const remainingTotal = remainingPrincipal + remainingInterest
       this.addLogEntry(
-        `${debtor.name} paid £${paymentAmount} on IOU, £${remainingDebt} remaining to ${creditor.name}`,
+        `${debtor.name} paid £${paymentAmount} on IOU, £${remainingTotal} remaining to ${creditor.name}${jackpotShare > 0 ? ` (£${jackpotShare} added to Jackpot)` : ""}`,
         "rent",
         debtorIndex,
       )
     }
   }
 
+  // Handle debt service payment when passing GO
+  public payDebtService() {
+    const debtService = this.state.pendingDebtService
+    if (!debtService) return
+
+    const playerIndex = debtService.playerIndex
+    const player = this.state.players[playerIndex]
+    if (!player) return
+
+    // Can the player afford the interest?
+    if (player.cash < debtService.totalInterestDue) {
+      // Re-run lead creditor logic if they somehow can't afford it now
+      const creditorTotals: Record<number, number> = {}
+      player.iousPayable.forEach(iou => {
+        const amount = iou.currentAmount + (iou.interestDue || 0)
+        creditorTotals[iou.creditorId] = (creditorTotals[iou.creditorId] || 0) + amount
+      })
+
+      let leadCreditorId = -1
+      let maxOwed = -1
+      for (const [cId, total] of Object.entries(creditorTotals)) {
+        if (total > maxOwed) {
+          maxOwed = total
+          leadCreditorId = parseInt(cId)
+        }
+      }
+
+      const representativeIou = player.iousPayable.find(iou => iou.creditorId === leadCreditorId)
+      if (leadCreditorId !== -1 && representativeIou) {
+        this.setState({
+          phase: "awaiting_foreclosure_decision",
+          pendingForeclosure: {
+            debtorIndex: playerIndex,
+            creditorIndex: leadCreditorId,
+            iouId: representativeIou.id,
+            amountOwed: maxOwed
+          },
+          pendingDebtService: null
+        })
+        this.addLogEntry(
+          `⚠️ ${player.name} cannot afford debt service! Lead creditor ${this.state.players[leadCreditorId]?.name} must decide how to proceed.`,
+          "system",
+          playerIndex
+        )
+        return
+      }
+    }
+
+    // Player pays all interest due
+    const updatedPlayers = this.state.players.map((p, i) => {
+      if (i === playerIndex) {
+        return {
+          ...p,
+          cash: p.cash - debtService.totalInterestDue,
+          iousPayable: p.iousPayable.map(iou => ({ ...iou, interestDue: 0 }))
+        }
+      }
+      
+      // Creditors receive their share
+      const interestToReceive = debtService.ious
+        .filter(di => {
+          const debtorIou = this.state.players[playerIndex]?.iousPayable.find(pIou => pIou.id === di.id)
+          return debtorIou?.creditorId === i
+        })
+        .reduce((sum, di) => sum + di.interestDue, 0)
+
+      if (interestToReceive > 0) {
+        return {
+          ...p,
+          cash: p.cash + interestToReceive,
+          iousReceivable: p.iousReceivable.map(iou => {
+            if (debtService.ious.some(di => di.id === iou.id)) {
+              return { ...iou, interestDue: 0 }
+            }
+            return iou
+          })
+        }
+      }
+      return p
+    })
+
+    this.setState({
+      players: updatedPlayers,
+      phase: "resolving_space",
+      pendingDebtService: null
+    })
+
+    this.addLogEntry(
+      `💰 ${player.name} paid £${debtService.totalInterestDue} in debt service interest to creditors`,
+      "system",
+      playerIndex
+    )
+
+    // Continue resolving the space
+    this.resolveSpace(playerIndex)
+  }
+
+  // Creditor decides how to handle missed debt service
+  public handleForeclosureDecision(decision: "restructure" | "foreclose", propertyId?: number) {
+    const foreclosure = this.state.pendingForeclosure
+    if (!foreclosure) return
+
+    const debtor = this.state.players[foreclosure.debtorIndex]
+    const creditor = this.state.players[foreclosure.creditorIndex]
+    if (!debtor || !creditor) return
+
+    if (decision === "restructure") {
+      // Lead Creditor decides to restructure ALL due interest for the debtor
+      const updatedPlayers = this.state.players.map((p, i) => {
+        if (i === foreclosure.debtorIndex) {
+          return {
+            ...p,
+            iousPayable: p.iousPayable.map(iou => ({
+              ...iou,
+              currentAmount: iou.currentAmount + (iou.interestDue || 0),
+              interestDue: 0
+            }))
+          }
+        }
+        
+        // Update all creditors' receivable IOUs for this debtor
+        const debtorIouIds = debtor.iousPayable.map(iou => iou.id)
+        return {
+          ...p,
+          iousReceivable: p.iousReceivable.map(iou => {
+            if (debtorIouIds.includes(iou.id)) {
+              return {
+                ...iou,
+                currentAmount: iou.currentAmount + (iou.interestDue || 0),
+                interestDue: 0
+              }
+            }
+            return iou
+          })
+        }
+      })
+
+      this.setState({
+        players: updatedPlayers,
+        phase: "resolving_space",
+        pendingForeclosure: null
+      })
+
+      this.addLogEntry(
+        `🤝 Lead creditor ${creditor.name} mandated a general restructuring of ${debtor.name}'s debts. All due interest capitalized.`,
+        "system",
+        foreclosure.creditorIndex
+      )
+      
+      this.resolveSpace(foreclosure.debtorIndex)
+    } else if (decision === "foreclose") {
+      // Find the representative IOU
+      const iou = debtor.iousPayable.find(i => i.id === foreclosure.iouId)
+      if (!iou) return
+
+      // Seize property or force sale
+      if (propertyId !== undefined) {
+        // Lead creditor seizes property for themselves
+        const property = this.state.spaces[propertyId] as Property
+        if (property && property.owner === foreclosure.debtorIndex) {
+          // Transfer ownership
+          const updatedSpaces = this.state.spaces.map((s, idx) => {
+            if (idx === propertyId) {
+              return { ...s, owner: foreclosure.creditorIndex, mortgaged: false, houses: 0, hotel: false }
+            }
+            return s
+          })
+
+          // Update player properties lists
+          const updatedPlayers = this.state.players.map((p, i) => {
+            if (i === foreclosure.debtorIndex) {
+              return { ...p, properties: p.properties.filter(id => id !== propertyId) }
+            }
+            if (i === foreclosure.creditorIndex) {
+              return { ...p, properties: [...p.properties, propertyId] }
+            }
+            return p
+          })
+
+          this.setState({
+            spaces: updatedSpaces,
+            players: updatedPlayers,
+            phase: "resolving_space",
+            pendingForeclosure: null
+          })
+
+          this.addLogEntry(
+            `🏠 Foreclosure! Lead creditor ${creditor.name} seized ${property.name} from ${debtor.name}.`,
+            "system",
+            foreclosure.creditorIndex
+          )
+
+          this.resolveSpace(foreclosure.debtorIndex)
+        }
+      } else {
+        // Force liquidation - ONLY available if the representative IOU is due
+        if (iou.roundsRemaining > 0) {
+          this.addLogEntry(
+            `🚫 ${creditor.name} cannot force liquidation yet. The IOU term has ${iou.roundsRemaining} rounds remaining.`,
+            "system",
+            foreclosure.creditorIndex
+          )
+          return
+        }
+
+        // Force liquidation of ALL due amounts (expired IOUs + all interest)
+        const expiredIOUs = debtor.iousPayable.filter(i => (i.roundsRemaining || 0) <= 0)
+        const totalInterestDue = debtor.iousPayable.reduce((sum, i) => sum + (i.interestDue || 0), 0)
+        const totalPrincipalDue = expiredIOUs.reduce((sum, i) => sum + i.currentAmount, 0)
+        const totalDue = totalInterestDue + totalPrincipalDue
+
+        this.addLogEntry(
+          `⚖️ Lead creditor ${creditor.name} demanded immediate settlement of all £${totalDue} due obligations.`,
+          "system",
+          foreclosure.creditorIndex
+        )
+        
+        if (debtor.cash < totalDue) {
+          // Debtor cannot afford to settle all due obligations
+          this.setState({ pendingForeclosure: null })
+          this.offerRestructuring(foreclosure.debtorIndex);
+        } else {
+          // Pay off all expired IOUs and all interest
+          this.setState({ pendingForeclosure: null })
+          
+          // Use payIOU for each expired IOU (this handles principal + interest)
+          expiredIOUs.forEach(eIou => {
+            this.payIOU(foreclosure.debtorIndex, eIou.id, eIou.currentAmount + (eIou.interestDue || 0))
+          })
+
+          // Pay remaining interest on non-expired IOUs
+          const remainingIousWithInterest = this.state.players[foreclosure.debtorIndex]!.iousPayable.filter(i => (i.interestDue || 0) > 0)
+          remainingIousWithInterest.forEach(rIou => {
+            this.payIOU(foreclosure.debtorIndex, rIou.id, rIou.interestDue)
+          })
+
+          this.setState({ phase: "resolving_space" })
+          this.resolveSpace(foreclosure.debtorIndex)
+        }
+      }
+    }
+  }
+
   // Apply interest to all IOUs at end of turn
   public applyIOUInterest(playerIndex: number) {
-    const player = this.state.players[playerIndex]
-    if (!player || player.iousPayable.length === 0) return
+    const activePlayers = this.state.players.filter((p) => !p.bankrupt)
+    const activeCount = activePlayers.length
+    if (activeCount === 0) return
 
-    // Simply log that interest is accruing (it's calculated on-the-fly during payment)
-    this.addLogEntry(
-      `Interest is accruing on ${player.name}'s IOUs.`,
-      "system",
-      playerIndex,
-    )
+    let anyUpdated = false
+    const updatedPlayers = this.state.players.map((p, idx) => {
+      if (p.bankrupt || p.iousPayable.length === 0) return p
+
+      let totalInterestThisTurn = 0
+      const updatedIousPayable = p.iousPayable.map((iou) => {
+        // Interest per turn = Round Interest / Number of Active Players
+        // This ensures that after a full round, the total interest equals what's due.
+        const interestPerTurn = (iou.interestRate || 0) / activeCount
+        const interest = Math.round(iou.currentAmount * interestPerTurn)
+        
+        if (interest > 0) {
+          totalInterestThisTurn += interest
+          anyUpdated = true
+          // We add interest to interestDue, which is payable on GO.
+          // We don't add to currentAmount yet to avoid compounding within the round,
+          // and to keep interestDue as the "due" amount.
+          return { 
+            ...iou, 
+            interestDue: (iou.interestDue || 0) + interest 
+          }
+        }
+        return iou
+      })
+
+      if (totalInterestThisTurn > 0) {
+        return { ...p, iousPayable: updatedIousPayable }
+      }
+      return p
+    })
+
+    if (anyUpdated) {
+      // Now sync iousReceivable for all creditors
+      const finalPlayers = updatedPlayers.map((p, idx) => {
+        if (p.bankrupt) return p
+        
+        // Find any IOUs where this player is the creditor
+        let receivedUpdated = false
+        const updatedIousReceivable = p.iousReceivable.map((ir) => {
+          // Find the corresponding IOU in the debtor's iousPayable
+          const debtor = updatedPlayers[ir.debtorId]
+          if (!debtor) return ir
+          
+          const updatedIou = debtor.iousPayable.find((up) => up.id === ir.id)
+          if (updatedIou && (updatedIou.interestDue !== ir.interestDue || updatedIou.currentAmount !== ir.currentAmount)) {
+            receivedUpdated = true
+            return updatedIou
+          }
+          return ir
+        })
+
+        return receivedUpdated ? { ...p, iousReceivable: updatedIousReceivable } : p
+      })
+
+      this.setState({ players: finalPlayers })
+    }
+  }
+
+  // Update rounds remaining for all IOUs at end of round
+  public updateIOURounds() {
+    const updatedPlayers = this.state.players.map((p) => {
+      if (p.bankrupt || p.iousPayable.length === 0) return p
+
+      const updatedIousPayable = p.iousPayable.map((iou) => ({
+        ...iou,
+        roundsRemaining: Math.max(0, iou.roundsRemaining - 1),
+      }))
+
+      return { ...p, iousPayable: updatedIousPayable }
+    })
+
+    // Sync receivables
+    const finalPlayers = updatedPlayers.map((p) => {
+      if (p.bankrupt) return p
+
+      const updatedIousReceivable = p.iousReceivable.map((ir) => {
+        const debtor = updatedPlayers[ir.debtorId]
+        const updatedIou = debtor?.iousPayable.find((up) => up.id === ir.id)
+        return updatedIou ? { ...ir, roundsRemaining: updatedIou.roundsRemaining } : ir
+      })
+
+      return { ...p, iousReceivable: updatedIousReceivable }
+    })
+
+    this.setState({ players: finalPlayers })
+  }
+
+  /**
+   * Applies a penalty to a player's net worth while they are in jail.
+   * This is a deterrent against using jail as a passive income strategy.
+   * The penalty is added to the Jackpot.
+   */
+  public applyJailPenalty(playerIndex: number) {
+    const player = this.state.players[playerIndex]
+    if (!player || !player.inJail || player.bankrupt) return
+
+    const penaltyRate = this.state.settings.jailPenaltyRate || 0
+    if (penaltyRate <= 0) return
+
+    const netWorth = calculateNetWorth(this.state, playerIndex)
+    const penaltyAmount = Math.max(1, Math.floor(netWorth * penaltyRate))
+
+    if (penaltyAmount > 0) {
+      // Deduct from cash (can go negative, requiring liquidation)
+      this.setState({
+        players: this.state.players.map((p, i) =>
+          i === playerIndex ? { ...p, cash: p.cash - penaltyAmount } : p,
+        ),
+        jackpot: this.state.jackpot + penaltyAmount,
+      })
+
+      this.addLogEntry(
+        `⚖️ Jail Penalty: ${player.name} paid £${penaltyAmount} (based on net worth) to the Jackpot`,
+        "jail",
+        playerIndex,
+      )
+
+      // If cash is negative, player might need to liquidate
+      if (player.cash - penaltyAmount < 0) {
+        this.offerRestructuring(playerIndex)
+      }
+    }
   }
 
   // Creditor demands immediate payment or property transfer
@@ -1630,9 +2122,10 @@ export class GameRoom implements GameActions {
         players: this.state.players.map((p, i) =>
           i === playerIndex ? { ...p, cash: p.cash - amount } : p,
         ),
+        jackpot: this.state.jackpot + amount,
       })
       this.addLogEntry(
-        `${player.name} paid £${amount} in taxes`,
+        `${player.name} paid £${amount} in taxes to the Jackpot`,
         "tax",
         playerIndex,
       )
@@ -1735,6 +2228,10 @@ export class GameRoom implements GameActions {
       this.applyLoanInterest(this.state.currentPlayerIndex)
       // Phase 3: Apply IOU interest at end of turn
       this.applyIOUInterest(this.state.currentPlayerIndex)
+      // Jail penalty for passive income deterrent
+      if (endingPlayer.inJail) {
+        this.applyJailPenalty(this.state.currentPlayerIndex)
+      }
       // Phase 3: Check Chapter 11 status
       if (endingPlayer.inChapter11) {
         this.checkChapter11Status(this.state.currentPlayerIndex)
@@ -1779,6 +2276,9 @@ export class GameRoom implements GameActions {
 
       // Phase 3: Check for expired insurance policies at end of round
       this.checkInsuranceExpiry()
+
+      // Phase 3: Update IOU rounds remaining
+      this.updateIOURounds()
     }
 
     const nextPlayer = this.state.players[nextPlayerIndex]
@@ -2735,9 +3235,10 @@ export class GameRoom implements GameActions {
               }
             : p,
         ),
+        jackpot: this.state.jackpot + totalInterest,
       })
       this.addLogEntry(
-        `📈 ${player.name}'s loans accrued £${totalInterest} in interest (total debt: £${updatedLoans.reduce((sum, l) => sum + l.totalOwed, 0)})`,
+        `📈 ${player.name}'s loans accrued £${totalInterest} in interest (total debt: £${updatedLoans.reduce((sum, l) => sum + l.totalOwed, 0)}, £${totalInterest} added to Jackpot)`,
         "system",
         playerIndex,
       )
@@ -2852,12 +3353,25 @@ export class GameRoom implements GameActions {
       }
     }
 
+    let jackpotUpdate = this.state.jackpot
+    if (effect.jackpotPercentage && this.state.jackpot > 0) {
+      const winAmount = Math.floor(this.state.jackpot * effect.jackpotPercentage)
+      cashChange += winAmount
+      jackpotUpdate -= winAmount
+      this.addLogEntry(
+        `🎉 ${player.name} won £${winAmount} from the Lottery (${Math.round(effect.jackpotPercentage * 100)}% of the Jackpot)!`,
+        "system",
+        playerIndex,
+      )
+    }
+
     this.setState({
       players: newPlayers.map((p, i) =>
         i === playerIndex
           ? { ...p, position: newPosition, cash: p.cash + cashChange }
           : p,
       ),
+      jackpot: jackpotUpdate,
       lastCardDrawn: card,
       // Set utility multiplier override if card specifies one
       utilityMultiplierOverride: effect.utilityMultiplier,

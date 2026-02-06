@@ -67,6 +67,10 @@ export interface IOU {
   interestRate: number; // e.g., 0.05 for 5% per turn
   turnCreated: number;
   reason: string; // e.g., "Rent for Boardwalk"
+  jackpotCutRate?: number; // Optional percentage (0.0-1.0) of each payment that goes to Jackpot instead of creditor
+  interestDue: number; // Interest accumulated that is due at GO
+  durationRounds: number; // How many rounds the IOU is valid for
+  roundsRemaining: number; // How many rounds left before the principal is due
 }
 
 export type AIDifficulty = "easy" | "medium" | "hard";
@@ -144,6 +148,7 @@ export interface CardEffect {
   passGoBonus?: boolean;     // Award GO bonus if passing
   triggerSpaceResolution?: boolean;  // Resolve the new space after moving
   utilityMultiplier?: number;  // Override utility rent multiplier (e.g., 10x for card-triggered moves)
+  jackpotPercentage?: number; // Win a percentage of the jackpot (e.g., 0.5 for 50%)
 }
 
 export interface Card {
@@ -170,6 +175,8 @@ export type GamePhase =
   | "awaiting_tax_decision"  // Player choosing between flat tax or percentage
   | "awaiting_rent_negotiation" // Player negotiating rent payment (Phase 3)
   | "awaiting_bankruptcy_decision" // Player choosing bankruptcy or restructuring (Phase 3)
+  | "awaiting_debt_service" // Player must pay GO-based debt obligations
+  | "awaiting_foreclosure_decision" // Creditor choosing how to handle missed IOU payment
   | "trading"
   | "building"
   | "auction"
@@ -234,6 +241,7 @@ export interface GameSettings {
   // Phase 3: Rent Negotiation
   enableRentNegotiation: boolean; // Allow rent payment plans and IOUs
   iouInterestRate: number; // Interest rate on IOUs per turn (e.g., 0.05 for 5%)
+  iouDurationRounds: number; // Default duration of IOUs in rounds
   
   // Phase 3: Property Insurance
   enablePropertyInsurance: boolean; // Allow players to insure properties
@@ -250,6 +258,7 @@ export interface GameSettings {
   // Economic features
   enableInflation: boolean; // GO salary increases over time
   enableProgressiveTax: boolean; // Income tax choice (10% vs flat)
+  jailPenaltyRate: number; // Percentage of net worth levied per turn in jail
 }
 
 export const DEFAULT_GAME_SETTINGS: GameSettings = {
@@ -262,6 +271,7 @@ export const DEFAULT_GAME_SETTINGS: GameSettings = {
   enableEconomicEvents: true,
   enableRentNegotiation: true,
   iouInterestRate: 0.05, // 5% interest per turn
+  iouDurationRounds: 5, // 5 rounds by default
   enablePropertyInsurance: true,
   insuranceCostPercent: 0.05, // 5% of property value
   enablePropertyValueFluctuation: true,
@@ -270,6 +280,7 @@ export const DEFAULT_GAME_SETTINGS: GameSettings = {
   chapter11Turns: 5,
   enableInflation: true,
   enableProgressiveTax: true,
+  jailPenaltyRate: 0.01, // 1% of net worth per turn
 };
 
 export interface MarketHistoryEntry {
@@ -341,6 +352,22 @@ export interface GameState {
     playerIndex: number;
     creditorIndex?: number;
     debtAmount: number;
+    restructuringPlan?: RestructuringPlan;
+  } | null;
+
+  // Phase 3: Debt Service (IOU interest payments on GO)
+  pendingDebtService: {
+    playerIndex: number;
+    totalInterestDue: number;
+    ious: { id: number; interestDue: number }[];
+  } | null;
+
+  // Phase 3: Foreclosure (Creditor decision when debtor misses IOU payment)
+  pendingForeclosure: {
+    debtorIndex: number;
+    creditorIndex: number;
+    iouId: number;
+    amountOwed: number;
   } | null;
   
   // Jackpot system

@@ -33,14 +33,22 @@ export const RentNegotiationModal: React.FC = () => {
         requestAnimationFrame(() => {
           if (modalRef.current) {
             const rect = modalRef.current.getBoundingClientRect();
-            const modalAreaWidth = 320;
-            const modalAreaTop = 12;
-            const rightMargin = 12;
-            const modalX = window.innerWidth - modalAreaWidth - rightMargin;
-            const modalY = modalAreaTop;
-            const maxY = window.innerHeight - rect.height - 20;
-            const adjustedY = Math.min(modalY, maxY);
-            setPosition({ x: modalX, y: adjustedY });
+            const isMobile = window.innerWidth < 768;
+            
+            if (isMobile) {
+              const modalX = (window.innerWidth - rect.width) / 2;
+              const modalY = (window.innerHeight - rect.height) / 2;
+              setPosition({ x: Math.max(8, modalX), y: Math.max(8, modalY) });
+            } else {
+              const modalAreaWidth = 320;
+              const modalAreaTop = 12;
+              const rightMargin = 12;
+              const modalX = window.innerWidth - modalAreaWidth - rightMargin;
+              const modalY = modalAreaTop;
+              const maxY = window.innerHeight - rect.height - 20;
+              const adjustedY = Math.min(modalY, maxY);
+              setPosition({ x: modalX, y: adjustedY });
+            }
           }
         });
       }
@@ -116,8 +124,8 @@ export const RentNegotiationModal: React.FC = () => {
           position: "fixed",
           left: `${position.x}px`,
           top: `${position.y}px`,
-          width: "360px",
-          maxWidth: "320px",
+          width: window.innerWidth < 768 ? "calc(100% - 16px)" : "320px",
+          maxWidth: "440px",
           maxHeight: "calc(100vh - 24px)",
           overflowX: "hidden",
           overflowY: "auto",

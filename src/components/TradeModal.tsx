@@ -24,23 +24,27 @@ export const TradeModal: React.FC = () => {
   React.useEffect(() => {
     const updatePosition = () => {
       if (modalRef.current) {
-        // Use requestAnimationFrame to ensure DOM is fully rendered
         requestAnimationFrame(() => {
           if (modalRef.current) {
             const rect = modalRef.current.getBoundingClientRect();
-            // Position modal on the right side (where GameLog used to be)
-            // Modals should be positioned at top: 12px, right: 12px, width: 320px
-            const modalAreaWidth = 320;
-            const modalAreaTop = 12;
-            const rightMargin = 12;
-            // Position on the right side
-            const modalX = window.innerWidth - modalAreaWidth - rightMargin;
-            // Position at top of modal area
-            const modalY = modalAreaTop;
-            // Ensure modal doesn't extend below viewport
-            const maxY = window.innerHeight - rect.height - 20; // 20px margin from bottom
-            const adjustedY = Math.min(modalY, maxY);
-            setPosition({ x: modalX, y: adjustedY });
+            const isMobile = window.innerWidth < 768;
+            
+            if (isMobile) {
+              // Center on mobile
+              const modalX = (window.innerWidth - rect.width) / 2;
+              const modalY = (window.innerHeight - rect.height) / 2;
+              setPosition({ x: Math.max(8, modalX), y: Math.max(8, modalY) });
+            } else {
+              // Position on the right side for desktop
+              const modalAreaWidth = 320;
+              const modalAreaTop = 12;
+              const rightMargin = 12;
+              const modalX = window.innerWidth - modalAreaWidth - rightMargin;
+              const modalY = modalAreaTop;
+              const maxY = window.innerHeight - rect.height - 20;
+              const adjustedY = Math.min(modalY, maxY);
+              setPosition({ x: modalX, y: adjustedY });
+            }
           }
         });
       }
@@ -204,11 +208,11 @@ export const TradeModal: React.FC = () => {
           position: "fixed",
           left: `${position.x}px`,
           top: `${position.y}px`,
-          width: "440px", // Scaled down for 100% zoom (was 580px)
-          maxWidth: "320px", // Match modal area width
-          maxHeight: "calc(100vh - 24px)", // Full height minus margins
+          width: window.innerWidth < 768 ? "calc(100% - 16px)" : "320px",
+          maxWidth: "440px",
+          maxHeight: "calc(100vh - 24px)",
           overflowY: "auto",
-          overflowX: "hidden", // Prevent horizontal scrollbars
+          overflowX: "hidden",
           color: "#fff",
           display: "flex",
           flexDirection: "column",
@@ -245,7 +249,7 @@ export const TradeModal: React.FC = () => {
         <div style={{ flex: 1, display: "flex", flexDirection: "column", gap: "8px" }}>
           <div style={{ padding: "8px", borderRadius: "8px", background: fromPlayer.color + "22", borderLeft: `3px solid ${fromPlayer.color}` }}>
             <div style={{ fontWeight: "bold", fontSize: "13px" }}>{fromPlayer.name} Offers:</div>
-            <div style={{ fontSize: "11px", opacity: 0.7 }}>Cash: £{fromPlayer.cash.toLocaleString()}</div>
+            <div style={{ fontSize: "11px", opacity: 0.7 }}>Cash: £{(fromPlayer.cash || 0).toLocaleString()}</div>
           </div>
 
           {status === "draft" ? (
@@ -286,7 +290,7 @@ export const TradeModal: React.FC = () => {
             </div>
           ) : (
             <div style={{ padding: "16px", background: "rgba(255,255,255,0.05)", borderRadius: "8px" }}>
-              {offer.cashOffered > 0 && <p>£{offer.cashOffered.toLocaleString()}</p>}
+              {offer.cashOffered > 0 && <p>£{(offer.cashOffered || 0).toLocaleString()}</p>}
               {offer.propertiesOffered.map(id => <p key={id}>• {getPropertyName(id)}</p>)}
               {offer.cashOffered === 0 && offer.propertiesOffered.length === 0 && <p style={{ fontStyle: "italic", opacity: 0.5 }}>Nothing</p>}
             </div>
@@ -300,7 +304,7 @@ export const TradeModal: React.FC = () => {
         <div style={{ flex: 1, display: "flex", flexDirection: "column", gap: "8px" }}>
           <div style={{ padding: "8px", borderRadius: "8px", background: toPlayer.color + "22", borderRight: `3px solid ${toPlayer.color}`, textAlign: "right" }}>
             <div style={{ fontWeight: "bold", fontSize: "13px" }}>{toPlayer.name} Gives:</div>
-            <div style={{ fontSize: "11px", opacity: 0.7 }}>Cash: £{toPlayer.cash.toLocaleString()}</div>
+            <div style={{ fontSize: "11px", opacity: 0.7 }}>Cash: £{(toPlayer.cash || 0).toLocaleString()}</div>
           </div>
 
           {status === "draft" ? (
@@ -341,7 +345,7 @@ export const TradeModal: React.FC = () => {
             </div>
           ) : (
             <div style={{ padding: "10px", background: "rgba(255,255,255,0.05)", borderRadius: "6px", fontSize: "12px" }}>
-              {offer.cashRequested > 0 && <p style={{ margin: "2px 0", fontSize: "12px" }}>£{offer.cashRequested.toLocaleString()}</p>}
+              {offer.cashRequested > 0 && <p style={{ margin: "2px 0", fontSize: "12px" }}>£{(offer.cashRequested || 0).toLocaleString()}</p>}
               {offer.propertiesRequested.map(id => <p key={id} style={{ margin: "2px 0", fontSize: "12px" }}>• {getPropertyName(id)}</p>)}
               {offer.cashRequested === 0 && offer.propertiesRequested.length === 0 && <p style={{ fontStyle: "italic", opacity: 0.5, fontSize: "12px", margin: "2px 0" }}>Nothing</p>}
             </div>

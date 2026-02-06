@@ -195,7 +195,7 @@ export const UserPanel: React.FC<UserPanelProps> = ({ myPlayerIndex }) => {
                               marginTop: "4px",
                             }}
                           >
-                            £{player.cash.toLocaleString()}
+                            £{(player.cash || 0).toLocaleString()}
                           </div>
                           {/* Only show Net Worth if properties are also visible to prevent calculating property value */}
                           {!shouldHideProperties && (
@@ -207,7 +207,7 @@ export const UserPanel: React.FC<UserPanelProps> = ({ myPlayerIndex }) => {
                                 marginTop: "2px",
                               }}
                             >
-                              Net: £{netWorths[index]?.toLocaleString()}
+                              Net: £{(netWorths[index] || 0).toLocaleString()}
                             </div>
                           )}
                         </>
@@ -360,8 +360,8 @@ export const UserPanel: React.FC<UserPanelProps> = ({ myPlayerIndex }) => {
                                            borderLeft: "3px solid #FF6B6B"
                                          }}>
                                            <div style={{ display: "flex", justifyContent: "space-between", marginBottom: "4px" }}>
-                                             <span style={{ fontWeight: "bold" }}>£{loan.amount.toLocaleString()} Loan</span>
-                                             <span style={{ color: "rgba(255,255,255,0.4)" }}>Owed: £{loan.totalOwed.toLocaleString()}</span>
+                                             <span style={{ fontWeight: "bold" }}>£{(loan.amount || 0).toLocaleString()} Loan</span>
+                                             <span style={{ color: "rgba(255,255,255,0.4)" }}>Owed: £{(loan.totalOwed || 0).toLocaleString()}</span>
                                            </div>
                                            <div style={{ fontSize: "9px", color: "rgba(255,255,255,0.3)" }}>
                                              Taken on Turn {loan.turnTaken} | Rate: {(loan.interestRate * 100).toFixed(0)}%
@@ -394,11 +394,11 @@ export const UserPanel: React.FC<UserPanelProps> = ({ myPlayerIndex }) => {
                                              borderLeft: "3px solid #FFA500"
                                            }}>
                                              <div style={{ display: "flex", justifyContent: "space-between", marginBottom: "4px" }}>
-                                               <span style={{ fontWeight: "bold" }}>£{iou.currentAmount.toLocaleString()} IOU</span>
+                                               <span style={{ fontWeight: "bold" }}>£{(iou.currentAmount || 0).toLocaleString()} IOU</span>
                                                <span style={{ color: creditor?.color || "#fff" }}>To: {creditor?.name || "Unknown"}</span>
                                              </div>
                                              <div style={{ fontSize: "9px", color: "rgba(255,255,255,0.3)" }}>
-                                               Original: £{iou.originalAmount.toLocaleString()} | Rate: {(iou.interestRate * 100).toFixed(0)}%
+                                               Original: £{(iou.originalAmount || 0).toLocaleString()} | Rate: {(iou.interestRate * 100).toFixed(0)}%
                                              </div>
                                            </div>
                                          );

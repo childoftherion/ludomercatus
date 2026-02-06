@@ -202,7 +202,7 @@ export const PlayerPropertiesPanel = ({ playerIndex, myPlayerIndex }: PlayerProp
             ) : (
               <>
                 <div style={{ color: "#4ECDC4", fontSize: "14px", fontWeight: 700 }}>
-                  £{player.cash.toLocaleString()}
+                  £{(player.cash || 0).toLocaleString()}
                 </div>
                 <div 
                   style={{ 
@@ -215,7 +215,7 @@ export const PlayerPropertiesPanel = ({ playerIndex, myPlayerIndex }: PlayerProp
                   title="Net Worth = Cash + Properties + Buildings (at liquidation value)"
                 >
                   <span style={{ color: "#FFD700" }}>📊</span>
-                  Net: £{netWorth.toLocaleString()}
+                  Net: £{(netWorth || 0).toLocaleString()}
                 </div>
                 {/* Show debt if player has loans */}
                 {player.totalDebt > 0 && (
@@ -230,7 +230,7 @@ export const PlayerPropertiesPanel = ({ playerIndex, myPlayerIndex }: PlayerProp
                     title="Total debt from bank loans"
                   >
                     <span>🏦</span>
-                    Debt: £{player.totalDebt.toLocaleString()}
+                    Debt: £{(player.totalDebt || 0).toLocaleString()}
                   </div>
                 )}
               </>
@@ -599,7 +599,7 @@ export const PlayerPropertiesPanel = ({ playerIndex, myPlayerIndex }: PlayerProp
                   }}
                 >
                   <span style={{ color: "#FF6B6B" }}>
-                    £{loan.totalOwed.toLocaleString()} ({Math.round(loan.interestRate * 100)}%/turn)
+                    £{(loan.totalOwed || 0).toLocaleString()} ({Math.round(loan.interestRate * 100)}%/turn)
                   </span>
                   <button
                     onClick={() => {
@@ -648,7 +648,7 @@ export const PlayerPropertiesPanel = ({ playerIndex, myPlayerIndex }: PlayerProp
           <div style={{ fontSize: "10px", color: "#ddd" }}>
             <div style={{ display: "flex", justifyContent: "space-between", marginBottom: "2px" }}>
               <span>Debt Target:</span>
-              <span style={{ fontWeight: "bold" }}>£{player.chapter11DebtTarget.toLocaleString()}</span>
+              <span style={{ fontWeight: "bold" }}>£{(player.chapter11DebtTarget || 0).toLocaleString()}</span>
             </div>
             <div style={{ display: "flex", justifyContent: "space-between" }}>
               <span>Turns Left:</span>
@@ -701,7 +701,7 @@ export const PlayerPropertiesPanel = ({ playerIndex, myPlayerIndex }: PlayerProp
                       }}
                     >
                       <div>
-                        <span style={{ color: "#ef4444" }}>£{iou.currentAmount.toLocaleString()}</span>
+                        <span style={{ color: "#ef4444" }}>£{(iou.currentAmount || 0).toLocaleString()}</span>
                         <span style={{ color: "#888", marginLeft: "4px" }}>
                           to {creditor?.name || "Unknown"}
                         </span>
@@ -765,7 +765,7 @@ export const PlayerPropertiesPanel = ({ playerIndex, myPlayerIndex }: PlayerProp
                       }}
                     >
                       <div>
-                        <span style={{ color: "#22c55e" }}>£{iou.currentAmount.toLocaleString()}</span>
+                        <span style={{ color: "#22c55e" }}>£{(iou.currentAmount || 0).toLocaleString()}</span>
                         <span style={{ color: "#888", marginLeft: "4px" }}>
                           from {debtor?.name || "Unknown"}
                         </span>
@@ -825,7 +825,7 @@ export const PlayerPropertiesPanel = ({ playerIndex, myPlayerIndex }: PlayerProp
                   Interest Rate: <span style={{ color: "#FF6B6B" }}>{Math.round((settings?.loanInterestRate ?? 0.1) * 100)}% per turn</span>
                 </div>
                 <div style={{ fontSize: "12px", color: "rgba(255,255,255,0.6)", marginBottom: "8px" }}>
-                  Max Loan: <span style={{ color: "#4ECDC4" }}>£{Math.floor(netWorth * (settings?.maxLoanPercent ?? 0.5) - player.totalDebt).toLocaleString()}</span>
+                  Max Loan: <span style={{ color: "#4ECDC4" }}>£{(Math.floor(netWorth * (settings?.maxLoanPercent ?? 0.5) - player.totalDebt) || 0).toLocaleString()}</span>
                 </div>
               </div>
 
@@ -932,9 +932,9 @@ export const PlayerPropertiesPanel = ({ playerIndex, myPlayerIndex }: PlayerProp
                 if (!loan) return null;
                 return (
                   <>
-                    <div style={{ marginBottom: "16px", fontSize: "12px", color: "rgba(255,255,255,0.6)" }}>
-                      <div>Amount Owed: <span style={{ color: "#FF6B6B" }}>£{loan.totalOwed.toLocaleString()}</span></div>
-                      <div>Your Cash: <span style={{ color: "#4ECDC4" }}>£{player.cash.toLocaleString()}</span></div>
+                    <div style={{ marginBottom: "12px", background: "rgba(0,0,0,0.2)", padding: "10px", borderRadius: "6px" }}>
+                      <div>Amount Owed: <span style={{ color: "#FF6B6B" }}>£{(loan.totalOwed || 0).toLocaleString()}</span></div>
+                      <div>Your Cash: <span style={{ color: "#4ECDC4" }}>£{(player.cash || 0).toLocaleString()}</span></div>
                     </div>
 
                     <div style={{ marginBottom: "16px" }}>
@@ -1046,10 +1046,10 @@ export const PlayerPropertiesPanel = ({ playerIndex, myPlayerIndex }: PlayerProp
                 return (
                   <>
                     <div style={{ marginBottom: "16px", fontSize: "12px", color: "rgba(255,255,255,0.6)" }}>
-                      <div>Amount Owed: <span style={{ color: "#ef4444" }}>£{iou.currentAmount.toLocaleString()}</span></div>
+                      <div>Amount Owed: <span style={{ color: "#ef4444" }}>£{(iou.currentAmount || 0).toLocaleString()}</span></div>
                       <div>To: <span style={{ color: "#4ECDC4" }}>{creditor?.name || "Unknown"}</span></div>
                       <div>Reason: <span style={{ color: "#888" }}>{iou.reason}</span></div>
-                      <div>Your Cash: <span style={{ color: "#22c55e" }}>£{player.cash.toLocaleString()}</span></div>
+                      <div>Your Cash: <span style={{ color: "#22c55e" }}>£{(player.cash || 0).toLocaleString()}</span></div>
                     </div>
 
                     <div style={{ marginBottom: "16px" }}>

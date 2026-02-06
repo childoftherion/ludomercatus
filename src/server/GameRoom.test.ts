@@ -68,6 +68,59 @@ describe("Game Logic (Server)", () => {
     expect(room.state.players[0]!.cash).toBeGreaterThan(p1Cash)
   })
 
+  test("utility rent rounding with value multiplier", () => {
+    setupGame()
+    // Give P0 utility 12 (Electric Company)
+    const electricCo = room.state.spaces[12] as Property
+    room.state.spaces[12] = { ...electricCo, owner: 0, valueMultiplier: 1.05 } as any
+    room.state.players[0]!.properties.push(12)
+    
+    // P2 lands on utility 12 with a dice roll of 7
+    room.state.currentPlayerIndex = 1
+    room.state.diceRoll = { die1: 3, die2: 4, total: 7, isDoubles: false }
+    
+    const p1CashBefore = room.state.players[0]!.cash
+    const p2CashBefore = room.state.players[1]!.cash
+    
+    room.movePlayer(1, 12)
+    
+    // Rent calculation: 7 * 4 = 28. 
+    // Multiplied by 1.05 = 29.4
+    // Rounded should be 29
+    const rentPaid = p2CashBefore - room.state.players[1]!.cash
+    expect(rentPaid).toBe(29)
+    expect(room.state.players[0]!.cash).toBe(p1CashBefore + 29)
+  })
+
+  test("IOU interest rounding", () => {
+    setupGame()
+    // P0 owes P1 an IOU of £100 at 5% interest
+    room.state.players[0]!.iousPayable = [{
+      id: 1,
+      creditorId: 1,
+      debtorId: 0,
+      originalAmount: 100,
+      currentAmount: 100,
+      interestRate: 0.05,
+      turnCreated: 0,
+      reason: "rent"
+    }]
+    room.state.players[1]!.iousReceivable = [room.state.players[0]!.iousPayable[0]!]
+    
+    // 3 rounds pass
+    room.state.roundsCompleted = 3
+    
+    // Interest calculation: 100 * 0.05 * 3 = 15
+    // Total owed: 115
+    
+    // Force state refresh
+    room.payIOU(0, 1, 50)
+    
+    // P0 pays £50. 115 - 50 = 65 remaining
+    const iou = room.state.players[0]!.iousPayable[0]
+    expect(iou?.currentAmount).toBe(65)
+  })
+
   test("jail logic", () => {
     setupGame()
     room.goToJail(0)

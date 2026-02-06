@@ -73,23 +73,25 @@ export const AuctionModal: React.FC = () => {
   React.useEffect(() => {
     const updatePosition = () => {
       if (modalRef.current) {
-        // Use requestAnimationFrame to ensure DOM is fully rendered
         requestAnimationFrame(() => {
           if (modalRef.current) {
             const rect = modalRef.current.getBoundingClientRect();
-            // Position modal on the right side (where GameLog used to be)
-            // Modals should be positioned at top: 12px, right: 12px, width: 320px
-            const modalAreaWidth = 320;
-            const modalAreaTop = 12;
-            const rightMargin = 12;
-            // Position on the right side
-            const modalX = window.innerWidth - modalAreaWidth - rightMargin;
-            // Position at top of modal area
-            const modalY = modalAreaTop;
-            // Ensure modal doesn't extend below viewport
-            const maxY = window.innerHeight - rect.height - 20; // 20px margin from bottom
-            const adjustedY = Math.min(modalY, maxY);
-            setPosition({ x: modalX, y: adjustedY });
+            const isMobile = window.innerWidth < 768;
+            
+            if (isMobile) {
+              const modalX = (window.innerWidth - rect.width) / 2;
+              const modalY = (window.innerHeight - rect.height) / 2;
+              setPosition({ x: Math.max(8, modalX), y: Math.max(8, modalY) });
+            } else {
+              const modalAreaWidth = 320;
+              const modalAreaTop = 12;
+              const rightMargin = 12;
+              const modalX = window.innerWidth - modalAreaWidth - rightMargin;
+              const modalY = modalAreaTop;
+              const maxY = window.innerHeight - rect.height - 20;
+              const adjustedY = Math.min(modalY, maxY);
+              setPosition({ x: modalX, y: adjustedY });
+            }
           }
         });
       }
@@ -114,26 +116,25 @@ export const AuctionModal: React.FC = () => {
     <AnimatePresence>
       <motion.div
         ref={modalRef}
-        data-auction-modal
         initial={{ opacity: 0, scale: 0.9 }}
         animate={{ opacity: 1, scale: 1 }}
         exit={{ opacity: 0, scale: 0.9 }}
-        transition={{ duration: 0.2 }}
         style={{
           position: "fixed",
           left: `${position.x}px`,
           top: `${position.y}px`,
-          width: "400px", // Scaled down for 100% zoom (was 420px)
-          maxWidth: "320px", // Match modal area width
-          maxHeight: "calc(100vh - 24px)", // Full height minus margins
+          width: window.innerWidth < 768 ? "calc(100% - 16px)" : "320px",
+          maxWidth: "440px",
+          maxHeight: "calc(100vh - 24px)",
           overflowY: "auto",
-          overflowX: "hidden", // Prevent horizontal scrollbars
-          color: "#fff",
-          backgroundColor: "rgba(0, 0, 0, 0.95)",
-          borderRadius: "16px",
-          boxShadow: "0 8px 32px rgba(0, 0, 0, 0.5)",
+          backgroundColor: "rgba(10, 10, 20, 0.95)",
+          color: "white",
+          borderRadius: "12px",
+          boxShadow: "0 8px 32px rgba(0,0,0,0.5)",
           border: "1px solid rgba(255,255,255,0.1)",
-          zIndex: 500,
+          zIndex: 1000,
+          display: "flex",
+          flexDirection: "column",
         }}
       >
         <div style={{ padding: "20px" }}>

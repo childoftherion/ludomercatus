@@ -79,6 +79,10 @@ type GameStore = GameState & {
   enterChapter11: () => void;
   declineRestructuring: () => void;
   
+  // Phase 3: Debt Service & Foreclosure
+  payDebtService: () => void;
+  handleForeclosureDecision: (outcome: "restructure" | "foreclose", propertyId?: number) => void;
+  
   // Room actions
   createRoom: (mode?: "single" | "multi") => void;
   joinRoom: (roomId: string) => void;
@@ -250,6 +254,7 @@ export const useGameStore = create<GameStore>((set, get) => ({
     "forgiveRent", "offerPaymentPlan", "acceptPaymentPlan", "rejectPaymentPlan", "createRentIOU", "payIOU", "demandImmediatePaymentOrProperty",
     "buyPropertyInsurance", "getInsuranceCost",
     "enterChapter11", "declineRestructuring",
+    "payDebtService", "handleForeclosureDecision",
     "appreciateColorGroup", "depreciateColorGroup", "assignPlayer"
   ].reduce((acc, action) => {
     acc[action] = (...args: any[]) => {
