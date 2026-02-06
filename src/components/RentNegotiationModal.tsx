@@ -1,9 +1,11 @@
 import React, { useRef, useState, useEffect } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { useGameStore } from "../store/gameStore";
+import { getCurrentPropertyPrice } from "../logic/rules/economics";
 import type { Property, Player } from "../types/game";
 
 export const RentNegotiationModal: React.FC = () => {
+  const gameState = useGameStore(s => s);
   const pendingRentNegotiation = useGameStore(s => s.pendingRentNegotiation);
   const players = useGameStore(s => s.players);
   const spaces = useGameStore(s => s.spaces);
@@ -288,7 +290,7 @@ export const RentNegotiationModal: React.FC = () => {
                     <option value="">-- Select Property --</option>
                     {debtorProperties.map((prop) => (
                       <option key={prop.id} value={prop.id}>
-                        {prop.name} (Value: £{prop.mortgaged ? prop.mortgageValue : prop.price})
+                        {prop.name} (Value: £{prop.mortgaged ? prop.mortgageValue : getCurrentPropertyPrice(gameState, prop)})
                       </option>
                     ))}
                   </select>

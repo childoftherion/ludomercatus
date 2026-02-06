@@ -5,6 +5,7 @@ import { Dice, DiceDisplay } from "./Dice"
 import type { Property } from "../types/game"
 import { isProperty } from "../utils/helpers"
 import { useIsMobile } from "../utils/useIsMobile"
+import { getCurrentPropertyPrice } from "../logic/rules/economics"
 
 interface GamePanelProps {
   isRolling: boolean
@@ -32,11 +33,12 @@ export const GamePanel: React.FC<GamePanelProps> = ({
   myPlayerIndex,
 }) => {
   const isMobile = useIsMobile()
-  const phase = useGameStore((s) => s.phase)
-  const diceRoll = useGameStore((s) => s.diceRoll)
-  const currentPlayerIndex = useGameStore((s) => s.currentPlayerIndex)
-  const players = useGameStore((s) => s.players)
-  const spaces = useGameStore((s) => s.spaces)
+  const gameState = useGameStore((s) => s)
+  const phase = gameState.phase
+  const diceRoll = gameState.diceRoll
+  const currentPlayerIndex = gameState.currentPlayerIndex
+  const players = gameState.players
+  const spaces = gameState.spaces
 
   // Select only the current player and current space to avoid unnecessary re-renders
   const currentPlayer = useGameStore((s) =>
@@ -56,6 +58,9 @@ export const GamePanel: React.FC<GamePanelProps> = ({
   const chooseTaxOption = useGameStore((s) => s.chooseTaxOption)
   const pendingRentNegotiation = useGameStore((s) => s.pendingRentNegotiation)
   const pendingBankruptcy = useGameStore((s) => s.pendingBankruptcy)
+  const pendingForeclosure = useGameStore((s) => s.pendingForeclosure)
+  const pendingDebtService = useGameStore((s) => s.pendingDebtService)
+  const auction = useGameStore((s) => s.auction)
   const forgiveRent = useGameStore((s) => s.forgiveRent)
   const createRentIOU = useGameStore((s) => s.createRentIOU)
   const demandImmediatePaymentOrProperty = useGameStore((s) => s.demandImmediatePaymentOrProperty)
@@ -224,26 +229,60 @@ export const GamePanel: React.FC<GamePanelProps> = ({
             }}
           >
           {/* AI Thinking Indicator */}
-          {currentPlayer.isAI && (
-            <motion.div
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              style={{
-                padding: "8px", // Reduced padding
-                fontSize: "12px", // Reduced font size
-                color: "#FF9800",
-                fontWeight: "bold",
-                flexShrink: 0,
-              }}
-            >
-              <motion.span
-                animate={{ opacity: [1, 0.5, 1] }}
-                transition={{ repeat: Infinity, duration: 1.5 }}
-              >
-                AI is thinking...
-              </motion.span>
-            </motion.div>
-          )}
+          {(() => {
+            let actorIndex = currentPlayerIndex
+            if (phase === "auction" && auction) {
+              actorIndex = auction.activePlayerIndex
+            } else if (
+              phase === "awaiting_foreclosure_decision" &&
+              pendingForeclosure
+            ) {
+              actorIndex = pendingForeclosure.creditorIndex
+            } else if (
+              phase === "awaiting_rent_negotiation" &&
+              pendingRentNegotiation
+            ) {
+              actorIndex =
+                pendingRentNegotiation.status === "creditor_decision"
+                  ? pendingRentNegotiation.creditorIndex
+                  : pendingRentNegotiation.debtorIndex
+            } else if (phase === "awaiting_debt_service" && pendingDebtService) {
+              actorIndex = pendingDebtService.playerIndex
+            } else if (
+              phase === "awaiting_bankruptcy_decision" &&
+              pendingBankruptcy
+            ) {
+              actorIndex = pendingBankruptcy.playerIndex
+            }
+
+            const actor = players[actorIndex]
+            const isActorAI = actor?.isAI
+            const isActorMe = actorIndex === myPlayerIndex
+
+            if (isActorAI && !isActorMe) {
+              return (
+                <motion.div
+                  initial={{ opacity: 0 }}
+                  animate={{ opacity: 1 }}
+                  style={{
+                    padding: "8px",
+                    fontSize: "12px",
+                    color: "#FF9800",
+                    fontWeight: "bold",
+                    flexShrink: 0,
+                  }}
+                >
+                  <motion.span
+                    animate={{ opacity: [1, 0.5, 1] }}
+                    transition={{ repeat: Infinity, duration: 1.5 }}
+                  >
+                    AI is thinking...
+                  </motion.span>
+                </motion.div>
+              )
+            }
+            return null
+          })()}
 
           {/* Rolling or Moving phase - not in jail */}
           {(phase === "rolling" || phase === "moving") &&
@@ -672,88 +711,163 @@ export const GamePanel: React.FC<GamePanelProps> = ({
             </div>
           )}
 
-          {/* Bankruptcy Restructuring phase */}
-          {phase === "awaiting_bankruptcy_decision" && pendingBankruptcy && (
-            <div
-              style={{
-                backgroundColor: "#333",
-                padding: cardPadding,
-                borderRadius: "8px",
-                border: "2px solid #FF6B6B",
-              }}
-            >
-              <h3 style={{ marginBottom: "12px", color: "#FF6B6B" }}>
-                Financial Distress
-              </h3>
-              <p
+          {/* Bankruptcy decision phase */}
+          {phase === "awaiting_bankruptcy_decision" &&
+            pendingBankruptcy &&
+            pendingBankruptcy.playerIndex === myPlayerIndex && (
+              <div
                 style={{
-                  fontSize: "14px",
-                  marginBottom: "16px",
-                  color: "#ccc",
-                  lineHeight: "1.4",
+                  backgroundColor: "#333",
+                  padding: cardPadding,
+                  borderRadius: "8px",
                 }}
               >
-                You owe £{pendingBankruptcy.debtAmount} and cannot afford it.
-                You can choose to liquidate everything or enter Chapter 11 Restructuring.
-              </p>
+                <h3 style={{ marginBottom: "8px", color: "#f44336" }}>
+                  🚨 Bankruptcy Warning
+                </h3>
+                <p
+                  style={{
+                    fontSize: "14px",
+                    marginBottom: "16px",
+                    color: "#ccc",
+                  }}
+                >
+                  You cannot afford to pay £{pendingBankruptcy.debtAmount.toLocaleString()}.
+                  Choose your path:
+                </p>
 
-              {myPlayerIndex === pendingBankruptcy.playerIndex ? (
                 <div
                   style={{
                     display: "flex",
+                    gap: "12px",
+                    justifyContent: "center",
                     flexDirection: "column",
-                    gap: "10px",
                   }}
                 >
-                  <motion.button
-                    onClick={() => enterChapter11()}
-                    whileHover={{ scale: 1.02 }}
-                    whileTap={{ scale: 0.98 }}
-                    style={{
-                      padding: "12px",
-                      backgroundColor: "#2196F3",
-                      color: "#fff",
-                      border: "none",
-                      borderRadius: "6px",
-                      cursor: "pointer",
-                      fontSize: "13px",
-                    }}
-                  >
-                    Enter Chapter 11 Restructuring
-                    <div style={{ fontSize: "10px", marginTop: "4px", opacity: 0.8 }}>
-                      Keep properties, but 50% rent penalty and 5-turn debt target
-                    </div>
-                  </motion.button>
+                  {pendingBankruptcy.creditorIndex !== undefined && (
+                    <motion.button
+                      onClick={enterChapter11}
+                      whileHover={{ scale: 1.02 }}
+                      whileTap={{ scale: 0.98 }}
+                      style={{
+                        padding: isMobile ? "14px 16px" : "16px 24px",
+                        fontSize: buttonFontSize,
+                        backgroundColor: "#2196F3",
+                        color: "#fff",
+                        border: "none",
+                        borderRadius: "8px",
+                        cursor: "pointer",
+                      }}
+                    >
+                      Enter Chapter 11 (Restructure)
+                    </motion.button>
+                  )}
 
                   <motion.button
-                    onClick={() => declineRestructuring()}
+                    onClick={declineRestructuring}
                     whileHover={{ scale: 1.02 }}
                     whileTap={{ scale: 0.98 }}
                     style={{
-                      padding: "12px",
+                      padding: isMobile ? "14px 16px" : "16px 24px",
+                      fontSize: buttonFontSize,
                       backgroundColor: "#f44336",
                       color: "#fff",
                       border: "none",
-                      borderRadius: "6px",
+                      borderRadius: "8px",
                       cursor: "pointer",
-                      fontSize: "13px",
                     }}
                   >
-                    Declare Full Bankruptcy
-                    <div style={{ fontSize: "10px", marginTop: "4px", opacity: 0.8 }}>
-                      Eliminate from game and transfer all assets
-                    </div>
+                    Declare Bankruptcy
                   </motion.button>
                 </div>
-              ) : (
-                <div style={{ textAlign: "center", padding: "10px" }}>
-                  <p style={{ color: "#FF6B6B", fontStyle: "italic" }}>
-                    Waiting for {players[pendingBankruptcy.playerIndex]?.name} to decide...
-                  </p>
-                </div>
-              )}
-            </div>
-          )}
+              </div>
+            )}
+
+          {/* Foreclosure decision phase */}
+          {phase === "awaiting_foreclosure_decision" &&
+            pendingForeclosure &&
+            pendingForeclosure.creditorIndex === myPlayerIndex && (
+              (() => {
+                const foreclosure = pendingForeclosure
+                const debtor = players[foreclosure.debtorIndex]
+                if (!debtor) return null
+
+                return (
+                  <div
+                    style={{
+                      backgroundColor: "#333",
+                      padding: cardPadding,
+                      borderRadius: "8px",
+                    }}
+                  >
+                    <h3 style={{ marginBottom: "8px", color: "#FFD700" }}>
+                      ⚖️ Foreclosure Decision
+                    </h3>
+                    <p
+                      style={{
+                        fontSize: "14px",
+                        marginBottom: "16px",
+                        color: "#ccc",
+                      }}
+                    >
+                      {debtor.name} cannot pay obligations. As lead creditor,
+                      you decide their fate:
+                    </p>
+
+                    <div
+                      style={{
+                        display: "flex",
+                        gap: "12px",
+                        justifyContent: "center",
+                        flexDirection: "column",
+                      }}
+                    >
+                      <motion.button
+                        onClick={() =>
+                          useGameStore
+                            .getState()
+                            .handleForeclosureDecision("restructure")
+                        }
+                        whileHover={{ scale: 1.02 }}
+                        whileTap={{ scale: 0.98 }}
+                        style={{
+                          padding: isMobile ? "14px 16px" : "16px 24px",
+                          fontSize: buttonFontSize,
+                          backgroundColor: "#2196F3",
+                          color: "#fff",
+                          border: "none",
+                          borderRadius: "8px",
+                          cursor: "pointer",
+                        }}
+                      >
+                        Restructure Debt (Global)
+                      </motion.button>
+
+                      <motion.button
+                        onClick={() =>
+                          useGameStore
+                            .getState()
+                            .handleForeclosureDecision("foreclose")
+                        }
+                        whileHover={{ scale: 1.02 }}
+                        whileTap={{ scale: 0.98 }}
+                        style={{
+                          padding: isMobile ? "14px 16px" : "16px 24px",
+                          fontSize: buttonFontSize,
+                          backgroundColor: "#f44336",
+                          color: "#fff",
+                          border: "none",
+                          borderRadius: "8px",
+                          cursor: "pointer",
+                        }}
+                      >
+                        Foreclose & Liquidate (Global)
+                      </motion.button>
+                    </div>
+                  </div>
+                )
+              })()
+            )}
 
           {/* Buy decision phase */}
           {phase === "awaiting_buy_decision" &&
@@ -769,15 +883,17 @@ export const GamePanel: React.FC<GamePanelProps> = ({
                 <h3 style={{ marginBottom: "8px", color: "#fff" }}>
                   {currentSpace.name}
                 </h3>
-                <p
-                  style={{
-                    fontSize: "16px",
-                    marginBottom: "12px",
-                    color: "#ccc",
-                  }}
-                >
-                  Price: £{currentSpace.price}
-                </p>
+                {isProperty(currentSpace) && (
+                  <p
+                    style={{
+                      fontSize: "16px",
+                      marginBottom: "12px",
+                      color: "#ccc",
+                    }}
+                  >
+                    Price: £{getCurrentPropertyPrice(gameState, currentSpace)}
+                  </p>
+                )}
 
                 {!currentPlayer.isAI && isMyTurn && (
                   <div
@@ -788,7 +904,7 @@ export const GamePanel: React.FC<GamePanelProps> = ({
                       flexDirection: isMobile ? "column" : "row",
                     }}
                   >
-                    {currentPlayer.cash >= currentSpace.price ? (
+                    {isProperty(currentSpace) && currentPlayer.cash >= getCurrentPropertyPrice(gameState, currentSpace) ? (
                       <>
                         <motion.button
                           onClick={handleBuyProperty}
@@ -805,7 +921,7 @@ export const GamePanel: React.FC<GamePanelProps> = ({
                             width: isMobile ? "100%" : undefined,
                           }}
                         >
-                          Buy for £{currentSpace.price}
+                          Buy for £{getCurrentPropertyPrice(gameState, currentSpace)}
                         </motion.button>
                         <motion.button
                           onClick={handleDeclineProperty}

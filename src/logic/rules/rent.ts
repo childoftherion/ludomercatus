@@ -42,6 +42,15 @@ export const calculateRent = (state: GameState, property: Property, diceTotal: n
   if (isEconomicEventActive(state, "recession")) {
     // Recession: 25% rent reduction
     rent = Math.round(rent * 0.75);
+  } else if (isEconomicEventActive(state, "market_crash")) {
+    // Market Crash: 20% rent reduction
+    rent = Math.round(rent * 0.80);
+  } else if (isEconomicEventActive(state, "market_crash_1")) {
+    // Speculative Bubble: 15% rent reduction
+    rent = Math.round(rent * 0.85);
+  } else if (isEconomicEventActive(state, "market_crash_2")) {
+    // Yield Crisis: 15% rent increase
+    rent = Math.round(rent * 1.15);
   } else if (isEconomicEventActive(state, "bull_market")) {
     // Bull Market: 20% rent increase
     rent = Math.round(rent * 1.20);

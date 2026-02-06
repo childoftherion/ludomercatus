@@ -2,6 +2,7 @@ import React from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import type { Property } from "../types/game";
 import { useGameStore } from "../store/gameStore";
+import { getCurrentPropertyPrice } from "../logic/rules/economics";
 
 interface PropertyDetailsModalProps {
   property: Property | null;
@@ -10,9 +11,10 @@ interface PropertyDetailsModalProps {
 }
 
 export const PropertyDetailsModal: React.FC<PropertyDetailsModalProps> = ({ property, ownerName, onClose }) => {
-  const houseSupply = useGameStore(s => s.availableHouses);
-  const hotelSupply = useGameStore(s => s.availableHotels);
-  const enableHousingScarcity = useGameStore(s => s.settings.enableHousingScarcity);
+  const gameState = useGameStore(s => s);
+  const houseSupply = gameState.availableHouses;
+  const hotelSupply = gameState.availableHotels;
+  const enableHousingScarcity = gameState.settings.enableHousingScarcity;
 
   if (!property) return null;
 
@@ -118,7 +120,7 @@ export const PropertyDetailsModal: React.FC<PropertyDetailsModalProps> = ({ prop
           {/* Property Details */}
           <div style={{ display: "flex", flexDirection: "column", gap: "8px", fontSize: "14px", lineHeight: 1.5 }}>
             <div>
-              <strong>Price:</strong> £{property.price}
+              <strong>Price:</strong> £{getCurrentPropertyPrice(gameState, property)}
               {property.valueMultiplier !== undefined && property.valueMultiplier !== 1.0 && (
                 <span style={{ 
                   marginLeft: "8px", 

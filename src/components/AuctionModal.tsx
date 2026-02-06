@@ -1,10 +1,12 @@
 import React from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { useGameStore } from "../store/gameStore";
+import { getCurrentPropertyPrice } from "../logic/rules/economics";
 import { audioManager } from "../utils/audio";
 import type { AuctionState, Property, Player } from "../types/game";
 
 export const AuctionModal: React.FC = () => {
+  const gameState = useGameStore(s => s);
   const auction = useGameStore(s => s.auction);
   const players = useGameStore(s => s.players);
   const spaces = useGameStore(s => s.spaces);
@@ -20,11 +22,13 @@ export const AuctionModal: React.FC = () => {
 
   const property = auction ? (spaces.find(s => s.id === auction.propertyId) as Property) : null;
   
+  const currentPrice = property ? getCurrentPropertyPrice(gameState, property) : 0;
+  
   // Calculate minimum bid: 10% increment or £10, whichever is higher
   const minIncrement = auction ? Math.max(10, Math.floor(auction.currentBid * 0.1)) : 0;
   const minimumBid = auction 
     ? (auction.currentBid === 0 
-      ? Math.max(10, Math.floor((property?.price ?? 100) * 0.1)) // Opening bid: 10% of property value
+      ? Math.max(10, Math.floor((property ? currentPrice : 100) * 0.1)) // Opening bid: 10% of property value
       : auction.currentBid + minIncrement)
     : 0;
   
@@ -149,7 +153,7 @@ export const AuctionModal: React.FC = () => {
         textAlign: "center",
       }}>
         <h3 style={{ margin: "0 0 8px 0" }}>{property?.name ?? "Property"}</h3>
-        <p style={{ margin: 0, color: "#ccc" }}>Market Price: £{property?.price ?? 0}</p>
+        <p style={{ margin: 0, color: "#ccc" }}>Market Price: £{currentPrice}</p>
       </div>
       
       {/* Current bid info */}

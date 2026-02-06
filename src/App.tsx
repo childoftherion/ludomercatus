@@ -39,6 +39,9 @@ export default function App() {
   const leaveRoom = useGameStore((s) => s.leaveRoom)
   const currentGoSalary = useGameStore((s) => s.currentGoSalary)
   const pendingRentNegotiation = useGameStore((s) => s.pendingRentNegotiation)
+  const pendingBankruptcy = useGameStore((s) => s.pendingBankruptcy)
+  const pendingForeclosure = useGameStore((s) => s.pendingForeclosure)
+  const pendingDebtService = useGameStore((s) => s.pendingDebtService)
   const settings = useGameStore((s) => s.settings)
   const roomId = useGameStore((s) => s.roomId)
   const joinRoom = useGameStore((s) => s.joinRoom)
@@ -340,7 +343,26 @@ export default function App() {
   // AI turn execution
   React.useEffect(() => {
     if (!connected) return // Wait for connection
-    if (!currentPlayer || !currentPlayer.isAI || currentPlayer.bankrupt) return
+
+    // Determine who the "current actor" is based on the phase
+    let actorIndex = currentPlayerIndex
+    if (phase === "auction" && auction) {
+      actorIndex = auction.activePlayerIndex
+    } else if (phase === "awaiting_foreclosure_decision" && pendingForeclosure) {
+      actorIndex = pendingForeclosure.creditorIndex
+    } else if (phase === "awaiting_rent_negotiation" && pendingRentNegotiation) {
+      actorIndex =
+        pendingRentNegotiation.status === "creditor_decision"
+          ? pendingRentNegotiation.creditorIndex
+          : pendingRentNegotiation.debtorIndex
+    } else if (phase === "awaiting_debt_service" && pendingDebtService) {
+      actorIndex = pendingDebtService.playerIndex
+    } else if (phase === "awaiting_bankruptcy_decision" && pendingBankruptcy) {
+      actorIndex = pendingBankruptcy.playerIndex
+    }
+
+    const actor = players[actorIndex]
+    if (!actor || !actor.isAI || actor.bankrupt) return
     if (phase === "setup" || phase === "game_over") return
 
     // Only one client should trigger AI turns to avoid duplicates on the server.
@@ -351,14 +373,28 @@ export default function App() {
     // Add delay for AI actions to be visible
     const aiDelay = setTimeout(() => {
       console.log(
-        `[App] Triggering AI turn for ${currentPlayer.name} (our player index: ${myPlayerIndex})`,
+        `[App] Triggering AI turn for actor ${actor.name} (index: ${actorIndex}, phase: ${phase})`,
       )
       useGameStore.getState().executeAITurn()
     }, 1200)
 
     return () => clearTimeout(aiDelay)
-  }, [currentPlayer, phase, auction?.activePlayerIndex, connected, diceRoll])
+  }, [
+    currentPlayerIndex,
+    phase,
+    auction?.activePlayerIndex,
+    pendingForeclosure,
+    pendingRentNegotiation,
+    pendingBankruptcy,
+    pendingDebtService,
+    connected,
+    diceRoll,
+    myPlayerIndex,
+    players,
+  ])
+
   // AI auction bid execution - separate handler for auction phase
+  // (We'll keep this as a secondary check, but the main AI turn execution above should handle it now)
   React.useEffect(() => {
     if (!connected) return
     if (phase !== "auction" || !auction) return
@@ -366,7 +402,10 @@ export default function App() {
     const activeBidder = players[auction.activePlayerIndex]
     if (!activeBidder || !activeBidder.isAI || activeBidder.bankrupt) return
 
-    // Add delay for AI actions to be visible
+    // Only one client should trigger AI turns
+    const firstHumanIndex = players.findIndex((p) => !p.isAI)
+    if (myPlayerIndex !== firstHumanIndex) return
+
     const aiDelay = setTimeout(() => {
       console.log(
         `[App] Triggering AI auction bid for ${activeBidder.name} (player ${auction.activePlayerIndex})`,
@@ -375,7 +414,7 @@ export default function App() {
     }, 1200)
 
     return () => clearTimeout(aiDelay)
-  }, [phase, auction?.activePlayerIndex, players, connected])
+  }, [phase, auction?.activePlayerIndex, players, connected, myPlayerIndex])
   // AI trade response
   React.useEffect(() => {
     if (!connected) return
@@ -431,6 +470,25 @@ export default function App() {
       }
     }
   }, [phase, connected, players])
+
+  // AI foreclosure decision
+  React.useEffect(() => {
+    if (!connected) return
+    if (phase === "awaiting_foreclosure_decision" && pendingForeclosure) {
+      const creditor = players[pendingForeclosure.creditorIndex]
+      if (creditor?.isAI && !creditor.bankrupt) {
+        // Only host triggers AI
+        const firstHumanIndex = players.findIndex((p) => !p.isAI)
+        if (myPlayerIndex !== firstHumanIndex) return
+
+        const aiDelay = setTimeout(() => {
+          useGameStore.getState().executeAITurn()
+        }, 2000)
+        return () => clearTimeout(aiDelay)
+      }
+    }
+  }, [phase, pendingForeclosure, connected, players, myPlayerIndex])
+
   const handleRollDice = () => {
     if (isRolling) return
     setIsRolling(true)

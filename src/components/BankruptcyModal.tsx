@@ -1,9 +1,11 @@
 import React, { useRef, useState, useEffect } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { useGameStore } from "../store/gameStore";
+import { getCurrentPropertyPrice } from "../logic/rules/economics";
 import type { Player, Property } from "../types/game";
 
 export const BankruptcyModal: React.FC = () => {
+  const gameState = useGameStore(s => s);
   const auction = useGameStore(s => s.auction);
   const players = useGameStore(s => s.players);
   const spaces = useGameStore(s => s.spaces);
@@ -77,7 +79,7 @@ export const BankruptcyModal: React.FC = () => {
   // Calculate player's assets (Liquidation Value)
   const totalAssetValue = playerProperties.reduce((sum: number, prop: Property) => {
     // Property value (adjusted for market fluctuations)
-    const propValue = Math.round(prop.price * (prop.valueMultiplier || 1.0));
+    const propValue = getCurrentPropertyPrice(gameState, prop);
     
     if (prop.mortgaged) {
       // Mortgaged property: only worth its mortgage value if we were to sell it back to bank? 

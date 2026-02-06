@@ -1,6 +1,6 @@
 import type { GameState, Property, TradeOffer, ColorGroup, AIDifficulty } from "../../types/game";
 import { hasMonopoly } from "../rules/monopoly";
-import { calculateNetWorth } from "../rules/economics";
+import { calculateNetWorth, getCurrentPropertyPrice } from "../rules/economics";
 
 export interface GameActions {
   rollDice: () => any;
@@ -101,8 +101,9 @@ const calculatePropertyROI = (state: GameState, property: Property, playerIndex:
     }
   }
   
-  // Rough ROI: expected rent per turn / price
-  return expectedRent / property.price;
+  // Rough ROI: expected rent per turn / current price
+  const currentPrice = getCurrentPropertyPrice(state, property);
+  return expectedRent / currentPrice;
 };
 
 // Helper: Check if buying would complete a monopoly
@@ -136,10 +137,19 @@ const wouldBlockOpponent = (state: GameState, playerIndex: number, property: Pro
 };
 
 export const executeAITurn = (state: GameState, actions: GameActions) => {
-  // During auctions, use the auction's active player index instead of currentPlayerIndex
+  // Determine which player should act in this phase
   let playerIndex = state.currentPlayerIndex;
+  
   if (state.phase === "auction" && state.auction) {
     playerIndex = state.auction.activePlayerIndex;
+  } else if (state.phase === "awaiting_foreclosure_decision" && state.pendingForeclosure) {
+    playerIndex = state.pendingForeclosure.creditorIndex;
+  } else if (state.phase === "awaiting_rent_negotiation" && state.pendingRentNegotiation) {
+    playerIndex = state.pendingRentNegotiation.status === "creditor_decision" 
+      ? state.pendingRentNegotiation.creditorIndex 
+      : state.pendingRentNegotiation.debtorIndex;
+  } else if (state.phase === "awaiting_bankruptcy_decision" && (state as any).pendingBankruptcy) {
+    playerIndex = (state as any).pendingBankruptcy.playerIndex;
   }
   
   const player = state.players[playerIndex];
@@ -187,9 +197,11 @@ export const executeAITurn = (state: GameState, actions: GameActions) => {
 
       if (debtorProperties.length > 0) {
         // Seize most valuable property
-        const bestProperty = debtorProperties.reduce((best, prop) => 
-          prop.price > (best?.price ?? 0) ? prop : best
-        );
+        const bestProperty = debtorProperties.reduce((best, prop) => {
+          const currentPrice = getCurrentPropertyPrice(state, prop);
+          const bestPrice = best ? getCurrentPropertyPrice(state, best) : 0;
+          return currentPrice > bestPrice ? prop : best;
+        });
         console.log(`[AI] ${player.name} seizing property ${bestProperty.name} from ${debtor.name}`);
         actions.handleForeclosureDecision("foreclose", bestProperty.id);
       } else {
@@ -229,7 +241,8 @@ export const executeAITurn = (state: GameState, actions: GameActions) => {
     
     const totalAssetValue = playerProperties.reduce((sum, prop) => {
       if (prop.mortgaged) return sum + prop.mortgageValue;
-      return sum + prop.price + (prop.houses * (prop.buildingCost ?? 0));
+      const currentPrice = getCurrentPropertyPrice(state, prop);
+      return sum + currentPrice + (prop.houses * (prop.buildingCost ?? 0));
     }, 0);
     
     // Strategy: Choose Chapter 11 if we have assets worth more than the debt
@@ -290,9 +303,11 @@ export const executeAITurn = (state: GameState, actions: GameActions) => {
           );
 
           if (debtorProperties.length > 0 && actions.demandImmediatePaymentOrProperty) {
-            const bestProperty = debtorProperties.reduce((best, prop) => 
-              prop.price > (best?.price ?? 0) ? prop : best
-            );
+            const bestProperty = debtorProperties.reduce((best, prop) => {
+              const currentPrice = getCurrentPropertyPrice(state, prop);
+              const bestPrice = best ? getCurrentPropertyPrice(state, best) : 0;
+              return currentPrice > bestPrice ? prop : best;
+            });
             actions.demandImmediatePaymentOrProperty(bestProperty.id);
             return;
           } else if (actions.forgiveRent) {
@@ -389,7 +404,8 @@ export const executeAITurn = (state: GameState, actions: GameActions) => {
       })[0];
       
       if (propToInsure) {
-        const insuranceCost = Math.ceil(propToInsure.price * (state.settings.insuranceCostPercent ?? 0.05));
+        const currentPrice = getCurrentPropertyPrice(state, propToInsure);
+        const insuranceCost = Math.ceil(currentPrice * (state.settings.insuranceCostPercent ?? 0.05));
         if (player.cash > insuranceCost + cashReserve) {
           actions.buyPropertyInsurance(propToInsure.id, playerIndex);
           return;
@@ -461,7 +477,7 @@ export const executeAITurn = (state: GameState, actions: GameActions) => {
                 }
               }
               
-              totalMarketValue += p.price;
+              totalMarketValue += getCurrentPropertyPrice(state, p);
               propIds.push(p.id);
             });
             
@@ -615,7 +631,8 @@ export const executeAITurn = (state: GameState, actions: GameActions) => {
       
       // Enhanced AI buying logic
       let shouldBuy = false;
-      const priceWithReserve = property.price + cashReserve;
+      const currentPrice = getCurrentPropertyPrice(state, property);
+      const priceWithReserve = currentPrice + cashReserve;
       
       if (player.cash >= priceWithReserve) {
         // Always buy if we'd complete a monopoly
@@ -631,7 +648,7 @@ export const executeAITurn = (state: GameState, actions: GameActions) => {
           const roi = calculatePropertyROI(state, property, playerIndex);
           shouldBuy = roi >= modifiers.roiThreshold;
         }
-      } else if (player.cash >= property.price) {
+      } else if (player.cash >= currentPrice) {
         // Low on cash but still can afford - only buy if completing/blocking monopoly
         shouldBuy = wouldCompleteMonopoly(state, playerIndex, property) || 
                     wouldBlockOpponent(state, playerIndex, property);
@@ -640,7 +657,7 @@ export const executeAITurn = (state: GameState, actions: GameActions) => {
       // Consider taking a loan to buy if it would complete a monopoly
       if (!shouldBuy && wouldCompleteMonopoly(state, playerIndex, property) && 
           state.settings?.enableBankLoans && actions.takeLoan && actions.getMaxLoanAmount) {
-        const shortfall = property.price - player.cash + 50; // Extra buffer
+        const shortfall = currentPrice - player.cash + 50; // Extra buffer
         const maxAvailableLoan = actions.getMaxLoanAmount(playerIndex);
         
         if (maxAvailableLoan > 0 && shortfall <= maxAvailableLoan && shortfall >= 50) {
@@ -686,15 +703,16 @@ export const executeAITurn = (state: GameState, actions: GameActions) => {
           console.log(`[AI Auction] ${player.name} would block opponent - bidding moderately`);
         }
         
+        const currentPrice = prop ? getCurrentPropertyPrice(state, prop) : 0;
         const maxBid = Math.min(
           player.cash - cashReserve,
-          prop ? prop.price * maxBidMultiplier * modifiers.auctionAggressiveness : player.cash
+          prop ? currentPrice * maxBidMultiplier * modifiers.auctionAggressiveness : player.cash
         );
         
         // Calculate minimum bid increment (10% or £10)
         const minIncrement = Math.max(10, Math.floor(auction.currentBid * 0.1));
         const nextBid = auction.currentBid === 0 
-          ? Math.max(10, Math.floor((prop?.price ?? 100) * 0.1)) // Opening bid
+          ? Math.max(10, Math.floor((prop ? currentPrice : 100) * 0.1)) // Opening bid
           : auction.currentBid + minIncrement;
         
         console.log(`[AI Auction] ${player.name} maxBid: £${maxBid}, nextBid: £${nextBid}, cash: £${player.cash}, reserve: £${cashReserve}`);
@@ -770,7 +788,7 @@ const calculateValuation = (state: GameState, ownerIndex: number, cash: number, 
   propertyIds.forEach(id => {
     const p = state.spaces.find(s => s.id === id);
     if (p && isProperty(p)) {
-      let propValue = p.price;
+      let propValue = getCurrentPropertyPrice(state, p);
       
       if (p.colorGroup) {
          const groupProps = state.spaces.filter((s): s is Property => isProperty(s) && s.colorGroup === p.colorGroup);

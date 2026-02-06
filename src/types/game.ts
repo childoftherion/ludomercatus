@@ -126,6 +126,8 @@ export type EconomicEventType =
   | "housing_boom"     // Building costs increase 50% for X turns
   | "tax_holiday"      // No income tax for X turns
   | "market_crash"     // Property values drop 20% for X turns
+  | "market_crash_1"   // Rent decreases 15%, property values increase 15% (Speculative Bubble)
+  | "market_crash_2"   // Rent increases 15%, property values decrease 15% (Yield Crisis)
   | "bull_market"      // Property values increase 20% for X turns
   | "banking_crisis"   // Interest rates double for X turns
   | "economic_stimulus"; // All players collect £100

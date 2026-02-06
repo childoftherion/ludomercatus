@@ -4,6 +4,35 @@ const isProperty = (space: any): space is Property => {
   return space.type === "property" || space.type === "railroad" || space.type === "utility"
 }
 
+// Check if an economic event is active
+const isEconomicEventActive = (state: GameState, type: string): boolean => {
+  return state.activeEconomicEvents?.some(e => e.type === type) ?? false;
+};
+
+/**
+ * Get the current market price of a property, accounting for economic events
+ */
+export const getCurrentPropertyPrice = (state: GameState, property: Property): number => {
+  let price = property.price * property.valueMultiplier;
+
+  // Apply economic event modifiers
+  if (isEconomicEventActive(state, "market_crash")) {
+    // Market Crash: 20% price reduction
+    price *= 0.80;
+  } else if (isEconomicEventActive(state, "market_crash_1")) {
+    // Speculative Bubble: 15% price increase
+    price *= 1.15;
+  } else if (isEconomicEventActive(state, "market_crash_2")) {
+    // Yield Crisis: 15% price reduction
+    price *= 0.85;
+  } else if (isEconomicEventActive(state, "bull_market")) {
+    // Bull Market: 20% price increase
+    price *= 1.20;
+  }
+
+  return Math.round(price);
+};
+
 /**
  * Calculate the net worth of a player
  * Net Worth = Cash
@@ -33,11 +62,11 @@ export const calculateNetWorth = (state: GameState, playerIndex: number): number
       // The mortgage value is what they'd get if they mortgage, but if already mortgaged,
       // they have that cash already. The property's "value" in net worth is the unmortgage cost.
       // Simpler approach: property value = price, minus mortgage value if mortgaged
-      const effectivePrice = Math.round(property.price * property.valueMultiplier)
+      const effectivePrice = getCurrentPropertyPrice(state, property)
       netWorth += effectivePrice - property.mortgageValue
     } else {
       // Unmortgaged property at full price (adjusted for value fluctuation)
-      const effectivePrice = Math.round(property.price * property.valueMultiplier)
+      const effectivePrice = getCurrentPropertyPrice(state, property)
       netWorth += effectivePrice
     }
 

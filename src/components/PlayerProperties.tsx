@@ -1,7 +1,7 @@
 import React, { useState, useMemo, useEffect } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { useGameStore } from "../store/gameStore";
-import { calculateNetWorth } from "../logic/rules/economics";
+import { calculateNetWorth, getCurrentPropertyPrice } from "../logic/rules/economics";
 import { audioManager } from "../utils/audio";
 import type { Player, Property, TradeOffer, BankLoan, IOU } from "../types/game";
 
@@ -22,6 +22,7 @@ interface PlayerPropertiesPanelProps {
 }
 
 export const PlayerPropertiesPanel = ({ playerIndex, myPlayerIndex }: PlayerPropertiesPanelProps) => {
+  const gameState = useGameStore((s) => s);
   const players = useGameStore((s) => s.players);
   const spaces = useGameStore((s) => s.spaces);
   const currentPlayerIndex = useGameStore((s) => s.currentPlayerIndex);
@@ -509,30 +510,36 @@ export const PlayerPropertiesPanel = ({ playerIndex, myPlayerIndex }: PlayerProp
 
               {/* Insurance Button - Phase 3 */}
               {settings?.enablePropertyInsurance && !selectedProperty.mortgaged && (
-                <button
-                  onClick={() => buyPropertyInsurance(selectedProperty.id, playerIndex)}
-                  disabled={
-                    (selectedProperty.isInsured && selectedProperty.insurancePaidUntilRound > roundsCompleted) ||
-                    player.cash < Math.ceil(selectedProperty.price * (settings?.insuranceCostPercent ?? 0.05))
-                  }
-                  style={{
-                    padding: "6px",
-                    fontSize: "10px",
-                    background: selectedProperty.isInsured && selectedProperty.insurancePaidUntilRound > roundsCompleted
-                      ? "#22c55e" 
-                      : "#8b5cf6",
-                    border: "none",
-                    borderRadius: "4px",
-                    color: "#fff",
-                    cursor: selectedProperty.isInsured && selectedProperty.insurancePaidUntilRound > roundsCompleted ? "default" : "pointer",
-                    gridColumn: "span 2",
-                    opacity: player.cash < Math.ceil(selectedProperty.price * (settings?.insuranceCostPercent ?? 0.05)) ? 0.5 : 1,
-                  }}
-                >
-                  {selectedProperty.isInsured && selectedProperty.insurancePaidUntilRound > roundsCompleted
-                    ? `🛡️ Insured (${selectedProperty.insurancePaidUntilRound - roundsCompleted} rounds)`
-                    : `🛡️ Insure (£${Math.ceil(selectedProperty.price * (settings?.insuranceCostPercent ?? 0.05))})`}
-                </button>
+                (() => {
+                  const currentPrice = getCurrentPropertyPrice(gameState, selectedProperty);
+                  const insuranceCost = Math.ceil(currentPrice * (settings?.insuranceCostPercent ?? 0.05));
+                  return (
+                    <button
+                      onClick={() => buyPropertyInsurance(selectedProperty.id, playerIndex)}
+                      disabled={
+                        (selectedProperty.isInsured && selectedProperty.insurancePaidUntilRound > roundsCompleted) ||
+                        player.cash < insuranceCost
+                      }
+                      style={{
+                        padding: "6px",
+                        fontSize: "10px",
+                        background: selectedProperty.isInsured && selectedProperty.insurancePaidUntilRound > roundsCompleted
+                          ? "#22c55e" 
+                          : "#8b5cf6",
+                        border: "none",
+                        borderRadius: "4px",
+                        color: "#fff",
+                        cursor: selectedProperty.isInsured && selectedProperty.insurancePaidUntilRound > roundsCompleted ? "default" : "pointer",
+                        gridColumn: "span 2",
+                        opacity: player.cash < insuranceCost ? 0.5 : 1,
+                      }}
+                    >
+                      {selectedProperty.isInsured && selectedProperty.insurancePaidUntilRound > roundsCompleted
+                        ? `🛡️ Insured (${selectedProperty.insurancePaidUntilRound - roundsCompleted} rounds)`
+                        : `🛡️ Insure (£${insuranceCost})`}
+                    </button>
+                  );
+                })()
               )}
             </div>
             {!selectedProperty.mortgaged && (selectedProperty.houses > 0 || selectedProperty.hotel) && !selectedProperty.mortgaged && (

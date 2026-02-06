@@ -3,6 +3,7 @@ import { motion } from "framer-motion";
 import { useGameStore } from "../store/gameStore";
 import type { Property } from "../types/game";
 import { BoardMarketStatus } from "./BoardMarketStatus";
+import { getCurrentPropertyPrice } from "../logic/rules/economics";
 
 // Responsive space size based on viewport - maximize board size for readability
 const getSpaceSize = () => {
@@ -130,8 +131,8 @@ const getSpaceIcon = (space: { type: string; name: string }) => {
 
 const Space = ({ space, spaceSize, onPropertyClick }: { space: { id: number; name: string; type: string; colorGroup?: string | null }; spaceSize: number; onPropertyClick?: (property: Property) => void }) => {
   const pos = getSpacePosition(space.id, spaceSize);
-  const spaces = useGameStore((s) => s.spaces);
-  const property = spaces.find((s) => s.id === space.id) as Property | undefined;
+  const gameState = useGameStore((s) => s);
+  const property = gameState.spaces.find((s) => s.id === space.id) as Property | undefined;
   
   const icon = getSpaceIcon(space);
   const isPropertyType = space.type === "property";
@@ -244,7 +245,7 @@ const Space = ({ space, spaceSize, onPropertyClick }: { space: { id: number; nam
             alignItems: "center",
             gap: "2px"
           }}>
-            £{property.price}
+            £{getCurrentPropertyPrice(gameState, property)}
             {property.valueMultiplier !== undefined && property.valueMultiplier !== 1.0 && (
               <span style={{ fontSize: `${Math.floor(priceFontSize * 0.8)}px` }}>
                 {property.valueMultiplier > 1 ? "📈" : "📉"}

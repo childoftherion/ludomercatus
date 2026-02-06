@@ -24,6 +24,7 @@ import {
   calculateGoSalary,
   calculateTenPercentTax,
   calculateNetWorth,
+  getCurrentPropertyPrice,
   getOptimalTaxChoice,
   calculateGiniCoefficient,
 } from "../logic/rules/economics"
@@ -1060,8 +1061,20 @@ export class GameRoom implements GameActions {
       },
       {
         type: "market_crash",
-        description: "💥 Market Crash! Property values drop 20%",
-        duration: 3,
+        description: "💥 Market Crash! Property values and rents drop 20%",
+        duration: Math.floor(Math.random() * 11) + 5, // 5 to 15 turns
+        weight: 10,
+      },
+      {
+        type: "market_crash_1",
+        description: "🎈 Speculative Bubble! Property values +15%, but Rents -15%",
+        duration: Math.floor(Math.random() * 6) + 4, // 4 to 10 turns
+        weight: 10,
+      },
+      {
+        type: "market_crash_2",
+        description: "📉 Yield Crisis! Rents +15%, but Property values -15%",
+        duration: Math.floor(Math.random() * 6) + 4, // 4 to 10 turns
         weight: 10,
       },
       {
@@ -1237,7 +1250,8 @@ export class GameRoom implements GameActions {
     }
 
     // Validate cash
-    const cashValidation = validateCash(player, property.price, "buy property")
+    const price = getCurrentPropertyPrice(this.state, property)
+    const cashValidation = validateCash(player, price, "buy property")
     if (!cashValidation.valid) {
       this.addLogEntry(
         cashValidation.error || "Insufficient funds",
@@ -1255,7 +1269,7 @@ export class GameRoom implements GameActions {
         i === playerIndex
           ? {
               ...p,
-              cash: p.cash - property.price,
+              cash: p.cash - price,
               properties: [...p.properties, property.id],
             }
           : p,
@@ -1264,7 +1278,7 @@ export class GameRoom implements GameActions {
     })
 
     this.addLogEntry(
-      `${player.name} bought ${property.name} for £${property.price}`,
+      `${player.name} bought ${property.name} for £${price}`,
       "buy",
       playerIndex,
     )
@@ -2796,7 +2810,8 @@ export class GameRoom implements GameActions {
     if (!property) return 0
 
     // Insurance cost is a percentage of property value per round
-    return Math.ceil(property.price * this.state.settings.insuranceCostPercent)
+    const currentPrice = getCurrentPropertyPrice(this.state, property)
+    return Math.ceil(currentPrice * this.state.settings.insuranceCostPercent)
   }
 
   // Buy insurance for a property (covers for 5 rounds)
@@ -2998,11 +3013,7 @@ export class GameRoom implements GameActions {
     ) as Property
     if (!property) return 0
 
-    if (!this.state.settings.enablePropertyValueFluctuation) {
-      return property.price
-    }
-
-    return Math.round(property.price * property.valueMultiplier)
+    return getCurrentPropertyPrice(this.state, property)
   }
 
   // Get effective mortgage value
@@ -3684,7 +3695,8 @@ export class GameRoom implements GameActions {
       (s) => s.id === propertyId,
     ) as Property
     // Starting bid is 10% of property value (minimum £10)
-    const startingBid = Math.max(10, Math.floor((property?.price ?? 100) * 0.1))
+    const currentPrice = property ? getCurrentPropertyPrice(this.state, property) : 100
+    const startingBid = Math.max(10, Math.floor(currentPrice * 0.1))
 
     this.setState({
       auction: {
@@ -3713,7 +3725,8 @@ export class GameRoom implements GameActions {
 
     if (auction.currentBid === 0) {
       // Opening bid: 10% of property value (minimum £10)
-      return Math.max(10, Math.floor((property?.price ?? 100) * 0.1))
+      const currentPrice = property ? getCurrentPropertyPrice(this.state, property) : 100
+      return Math.max(10, Math.floor(currentPrice * 0.1))
     }
 
     // Minimum increment: 10% of current bid or £10, whichever is higher
