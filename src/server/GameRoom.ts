@@ -1837,7 +1837,7 @@ export class GameRoom implements GameActions {
       if (!iou) return
 
       // Seize property or force sale
-      if (propertyId !== undefined) {
+      if (propertyId != null) {
         // Lead creditor seizes property for themselves
         const property = this.state.spaces[propertyId] as Property
         if (property && property.owner === foreclosure.debtorIndex) {
@@ -2065,7 +2065,7 @@ export class GameRoom implements GameActions {
 
     if (!debtor || !creditor) return
 
-    if (propertyIdToTransfer !== undefined) {
+    if (propertyIdToTransfer != null) {
       // Transfer property as payment
       const propertyToTransfer = this.state.spaces.find(
         (s) => s.id === propertyIdToTransfer,
@@ -3600,7 +3600,7 @@ export class GameRoom implements GameActions {
             iousPayable: [],
             iousReceivable: [],
           }
-        if (i === creditorIndex && creditorIndex !== undefined) {
+        if (i === creditorIndex && creditorIndex != null) {
           return {
             ...p,
             cash: p.cash + Math.max(0, player.cash),
@@ -3619,12 +3619,12 @@ export class GameRoom implements GameActions {
         // Hardening: Update other players' IOUs
         const updatedPayable = p.iousPayable
           .map((iou) =>
-            iou.creditorId === playerIndex && creditorIndex !== undefined
+            iou.creditorId === playerIndex && creditorIndex != null
               ? { ...iou, creditorId: creditorIndex }
               : iou,
           )
           .filter(
-            (iou) => iou.creditorId !== playerIndex || creditorIndex !== undefined,
+            (iou) => iou.creditorId !== playerIndex || creditorIndex != null,
           )
 
         const updatedReceivable = p.iousReceivable.filter(
