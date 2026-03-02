@@ -12,6 +12,9 @@ const server = Bun.serve<{ roomId: string; clientId: string | null }>({
   },
   fetch(req: Request, server: any) {
     const url = new URL(req.url)
+    if (url.pathname === "/favicon.ico") {
+      return new Response(null, { status: 204 })
+    }
     if (url.pathname === "/ws") {
       const clientId = url.searchParams.get("clientId")
       if (server.upgrade(req, { data: { roomId: "default", clientId } })) {
@@ -34,6 +37,11 @@ const server = Bun.serve<{ roomId: string; clientId: string | null }>({
             ? message
             : new TextDecoder().decode(message),
         )
+
+        if (data.type === "PING") {
+          ws.send(JSON.stringify({ type: "PONG" }))
+          return
+        }
 
         // Room Management
         if (data.type === "CREATE_ROOM") {
@@ -83,6 +91,7 @@ const server = Bun.serve<{ roomId: string; clientId: string | null }>({
 
         // Game Action
         if (data.type === "ACTION") {
+          gameManager.touchRoom(ws.data.roomId)
           const { action, payload } = data
           const room = gameManager.getRoom(ws.data.roomId)
 

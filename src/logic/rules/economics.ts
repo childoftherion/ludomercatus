@@ -1,37 +1,58 @@
-import type { GameState, Player, Property } from "../../types/game"
+import type {
+  GameState,
+  Player,
+  Property,
+  MarketHistoryEntry,
+} from '../../types/game'
 
 const isProperty = (space: any): space is Property => {
-  return space.type === "property" || space.type === "railroad" || space.type === "utility"
+  return (
+    space.type === 'property' ||
+    space.type === 'railroad' ||
+    space.type === 'utility'
+  )
 }
 
-// Check if an economic event is active
-const isEconomicEventActive = (state: GameState, type: string): boolean => {
-  return state.activeEconomicEvents?.some(e => e.type === type) ?? false;
-};
+/** Check if an economic event is currently active */
+export const isEconomicEventActive = (state: GameState, type: string): boolean => {
+  return state.activeEconomicEvents?.some(e => e.type === type) ?? false
+}
+
+/**
+ * Apply economic event modifiers to a rent amount.
+ * Centralizes rent-affecting event logic so rent.ts and GameRoom stay consistent.
+ */
+export const applyRentEventModifier = (state: GameState, rent: number): number => {
+  if (isEconomicEventActive(state, 'recession')) return Math.round(rent * 0.75)
+  if (isEconomicEventActive(state, 'market_crash')) return Math.round(rent * 0.8)
+  if (isEconomicEventActive(state, 'market_crash_1')) return Math.round(rent * 0.85)
+  if (isEconomicEventActive(state, 'market_crash_2')) return Math.round(rent * 1.15)
+  if (isEconomicEventActive(state, 'bull_market')) return Math.round(rent * 1.2)
+  return rent
+}
+
+/**
+ * Apply economic event modifiers to a property price.
+ * Centralizes price-affecting event logic for getCurrentPropertyPrice and similar callers.
+ */
+export const applyPriceEventModifier = (state: GameState, price: number): number => {
+  if (isEconomicEventActive(state, 'market_crash')) return Math.round(price * 0.8)
+  if (isEconomicEventActive(state, 'market_crash_1')) return Math.round(price * 1.15)
+  if (isEconomicEventActive(state, 'market_crash_2')) return Math.round(price * 0.85)
+  if (isEconomicEventActive(state, 'bull_market')) return Math.round(price * 1.2)
+  return Math.round(price)
+}
 
 /**
  * Get the current market price of a property, accounting for economic events
  */
-export const getCurrentPropertyPrice = (state: GameState, property: Property): number => {
-  let price = property.price * property.valueMultiplier;
-
-  // Apply economic event modifiers
-  if (isEconomicEventActive(state, "market_crash")) {
-    // Market Crash: 20% price reduction
-    price *= 0.80;
-  } else if (isEconomicEventActive(state, "market_crash_1")) {
-    // Speculative Bubble: 15% price increase
-    price *= 1.15;
-  } else if (isEconomicEventActive(state, "market_crash_2")) {
-    // Yield Crisis: 15% price reduction
-    price *= 0.85;
-  } else if (isEconomicEventActive(state, "bull_market")) {
-    // Bull Market: 20% price increase
-    price *= 1.20;
-  }
-
-  return Math.round(price);
-};
+export const getCurrentPropertyPrice = (
+  state: GameState,
+  property: Property,
+): number => {
+  const basePrice = property.price * property.valueMultiplier
+  return applyPriceEventModifier(state, basePrice)
+}
 
 /**
  * Calculate the net worth of a player
@@ -43,7 +64,10 @@ export const getCurrentPropertyPrice = (state: GameState, property: Property): n
  *
  * Note: Houses/Hotels are valued at half their cost (liquidation value)
  */
-export const calculateNetWorth = (state: GameState, playerIndex: number): number => {
+export const calculateNetWorth = (
+  state: GameState,
+  playerIndex: number,
+): number => {
   const player = state.players[playerIndex]
   if (!player) return 0
 
@@ -51,7 +75,7 @@ export const calculateNetWorth = (state: GameState, playerIndex: number): number
 
   // Get all properties owned by this player
   const ownedProperties = state.spaces.filter(
-    (s): s is Property => isProperty(s) && s.owner === playerIndex
+    (s): s is Property => isProperty(s) && s.owner === playerIndex,
   )
 
   for (const property of ownedProperties) {
@@ -74,9 +98,9 @@ export const calculateNetWorth = (state: GameState, playerIndex: number): number
     if (property.buildingCost) {
       if (property.hotel) {
         // Hotel = 5 buildings worth (4 houses + 1 hotel upgrade)
-        netWorth += Math.floor(property.buildingCost * 5 / 2)
+        netWorth += Math.floor((property.buildingCost * 5) / 2)
       } else if (property.houses > 0) {
-        netWorth += Math.floor(property.buildingCost * property.houses / 2)
+        netWorth += Math.floor((property.buildingCost * property.houses) / 2)
       }
     }
   }
@@ -90,7 +114,10 @@ export const calculateNetWorth = (state: GameState, playerIndex: number): number
 /**
  * Calculate 10% of net worth for progressive income tax
  */
-export const calculateTenPercentTax = (state: GameState, playerIndex: number): number => {
+export const calculateTenPercentTax = (
+  state: GameState,
+  playerIndex: number,
+): number => {
   const netWorth = calculateNetWorth(state, playerIndex)
   return Math.floor(netWorth * 0.1)
 }
@@ -101,15 +128,15 @@ export const calculateTenPercentTax = (state: GameState, playerIndex: number): n
  */
 export const getOptimalTaxChoice = (
   state: GameState,
-  playerIndex: number
-): { choice: "flat" | "percentage"; amount: number } => {
+  playerIndex: number,
+): { choice: 'flat' | 'percentage'; amount: number } => {
   const tenPercent = calculateTenPercentTax(state, playerIndex)
   const flatTax = 200
 
   if (tenPercent < flatTax) {
-    return { choice: "percentage", amount: tenPercent }
+    return { choice: 'percentage', amount: tenPercent }
   }
-  return { choice: "flat", amount: flatTax }
+  return { choice: 'flat', amount: flatTax }
 }
 
 /**
@@ -132,8 +159,13 @@ export const calculateGoSalary = (roundsCompleted: number): number => {
  * Get all players sorted by net worth (descending)
  */
 export const getNetWorthRanking = (
-  state: GameState
-): Array<{ playerIndex: number; name: string; netWorth: number; rank: number }> => {
+  state: GameState,
+): Array<{
+  playerIndex: number
+  name: string
+  netWorth: number
+  rank: number
+}> => {
   const rankings = state.players
     .map((player, index) => ({
       playerIndex: index,
@@ -163,6 +195,65 @@ export const calculateMoneyInCirculation = (state: GameState): number => {
 }
 
 /**
+ * Get latest market history entry.
+ */
+export const getLatestMarketHistoryEntry = (
+  marketHistory: MarketHistoryEntry[],
+) => {
+  return marketHistory[marketHistory.length - 1] ?? null
+}
+
+/**
+ * Get previous market history entry.
+ */
+export const getPreviousMarketHistoryEntry = (
+  marketHistory: MarketHistoryEntry[],
+) => {
+  return marketHistory[marketHistory.length - 2] ?? null
+}
+
+export type MarketHistoryTrendDirection = 'up' | 'down' | 'flat'
+
+export interface InflationTrend {
+  direction: MarketHistoryTrendDirection
+  delta: number
+  percentage: number
+}
+
+/**
+ * Compute the inflation trend from market history.
+ */
+export const getInflationTrendFromHistory = (
+  marketHistory: MarketHistoryEntry[],
+): InflationTrend => {
+  const latest = getLatestMarketHistoryEntry(marketHistory)
+  const previous = getPreviousMarketHistoryEntry(marketHistory)
+
+  if (!latest || !previous) {
+    return { direction: 'flat', delta: 0, percentage: 0 }
+  }
+
+  const delta = latest.inflation - previous.inflation
+  const direction = delta > 0 ? 'up' : delta < 0 ? 'down' : 'flat'
+  const base = previous.inflation === 0 ? 1 : previous.inflation
+
+  return {
+    direction,
+    delta,
+    percentage: (delta / base) * 100,
+  }
+}
+
+/**
+ * Read the most recent money-in-circulation snapshot from market history.
+ */
+export const getMoneyInCirculationFromHistory = (
+  marketHistory: MarketHistoryEntry[],
+): number | null => {
+  return getLatestMarketHistoryEntry(marketHistory)?.moneyInCirculation ?? null
+}
+
+/**
  * Calculate Gini coefficient for wealth inequality (0 = perfect equality, 1 = perfect inequality)
  */
 export const calculateGiniCoefficient = (state: GameState): number => {
@@ -170,7 +261,9 @@ export const calculateGiniCoefficient = (state: GameState): number => {
   if (activePlayers.length <= 1) return 0
 
   const netWorths = activePlayers
-    .map((_, i) => calculateNetWorth(state, state.players.indexOf(activePlayers[i]!)))
+    .map((_, i) =>
+      calculateNetWorth(state, state.players.indexOf(activePlayers[i]!)),
+    )
     .sort((a, b) => a - b)
 
   const n = netWorths.length
@@ -191,4 +284,3 @@ export const calculateGiniCoefficient = (state: GameState): number => {
 
   return Math.max(0, Math.min(1, gini))
 }
-

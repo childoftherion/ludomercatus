@@ -1,4 +1,3 @@
-
 import type {
   GameState,
   Player,
@@ -14,12 +13,12 @@ import type {
   EconomicEventType,
   IOU,
   AIDifficulty,
-} from "../types/game"
-import { DEFAULT_GAME_SETTINGS } from "../types/game"
-import { boardSpaces } from "../data/board"
-import { createChanceDeck, createCommunityChestDeck } from "../data/cards"
-import { calculateRent } from "../logic/rules/rent"
-import { hasMonopoly, getPlayerProperties } from "../logic/rules/monopoly"
+} from '../types/game'
+import { DEFAULT_GAME_SETTINGS } from '../types/game'
+import { boardSpaces } from '../data/board'
+import { createChanceDeck, createCommunityChestDeck } from '../data/cards'
+import { calculateRent } from '../logic/rules/rent'
+import { hasMonopoly, getPlayerProperties } from '../logic/rules/monopoly'
 import {
   calculateGoSalary,
   calculateTenPercentTax,
@@ -27,12 +26,13 @@ import {
   getCurrentPropertyPrice,
   getOptimalTaxChoice,
   calculateGiniCoefficient,
-} from "../logic/rules/economics"
+  calculateMoneyInCirculation,
+} from '../logic/rules/economics'
 import {
   executeAITurn,
   executeAITradeResponse,
   type GameActions,
-} from "../logic/ai"
+} from '../logic/ai'
 import {
   validatePlayerTurn,
   validateCash,
@@ -40,24 +40,24 @@ import {
   validateBuilding,
   validateTradeOffer,
   validateMortgage,
-} from "../utils/validation"
+} from '../utils/validation'
 
 const PLAYER_COLORS = [
-  "#FF6B6B",
-  "#4ECDC4",
-  "#45B7D1",
-  "#96CEB4",
-  "#FFEAA7",
-  "#DDA0DD",
-  "#98D8C8",
-  "#F7DC6F",
+  '#FF6B6B',
+  '#4ECDC4',
+  '#45B7D1',
+  '#96CEB4',
+  '#FFEAA7',
+  '#DDA0DD',
+  '#98D8C8',
+  '#F7DC6F',
 ]
 
 const isProperty = (space: Space): space is Property => {
   return (
-    space.type === "property" ||
-    space.type === "railroad" ||
-    space.type === "utility"
+    space.type === 'property' ||
+    space.type === 'railroad' ||
+    space.type === 'utility'
   )
 }
 
@@ -92,8 +92,9 @@ const createPlayer = (
   jailFreeCards: 0,
   bankrupt: false,
   isAI,
-  aiDifficulty: isAI ? (aiDifficulty ?? "medium") : null,
+  aiDifficulty: isAI ? (aiDifficulty ?? 'medium') : null,
   clientId: null,
+  previousClientId: null,
   lastTradeTurn: -10,
   tradeHistory: null,
   // Bank Loans (Phase 2)
@@ -115,7 +116,7 @@ export class GameRoom implements GameActions {
   private listeners = new Set<(state: GameState) => void>()
 
   constructor(
-    initialPhase: "setup" | "lobby" = "setup",
+    initialPhase: 'setup' | 'lobby' = 'setup',
     settings: Partial<GameSettings> = {},
   ) {
     this.state = {
@@ -159,12 +160,12 @@ export class GameRoom implements GameActions {
       // Phase 3: Foreclosure
       pendingForeclosure: null,
       // Jackpot system
-    jackpot: 0,
-    // Market History
-    marketHistory: [],
-    // Multiplayer stability
-    turnStartTime: Date.now(),
-  }
+      jackpot: 0,
+      // Market History
+      marketHistory: [],
+      // Multiplayer stability
+      turnStartTime: Date.now(),
+    }
 
     // Bind all public methods to `this`
     this.addPlayer = this.addPlayer.bind(this)
@@ -216,7 +217,7 @@ export class GameRoom implements GameActions {
   }
 
   private notify() {
-    this.listeners.forEach((listener) => listener(this.state))
+    this.listeners.forEach(listener => listener(this.state))
   }
 
   // --- State Updates ---
@@ -246,7 +247,7 @@ export class GameRoom implements GameActions {
     payload: unknown,
   ): { allowed: boolean; payload: unknown[]; error?: string } {
     const payloadArray: unknown[] = Array.isArray(payload) ? payload : []
-    const resolvedClientId = typeof clientId === "string" ? clientId : null
+    const resolvedClientId = typeof clientId === 'string' ? clientId : null
 
     const allow = (nextPayload: unknown[] = payloadArray) => ({
       allowed: true,
@@ -258,268 +259,300 @@ export class GameRoom implements GameActions {
       error,
     })
 
-    if (action === "initGame") return allow(payloadArray)
+    if (action === 'initGame') return allow(payloadArray)
 
-    if (action === "addPlayer") {
-      if (!resolvedClientId) return deny("Missing clientId")
+    if (action === 'addPlayer') {
+      if (!resolvedClientId) return deny('Missing clientId')
       const [name, token, _clientId, isMobile] = payloadArray
       return allow([name, token, resolvedClientId, isMobile])
     }
 
-    if (action === "assignPlayer") {
-      if (!resolvedClientId) return deny("Missing clientId")
+    if (action === 'assignPlayer') {
+      if (!resolvedClientId) return deny('Missing clientId')
       const [index] = payloadArray
+      const player = this.state.players[index as number]
+      if (!player) return deny('Invalid player slot')
+
+      // A player can't claim a seat occupied by another connected human.
+      if (
+        player.clientId &&
+        player.clientId !== resolvedClientId &&
+        player.isConnected &&
+        !player.isAI
+      ) {
+        return deny('Seat is already occupied by another human player')
+      }
+
+      // A player can't claim an AI seat that has been taken over by another human.
+      if (
+        player.isAI &&
+        player.clientId &&
+        player.clientId !== resolvedClientId
+      ) {
+        const occupyingPlayer = this.state.players.find(
+          p => p.clientId === player.clientId,
+        )
+        if (occupyingPlayer && occupyingPlayer.isConnected) {
+          return deny('Seat is already occupied by an active player')
+        }
+      }
+
       return allow([index, resolvedClientId])
     }
 
     const actorIndex = resolvedClientId
-      ? this.state.players.findIndex((p) => p.clientId === resolvedClientId)
+      ? this.state.players.findIndex(p => p.clientId === resolvedClientId)
       : -1
 
-    if (action === "updatePlayer") {
-      if (actorIndex === -1) return deny("Unknown player")
+    if (action === 'updatePlayer') {
+      if (actorIndex === -1) return deny('Unknown player')
       const [index] = payloadArray
-      if (typeof index !== "number" || index !== actorIndex)
-        return deny("Not allowed")
+      if (typeof index !== 'number' || index !== actorIndex)
+        return deny('Not allowed')
       return allow(payloadArray)
     }
 
-    if (action === "startGame") {
-      if (actorIndex === -1) return deny("Unknown player")
+    if (action === 'startGame') {
+      if (actorIndex === -1) return deny('Unknown player')
       return allow(payloadArray)
     }
 
-    if (action === "updateSettings") {
-      if (actorIndex !== 0) return deny("Only host can update settings")
+    if (action === 'updateSettings') {
+      if (actorIndex !== 0) return deny('Only host can update settings')
       return allow(payloadArray)
     }
 
     const isCurrentTurn = actorIndex === this.state.currentPlayerIndex
 
     const isHostClient = (() => {
-      const firstHumanIndex = this.state.players.findIndex((p) => !p.isAI)
+      const firstHumanIndex = this.state.players.findIndex(p => !p.isAI)
       return firstHumanIndex !== -1 && actorIndex === firstHumanIndex
     })()
 
-    if (action === "executeAITurn" || action === "executeAITradeResponse") {
-      if (!isHostClient) return deny("Only host can run AI")
-      
-      // If it's an AI turn and they have already rolled but haven't moved, 
+    if (action === 'executeAITurn' || action === 'executeAITradeResponse') {
+      if (!isHostClient) return deny('Only host can run AI')
+
+      // If it's an AI turn and they have already rolled but haven't moved,
       // block the executeAITurn action to prevent re-rolling
-      if (action === "executeAITurn") {
+      if (action === 'executeAITurn') {
         const player = this.state.players[this.state.currentPlayerIndex]
-        if (player?.isAI && this.state.phase === "rolling" && this.state.diceRoll) {
-          return deny("AI already rolled, waiting for move")
+        if (
+          player?.isAI &&
+          this.state.phase === 'rolling' &&
+          this.state.diceRoll
+        ) {
+          return deny('AI already rolled, waiting for move')
         }
       }
-      
+
       return allow(payloadArray)
     }
 
     if (
-      action === "rollDice" ||
-      action === "movePlayer" ||
-      action === "buyProperty" ||
-      action === "declineProperty" ||
-      action === "endTurn"
+      action === 'rollDice' ||
+      action === 'movePlayer' ||
+      action === 'buyProperty' ||
+      action === 'declineProperty' ||
+      action === 'endTurn'
     ) {
-      if (!isCurrentTurn) return deny("Not your turn")
+      if (!isCurrentTurn) return deny('Not your turn')
     }
 
-    if (action === "rollDice") {
+    if (action === 'rollDice') {
       const player = this.state.players[this.state.currentPlayerIndex]
-      if (!player || player.isAI) return deny("Not allowed")
-      if (this.state.phase !== "rolling") return deny("Not allowed")
-      if (player.inJail) return deny("Not allowed")
-      if (this.state.diceRoll) return deny("Not allowed")
+      if (!player || player.isAI) return deny('Not allowed')
+      if (this.state.phase !== 'rolling') return deny('Not allowed')
+      if (player.inJail) return deny('Not allowed')
+      if (this.state.diceRoll) return deny('Not allowed')
       return allow(payloadArray)
     }
 
-    if (action === "movePlayer") {
+    if (action === 'movePlayer') {
       const [playerIndex, steps] = payloadArray
-      if (typeof playerIndex !== "number" || typeof steps !== "number")
-        return deny("Invalid payload")
-      if (playerIndex !== actorIndex) return deny("Not allowed")
-      
+      if (typeof playerIndex !== 'number' || typeof steps !== 'number')
+        return deny('Invalid payload')
+      if (playerIndex !== actorIndex) return deny('Not allowed')
+
       // Allow moving in "moving" phase OR "rolling" phase (for legacy/jail scenarios)
-      if (this.state.phase !== "moving" && this.state.phase !== "rolling") return deny("Not allowed")
-      
+      if (this.state.phase !== 'moving' && this.state.phase !== 'rolling')
+        return deny('Not allowed')
+
       const rollTotal = this.state.diceRoll?.total
-      if (typeof rollTotal !== "number") return deny("Not allowed")
-      if (steps !== rollTotal) return deny("Not allowed")
+      if (typeof rollTotal !== 'number') return deny('Not allowed')
+      if (steps !== rollTotal) return deny('Not allowed')
       return allow(payloadArray)
     }
 
-    if (action === "buyProperty" || action === "declineProperty") {
-      if (this.state.phase !== "awaiting_buy_decision")
-        return deny("Not allowed")
+    if (action === 'buyProperty' || action === 'declineProperty') {
+      if (this.state.phase !== 'awaiting_buy_decision')
+        return deny('Not allowed')
       return allow(payloadArray)
     }
 
-    if (action === "endTurn") {
-      if (this.state.phase !== "resolving_space") return deny("Not allowed")
+    if (action === 'endTurn') {
+      if (this.state.phase !== 'resolving_space') return deny('Not allowed')
       return allow(payloadArray)
     }
 
-    if (action === "getOutOfJail") {
+    if (action === 'getOutOfJail') {
       const [playerIndex, method] = payloadArray
-      if (typeof playerIndex !== "number") return deny("Invalid payload")
-      if (playerIndex !== actorIndex) return deny("Not allowed")
-      if (!isCurrentTurn) return deny("Not your turn")
-      if (method !== "roll" && method !== "pay" && method !== "card")
-        return deny("Invalid payload")
+      if (typeof playerIndex !== 'number') return deny('Invalid payload')
+      if (playerIndex !== actorIndex) return deny('Not allowed')
+      if (!isCurrentTurn) return deny('Not your turn')
+      if (method !== 'roll' && method !== 'pay' && method !== 'card')
+        return deny('Invalid payload')
       const player = this.state.players[playerIndex]
-      if (!player?.inJail) return deny("Not allowed")
+      if (!player?.inJail) return deny('Not allowed')
       if (
-        this.state.phase !== "jail_decision" &&
-        this.state.phase !== "rolling"
+        this.state.phase !== 'jail_decision' &&
+        this.state.phase !== 'rolling'
       )
-        return deny("Not allowed")
+        return deny('Not allowed')
       return allow(payloadArray)
     }
 
-    if (action === "chooseTaxOption") {
+    if (action === 'chooseTaxOption') {
       const [playerIndex, choice] = payloadArray
-      if (typeof playerIndex !== "number") return deny("Invalid payload")
-      if (playerIndex !== actorIndex) return deny("Not allowed")
-      if (!isCurrentTurn) return deny("Not your turn")
-      if (choice !== "flat" && choice !== "percentage")
-        return deny("Invalid payload")
+      if (typeof playerIndex !== 'number') return deny('Invalid payload')
+      if (playerIndex !== actorIndex) return deny('Not allowed')
+      if (!isCurrentTurn) return deny('Not your turn')
+      if (choice !== 'flat' && choice !== 'percentage')
+        return deny('Invalid payload')
       if (
-        this.state.phase !== "awaiting_tax_decision" ||
+        this.state.phase !== 'awaiting_tax_decision' ||
         this.state.awaitingTaxDecision?.playerIndex !== playerIndex
       )
-        return deny("Not allowed")
+        return deny('Not allowed')
       return allow(payloadArray)
     }
 
-    if (action === "placeBid" || action === "passAuction") {
+    if (action === 'placeBid' || action === 'passAuction') {
       const [playerIndex] = payloadArray
-      if (typeof playerIndex !== "number") return deny("Invalid payload")
-      if (playerIndex !== actorIndex) return deny("Not allowed")
-      if (this.state.phase !== "auction" || !this.state.auction)
-        return deny("Not allowed")
+      if (typeof playerIndex !== 'number') return deny('Invalid payload')
+      if (playerIndex !== actorIndex) return deny('Not allowed')
+      if (this.state.phase !== 'auction' || !this.state.auction)
+        return deny('Not allowed')
       if (this.state.auction.activePlayerIndex !== playerIndex)
-        return deny("Not allowed")
+        return deny('Not allowed')
       return allow(payloadArray)
     }
 
     if (
-      action === "startTrade" ||
-      action === "updateTradeOffer" ||
-      action === "proposeTrade" ||
-      action === "acceptTrade" ||
-      action === "rejectTrade" ||
-      action === "cancelTrade" ||
-      action === "counterOffer" ||
-      action === "acceptCounterOffer"
+      action === 'startTrade' ||
+      action === 'updateTradeOffer' ||
+      action === 'proposeTrade' ||
+      action === 'acceptTrade' ||
+      action === 'rejectTrade' ||
+      action === 'cancelTrade' ||
+      action === 'counterOffer' ||
+      action === 'acceptCounterOffer'
     ) {
       const trade = this.state.trade
-      if (action === "startTrade") {
+      if (action === 'startTrade') {
         const [fromPlayer] = payloadArray
-        if (typeof fromPlayer !== "number") return deny("Invalid payload")
-        if (fromPlayer !== actorIndex) return deny("Not allowed")
-        if (!isCurrentTurn) return deny("Not your turn")
-        if (this.state.phase === "auction")
-          return deny("Cannot trade during an auction")
+        if (typeof fromPlayer !== 'number') return deny('Invalid payload')
+        if (fromPlayer !== actorIndex) return deny('Not allowed')
+        if (!isCurrentTurn) return deny('Not your turn')
+        if (this.state.phase === 'auction')
+          return deny('Cannot trade during an auction')
         return allow(payloadArray)
       }
 
-      if (!trade) return deny("Not allowed")
+      if (!trade) return deny('Not allowed')
       const { offer, status } = trade
       const isFrom = actorIndex === offer.fromPlayer
       const isTo = actorIndex === offer.toPlayer
 
-      if (!isFrom && !isTo) return deny("Not allowed")
+      if (!isFrom && !isTo) return deny('Not allowed')
 
-      if (action === "updateTradeOffer" || action === "proposeTrade") {
-        if (!isFrom) return deny("Not allowed")
+      if (action === 'updateTradeOffer' || action === 'proposeTrade') {
+        if (!isFrom) return deny('Not allowed')
       }
 
-      if (action === "counterOffer") {
-        if (!isTo) return deny("Not allowed")
+      if (action === 'counterOffer') {
+        if (!isTo) return deny('Not allowed')
       }
 
-      if (action === "cancelTrade") {
-        if (!isFrom) return deny("Not allowed")
+      if (action === 'cancelTrade') {
+        if (!isFrom) return deny('Not allowed')
       }
 
-      if (action === "acceptTrade" || action === "rejectTrade") {
-        if (status === "pending") {
-          if (!isTo) return deny("Not allowed")
-        } else if (status === "counter_pending") {
-          if (!isFrom) return deny("Not allowed")
+      if (action === 'acceptTrade' || action === 'rejectTrade') {
+        if (status === 'pending') {
+          if (!isTo) return deny('Not allowed')
+        } else if (status === 'counter_pending') {
+          if (!isFrom) return deny('Not allowed')
         } else {
-          return deny("Not allowed")
+          return deny('Not allowed')
         }
       }
 
-      if (action === "acceptCounterOffer") {
-        if (!isFrom || status !== "counter_pending") return deny("Not allowed")
+      if (action === 'acceptCounterOffer') {
+        if (!isFrom || status !== 'counter_pending') return deny('Not allowed')
       }
 
       return allow(payloadArray)
     }
 
     if (
-      action === "forgiveRent" ||
-      action === "createRentIOU" ||
-      action === "demandImmediatePaymentOrProperty"
+      action === 'forgiveRent' ||
+      action === 'createRentIOU' ||
+      action === 'demandImmediatePaymentOrProperty'
     ) {
       const negotiation = this.state.pendingRentNegotiation
-      if (!negotiation || this.state.phase !== "awaiting_rent_negotiation")
-        return deny("Not allowed")
-      if (action === "createRentIOU") {
-        if (actorIndex !== negotiation.debtorIndex) return deny("Not allowed")
+      if (!negotiation || this.state.phase !== 'awaiting_rent_negotiation')
+        return deny('Not allowed')
+      if (action === 'createRentIOU') {
+        if (actorIndex !== negotiation.debtorIndex) return deny('Not allowed')
       } else {
-        if (actorIndex !== negotiation.creditorIndex) return deny("Not allowed")
+        if (actorIndex !== negotiation.creditorIndex) return deny('Not allowed')
       }
       return allow(payloadArray)
     }
 
-    if (action === "payIOU") {
+    if (action === 'payIOU') {
       const [debtorIndex] = payloadArray
-      if (typeof debtorIndex !== "number") return deny("Invalid payload")
-      if (debtorIndex !== actorIndex) return deny("Not allowed")
-      if (this.state.phase === "auction")
-        return deny("Cannot pay IOUs during an auction")
+      if (typeof debtorIndex !== 'number') return deny('Invalid payload')
+      if (debtorIndex !== actorIndex) return deny('Not allowed')
+      if (this.state.phase === 'auction')
+        return deny('Cannot pay IOUs during an auction')
       return allow(payloadArray)
     }
 
-    if (action === "enterChapter11" || action === "declineRestructuring") {
+    if (action === 'enterChapter11' || action === 'declineRestructuring') {
       const pending = (this.state as any).pendingBankruptcy
-      if (!pending || this.state.phase !== "awaiting_bankruptcy_decision")
-        return deny("Not allowed")
-      if (actorIndex !== pending.playerIndex) return deny("Not allowed")
+      if (!pending || this.state.phase !== 'awaiting_bankruptcy_decision')
+        return deny('Not allowed')
+      if (actorIndex !== pending.playerIndex) return deny('Not allowed')
       return allow(payloadArray)
     }
 
     if (
-      action === "buildHouse" ||
-      action === "buildHotel" ||
-      action === "sellHouse" ||
-      action === "sellHotel" ||
-      action === "mortgageProperty" ||
-      action === "unmortgageProperty" ||
-      action === "takeLoan" ||
-      action === "repayLoan" ||
-      action === "buyPropertyInsurance" ||
-      action === "appreciateColorGroup" ||
-      action === "depreciateColorGroup"
+      action === 'buildHouse' ||
+      action === 'buildHotel' ||
+      action === 'sellHouse' ||
+      action === 'sellHotel' ||
+      action === 'mortgageProperty' ||
+      action === 'unmortgageProperty' ||
+      action === 'takeLoan' ||
+      action === 'repayLoan' ||
+      action === 'buyPropertyInsurance' ||
+      action === 'appreciateColorGroup' ||
+      action === 'depreciateColorGroup'
     ) {
-      if (!isCurrentTurn) return deny("Not your turn")
-      if (this.state.phase === "setup" || this.state.phase === "lobby")
-        return deny("Not allowed")
-      if (this.state.phase === "auction" || this.state.phase === "trading")
-        return deny("Not allowed")
+      if (!isCurrentTurn) return deny('Not your turn')
+      if (this.state.phase === 'setup' || this.state.phase === 'lobby')
+        return deny('Not allowed')
+      if (this.state.phase === 'auction' || this.state.phase === 'trading')
+        return deny('Not allowed')
       return allow(payloadArray)
     }
 
-    if (action === "drawCard") {
+    if (action === 'drawCard') {
       const [playerIndex] = payloadArray
-      if (typeof playerIndex !== "number") return deny("Invalid payload")
-      if (playerIndex !== actorIndex) return deny("Not allowed")
-      if (!isCurrentTurn) return deny("Not your turn")
+      if (typeof playerIndex !== 'number') return deny('Invalid payload')
+      if (playerIndex !== actorIndex) return deny('Not allowed')
+      if (!isCurrentTurn) return deny('Not your turn')
       return allow(payloadArray)
     }
 
@@ -534,10 +567,10 @@ export class GameRoom implements GameActions {
     clientId: string,
     isMobile?: boolean,
   ) {
-    if (this.state.phase !== "lobby") return
+    if (this.state.phase !== 'lobby') return
 
     const existingIndex = this.state.players.findIndex(
-      (p) => p.clientId === clientId,
+      p => p.clientId === clientId,
     )
     if (existingIndex !== -1) {
       this.updatePlayer(existingIndex, name, token)
@@ -558,7 +591,7 @@ export class GameRoom implements GameActions {
     // Ensure unique name
     let uniqueName = name
     let counter = 2
-    while (this.state.players.some((p) => p.name === uniqueName)) {
+    while (this.state.players.some(p => p.name === uniqueName)) {
       uniqueName = `${name} (${counter})`
       counter++
     }
@@ -567,7 +600,7 @@ export class GameRoom implements GameActions {
       index,
       uniqueName,
       token,
-      PLAYER_COLORS[index] ?? "#999999",
+      PLAYER_COLORS[index] ?? '#999999',
       false,
     )
     newPlayer.clientId = clientId
@@ -577,14 +610,14 @@ export class GameRoom implements GameActions {
       players: [...this.state.players, newPlayer],
     })
     this.addLogEntry(
-      `${uniqueName} joined the lobby!${isMobile ? " (Mobile)" : ""}`,
-      "system",
+      `${uniqueName} joined the lobby!${isMobile ? ' (Mobile)' : ''}`,
+      'system',
     )
   }
 
   public handlePlayerDisconnect(clientId: string) {
     const playerIndex = this.state.players.findIndex(
-      (p) => p.clientId === clientId,
+      p => p.clientId === clientId,
     )
     if (playerIndex === -1) return
 
@@ -595,7 +628,7 @@ export class GameRoom implements GameActions {
     updatedPlayers[playerIndex] = { ...player, isConnected: false }
 
     this.setState({ players: updatedPlayers })
-    this.addLogEntry(`${player.name} disconnected.`, "system")
+    this.addLogEntry(`${player.name} disconnected.`, 'system')
 
     // If it's their turn and they are not AI, start a timeout to skip their turn
     if (this.state.currentPlayerIndex === playerIndex && !player.isAI) {
@@ -609,7 +642,7 @@ export class GameRoom implements GameActions {
         ) {
           this.addLogEntry(
             `${currentPlayer.name} timed out. Converting to AI.`,
-            "system",
+            'system',
           )
 
           // Convert to AI instead of just skipping
@@ -617,7 +650,10 @@ export class GameRoom implements GameActions {
           updatedPlayers[playerIndex] = {
             ...currentPlayer,
             isAI: true,
-            aiDifficulty: "medium",
+            aiDifficulty: 'medium',
+            previousClientId: currentPlayer.clientId, // Preserve the original clientId
+            clientId: null,
+            isConnected: false,
           }
 
           this.setState({ players: updatedPlayers })
@@ -630,23 +666,40 @@ export class GameRoom implements GameActions {
   }
 
   public handlePlayerReconnect(clientId: string) {
+    // Find by current clientId or previousClientId
     const playerIndex = this.state.players.findIndex(
-      (p) => p.clientId === clientId,
+      p => p.clientId === clientId || p.previousClientId === clientId,
     )
     if (playerIndex === -1) return
 
     const player = this.state.players[playerIndex]
     if (!player) return
 
+    // If another player has taken the seat in the meantime, we can't reconnect them to it.
+    if (player.clientId && player.clientId !== clientId) {
+      this.addLogEntry(
+        `${player.name} tried to reconnect, but seat was taken.`,
+        'system',
+      )
+      return
+    }
+
     const updatedPlayers = [...this.state.players]
-    updatedPlayers[playerIndex] = { ...player, isConnected: true }
+    updatedPlayers[playerIndex] = {
+      ...player,
+      isAI: false,
+      aiDifficulty: null,
+      isConnected: true,
+      clientId: clientId, // Ensure clientId is set to the reconnecting client
+      previousClientId: null, // Clear previousClientId
+    }
 
     this.setState({ players: updatedPlayers })
-    this.addLogEntry(`${player.name} reconnected!`, "system")
+    this.addLogEntry(`${player.name} reconnected!`, 'system')
   }
 
   public updatePlayer(index: number, name: string, token: string) {
-    if (this.state.phase !== "lobby") return
+    if (this.state.phase !== 'lobby') return
     const player = this.state.players[index]
     if (!player) return
 
@@ -659,20 +712,47 @@ export class GameRoom implements GameActions {
     const player = this.state.players[index]
     if (!player) return
 
-    // We used to block reassigning if already taken, but this causes issues on refresh
-    // if client IDs change or server sessions linger.
-    // We now allow re-claiming human players to ensure session recovery.
-    if (player.isAI) {
-      console.warn(`[GameRoom] Cannot claim AI player ${index}`)
+    // AIs can be claimed when:
+    // - the seat is disconnected,
+    // - the claiming client matches the AI seat's prior owner, or
+    // - the AI seat is an unowned AI slot.
+    const canClaimAiSeat =
+      player.isAI &&
+      (!player.isConnected ||
+        player.clientId === null ||
+        player.clientId === clientId ||
+        player.previousClientId === clientId)
+
+    const canClaimHumanSeat =
+      !player.isAI && (!player.isConnected || player.clientId === clientId)
+
+    if (!canClaimAiSeat && !canClaimHumanSeat) {
+      console.warn(`[GameRoom] Cannot claim active player ${index}`, {
+        isConnected: player.isConnected,
+        previousClientId: player.clientId,
+        requesterClientId: clientId,
+      })
       return
     }
 
     // Assign clientId to the player
     const updatedPlayers = [...this.state.players]
-    updatedPlayers[index] = { ...player, clientId }
+    updatedPlayers[index] = {
+      ...player,
+      clientId,
+      isAI: false,
+      aiDifficulty: null,
+      isConnected: true,
+      previousClientId: null, // Clear on claim
+    }
 
     this.setState({ players: updatedPlayers })
-    this.addLogEntry(`${player.name} claimed by a new session!`, "system")
+    const wasAI = player.isAI
+    const source = wasAI ? 'AI slot' : 'human seat'
+    this.addLogEntry(
+      `${player.name} claimed from ${source} by a human!`,
+      'system',
+    )
     console.log(
       `[GameRoom] Player ${index} (${player.name}) claimed by ${clientId}`,
     )
@@ -680,8 +760,8 @@ export class GameRoom implements GameActions {
 
   public startGame() {
     if (this.state.players.length < 2) return
-    this.setState({ phase: "rolling" })
-    this.addLogEntry("Game Started!", "system")
+    this.setState({ phase: 'rolling' })
+    this.addLogEntry('Game Started!', 'system')
   }
 
   // --- GameActions Implementation ---
@@ -698,7 +778,7 @@ export class GameRoom implements GameActions {
         index,
         name,
         tokens[index] ?? name,
-        PLAYER_COLORS[index] ?? "#999999",
+        PLAYER_COLORS[index] ?? '#999999',
         isAIFlags[index] ?? false,
         aiDifficulties[index],
       )
@@ -714,7 +794,7 @@ export class GameRoom implements GameActions {
       spaces: JSON.parse(JSON.stringify(boardSpaces)) as Space[],
       chanceDeck: shuffleDeck(createChanceDeck()),
       communityChestDeck: shuffleDeck(createCommunityChestDeck()),
-      phase: "rolling",
+      phase: 'rolling',
       diceRoll: null,
       consecutiveDoubles: 0,
       passedGo: false,
@@ -747,7 +827,7 @@ export class GameRoom implements GameActions {
       jackpot: 0,
     })
 
-    this.addLogEntry(`Game started with ${players.length} players!`, "system")
+    this.addLogEntry(`Game started with ${players.length} players!`, 'system')
   }
 
   // Update game settings
@@ -766,18 +846,18 @@ export class GameRoom implements GameActions {
     const roll: DiceRoll = { die1, die2, total, isDoubles }
 
     // Phase 1: Verify Jail Rules - 3 consecutive doubles = Jail
-    let nextConsecutiveDoubles = isDoubles ? this.state.consecutiveDoubles + 1 : 0
-    
+    const nextConsecutiveDoubles = isDoubles ? this.state.consecutiveDoubles + 1 : 0
+
     if (nextConsecutiveDoubles >= 3) {
       this.setState({
         diceRoll: roll,
         lastDiceRoll: roll,
         consecutiveDoubles: 0,
-        phase: "moving",
+        phase: 'moving',
       })
       this.addLogEntry(
         `${this.state.players[this.state.currentPlayerIndex]?.name} rolled 3 consecutive doubles! GO TO JAIL!`,
-        "jail",
+        'jail',
         this.state.currentPlayerIndex,
       )
       this.goToJail(this.state.currentPlayerIndex)
@@ -788,19 +868,19 @@ export class GameRoom implements GameActions {
       diceRoll: roll,
       lastDiceRoll: roll,
       consecutiveDoubles: isDoubles ? this.state.consecutiveDoubles + 1 : 0,
-      phase: "moving",
+      phase: 'moving',
     })
 
     const player = this.state.players[this.state.currentPlayerIndex]
     if (player) {
-      const doublesText = isDoubles ? " (Doubles!)" : ""
+      const doublesText = isDoubles ? ' (Doubles!)' : ''
       const consecutiveText =
         isDoubles && this.state.consecutiveDoubles > 0
           ? ` (${this.state.consecutiveDoubles + 1}/3 consecutive)`
-          : ""
+          : ''
       this.addLogEntry(
         `${player.name} rolled ${die1} + ${die2} = ${total}${doublesText}${consecutiveText}`,
-        "roll",
+        'roll',
         this.state.currentPlayerIndex,
       )
     }
@@ -833,35 +913,45 @@ export class GameRoom implements GameActions {
     this.setState({
       players: updatedPlayersWithSalary,
       passedGo,
-      phase: "resolving_space",
+      phase: 'resolving_space',
     })
 
     const updatedPlayer = updatedPlayersWithSalary[playerIndex]
     if (passedGo && updatedPlayer && updatedPlayer.iousPayable.length > 0) {
       // Check for both current interestDue AND expired IOUs
-      const interestDue = updatedPlayer.iousPayable.reduce((sum, iou) => sum + (iou.interestDue || 0), 0)
-      const expiredIOUs = updatedPlayer.iousPayable.filter(iou => (iou.roundsRemaining || 0) <= 0)
-      const totalDueAmount = interestDue + expiredIOUs.reduce((sum, iou) => sum + iou.currentAmount, 0)
+      const interestDue = updatedPlayer.iousPayable.reduce(
+        (sum, iou) => sum + (iou.interestDue || 0),
+        0,
+      )
+      const expiredIOUs = updatedPlayer.iousPayable.filter(
+        iou => (iou.roundsRemaining || 0) <= 0,
+      )
+      const totalDueAmount =
+        interestDue +
+        expiredIOUs.reduce((sum, iou) => sum + iou.currentAmount, 0)
 
       if (totalDueAmount > 0) {
         // If player has enough cash AFTER passing GO, they must pay interest immediately
         if (updatedPlayer.cash >= interestDue && expiredIOUs.length === 0) {
           // Auto-pay interest if no IOUs are expired and cash is sufficient
           this.setState({
-            phase: "awaiting_debt_service",
+            phase: 'awaiting_debt_service',
             pendingDebtService: {
               playerIndex,
               totalInterestDue: interestDue,
-              ious: updatedPlayer.iousPayable.map(iou => ({ id: iou.id, interestDue: iou.interestDue || 0 }))
-            }
+              ious: updatedPlayer.iousPayable.map(iou => ({
+                id: iou.id,
+                interestDue: iou.interestDue || 0,
+              })),
+            },
           })
-          
+
           this.addLogEntry(
             `💰 ${updatedPlayer.name} passed GO and must settle £${interestDue} in interest.`,
-            "system",
-            playerIndex
+            'system',
+            playerIndex,
           )
-          // We don't return here yet, we'll call payDebtService or similar if needed, 
+          // We don't return here yet, we'll call payDebtService or similar if needed,
           // but for now let's use the phase to trigger the UI/AI.
           return
         } else {
@@ -870,7 +960,8 @@ export class GameRoom implements GameActions {
           const creditorTotals: Record<number, number> = {}
           updatedPlayer.iousPayable.forEach(iou => {
             const amount = iou.currentAmount + (iou.interestDue || 0)
-            creditorTotals[iou.creditorId] = (creditorTotals[iou.creditorId] || 0) + amount
+            creditorTotals[iou.creditorId] =
+              (creditorTotals[iou.creditorId] || 0) + amount
           })
 
           let leadCreditorId = -1
@@ -884,25 +975,28 @@ export class GameRoom implements GameActions {
 
           if (leadCreditorId !== -1) {
             // Find an IOU to serve as the "representative" IOU for foreclosure (ideally an expired one)
-            const representativeIou = expiredIOUs.find(iou => iou.creditorId === leadCreditorId) || 
-                                    updatedPlayer.iousPayable.find(iou => iou.creditorId === leadCreditorId)
+            const representativeIou =
+              expiredIOUs.find(iou => iou.creditorId === leadCreditorId) ||
+              updatedPlayer.iousPayable.find(
+                iou => iou.creditorId === leadCreditorId,
+              )
 
             if (representativeIou) {
-               this.setState({
-                 phase: "awaiting_foreclosure_decision",
-                 pendingForeclosure: {
-                   debtorIndex: playerIndex,
-                   creditorIndex: leadCreditorId,
-                   iouId: representativeIou.id,
-                   amountOwed: maxOwed
-                 }
-               })
+              this.setState({
+                phase: 'awaiting_foreclosure_decision',
+                pendingForeclosure: {
+                  debtorIndex: playerIndex,
+                  creditorIndex: leadCreditorId,
+                  iouId: representativeIou.id,
+                  amountOwed: maxOwed,
+                },
+              })
 
               const leadCreditor = this.state.players[leadCreditorId]
               this.addLogEntry(
                 `🛑 ${updatedPlayer.name} cannot meet obligations! Lead creditor ${leadCreditor?.name} (owed £${maxOwed}) will decide how to proceed.`,
-                "system",
-                playerIndex
+                'system',
+                playerIndex,
               )
               return
             }
@@ -912,11 +1006,11 @@ export class GameRoom implements GameActions {
     }
 
     const space = this.state.spaces[newPosition]
-    const goBonus = passedGo ? ` (collected £${goSalary} passing GO)` : ""
+    const goBonus = passedGo ? ` (collected £${goSalary} passing GO)` : ''
     if (space) {
       this.addLogEntry(
         `${player.name} moved to ${space.name}${goBonus}`,
-        "move",
+        'move',
         playerIndex,
       )
     }
@@ -932,12 +1026,12 @@ export class GameRoom implements GameActions {
     if (!space) return
 
     switch (space.type) {
-      case "property":
-      case "railroad":
-      case "utility": {
+      case 'property':
+      case 'railroad':
+      case 'utility': {
         const property = space as Property
         if (property.owner === undefined) {
-          this.setState({ phase: "awaiting_buy_decision" })
+          this.setState({ phase: 'awaiting_buy_decision' })
         } else if (property.owner !== playerIndex) {
           const diceTotal = this.state.diceRoll?.total ?? 7
           this.payRent(playerIndex, property.id, diceTotal)
@@ -945,26 +1039,26 @@ export class GameRoom implements GameActions {
         break
       }
 
-      case "chance":
-      case "community_chest":
+      case 'chance':
+      case 'community_chest':
         this.drawCard(playerIndex, space.type)
         break
 
-      case "tax": {
+      case 'tax': {
         // Check for Tax Holiday economic event
         if (
-          space.name.includes("Income") &&
-          this.isEconomicEventActive("tax_holiday")
+          space.name.includes('Income') &&
+          this.isEconomicEventActive('tax_holiday')
         ) {
           this.addLogEntry(
             `🎉 ${player.name} enjoys Tax Holiday - no Income Tax!`,
-            "tax",
+            'tax',
             playerIndex,
           )
           break
         }
 
-        if (space.name.includes("Income")) {
+        if (space.name.includes('Income')) {
           // Progressive Income Tax: Player chooses 10% of net worth OR £200
           const percentageAmount = calculateTenPercentTax(
             this.state,
@@ -977,14 +1071,14 @@ export class GameRoom implements GameActions {
             const optimal = getOptimalTaxChoice(this.state, playerIndex)
             this.payTax(playerIndex, optimal.amount)
             this.addLogEntry(
-              `${player.name} chose to pay ${optimal.choice === "percentage" ? "10%" : "flat £200"} (£${optimal.amount})`,
-              "tax",
+              `${player.name} chose to pay ${optimal.choice === 'percentage' ? '10%' : 'flat £200'} (£${optimal.amount})`,
+              'tax',
               playerIndex,
             )
           } else {
             // Human player gets a choice
             this.setState({
-              phase: "awaiting_tax_decision" as any, // Will add to GamePhase
+              phase: 'awaiting_tax_decision' as any, // Will add to GamePhase
               awaitingTaxDecision: {
                 playerIndex,
                 flatAmount,
@@ -999,11 +1093,25 @@ export class GameRoom implements GameActions {
         break
       }
 
-      case "go_to_jail":
+      case 'go_to_jail':
+        if (this.state.passedGo) {
+          const goSalary = this.state.currentGoSalary
+          this.setState({
+            players: this.state.players.map((p, i) =>
+              i === playerIndex ? { ...p, cash: p.cash - goSalary } : p,
+            ),
+            passedGo: false,
+          })
+          this.addLogEntry(
+            `${player?.name} does not collect £${goSalary} (sent to Jail)`,
+            'jail',
+            playerIndex,
+          )
+        }
         this.goToJail(playerIndex)
         break
 
-      case "free_parking":
+      case 'free_parking':
         // Trigger economic event if enabled
         if (this.state.settings.enableEconomicEvents) {
           this.triggerEconomicEvent(playerIndex)
@@ -1019,7 +1127,7 @@ export class GameRoom implements GameActions {
           })
           this.addLogEntry(
             `🎉 ${player.name} won the Free Parking jackpot of £${jackpotAmount}!`,
-            "system",
+            'system',
             playerIndex,
           )
         }
@@ -1042,56 +1150,57 @@ export class GameRoom implements GameActions {
       weight: number
     }> = [
       {
-        type: "recession",
-        description: "📉 Recession! All rents reduced by 25%",
+        type: 'recession',
+        description: '📉 Recession! All rents reduced by 25%',
         duration: 3,
         weight: 15,
       },
       {
-        type: "housing_boom",
-        description: "🏗️ Housing Boom! Building costs increase 50%",
+        type: 'housing_boom',
+        description: '🏗️ Housing Boom! Building costs increase 50%',
         duration: 2,
         weight: 15,
       },
       {
-        type: "tax_holiday",
-        description: "🎉 Tax Holiday! No income tax",
+        type: 'tax_holiday',
+        description: '🎉 Tax Holiday! No income tax',
         duration: 2,
         weight: 10,
       },
       {
-        type: "market_crash",
-        description: "💥 Market Crash! Property values and rents drop 20%",
+        type: 'market_crash',
+        description: '💥 Market Crash! Property values and rents drop 20%',
         duration: Math.floor(Math.random() * 11) + 5, // 5 to 15 turns
         weight: 10,
       },
       {
-        type: "market_crash_1",
-        description: "🎈 Speculative Bubble! Property values +15%, but Rents -15%",
+        type: 'market_crash_1',
+        description:
+          '🎈 Speculative Bubble! Property values +15%, but Rents -15%',
         duration: Math.floor(Math.random() * 6) + 4, // 4 to 10 turns
         weight: 10,
       },
       {
-        type: "market_crash_2",
-        description: "📉 Yield Crisis! Rents +15%, but Property values -15%",
+        type: 'market_crash_2',
+        description: '📉 Yield Crisis! Rents +15%, but Property values -15%',
         duration: Math.floor(Math.random() * 6) + 4, // 4 to 10 turns
         weight: 10,
       },
       {
-        type: "bull_market",
-        description: "📈 Bull Market! Property values increase 20%",
+        type: 'bull_market',
+        description: '📈 Bull Market! Property values increase 20%',
         duration: 3,
         weight: 15,
       },
       {
-        type: "banking_crisis",
-        description: "🏦 Banking Crisis! Loan interest rates double",
+        type: 'banking_crisis',
+        description: '🏦 Banking Crisis! Loan interest rates double',
         duration: 2,
         weight: 10,
       },
       {
-        type: "economic_stimulus",
-        description: "💰 Economic Stimulus! All players collect £100",
+        type: 'economic_stimulus',
+        description: '💰 Economic Stimulus! All players collect £100',
         duration: 0,
         weight: 25,
       },
@@ -1124,25 +1233,25 @@ export class GameRoom implements GameActions {
     // Log the event
     this.addLogEntry(
       `${player.name} triggered an economic event: ${event.description}`,
-      "system",
+      'system',
       playerIndex,
     )
 
     // Handle immediate effects
-    if (event.type === "economic_stimulus") {
+    if (event.type === 'economic_stimulus') {
       // Give £100 to all active players
       this.setState({
-        players: this.state.players.map((p) =>
+        players: this.state.players.map(p =>
           p.bankrupt ? p : { ...p, cash: p.cash + 100 },
         ),
       })
-      this.addLogEntry("All players received £100 stimulus!", "system")
+      this.addLogEntry('All players received £100 stimulus!', 'system')
       return
     }
 
     // Check if this event type is already active
     const existingEventIndex = this.state.activeEconomicEvents.findIndex(
-      (e) => e.type === event.type,
+      e => e.type === event.type,
     )
 
     if (existingEventIndex >= 0) {
@@ -1156,7 +1265,7 @@ export class GameRoom implements GameActions {
       this.setState({ activeEconomicEvents: updatedEvents })
       this.addLogEntry(
         `${event.description} extended by ${event.duration} turns!`,
-        "system",
+        'system',
       )
     } else {
       // Add new event
@@ -1176,16 +1285,16 @@ export class GameRoom implements GameActions {
     if (this.state.activeEconomicEvents.length === 0) return
 
     const updatedEvents = this.state.activeEconomicEvents
-      .map((event) => ({ ...event, turnsRemaining: event.turnsRemaining - 1 }))
-      .filter((event) => event.turnsRemaining > 0)
+      .map(event => ({ ...event, turnsRemaining: event.turnsRemaining - 1 }))
+      .filter(event => event.turnsRemaining > 0)
 
     // Log expired events
     const expiredEvents = this.state.activeEconomicEvents.filter(
-      (event) => !updatedEvents.find((e) => e.type === event.type),
+      event => !updatedEvents.find(e => e.type === event.type),
     )
 
-    expiredEvents.forEach((event) => {
-      this.addLogEntry(`${event.description} has ended.`, "system")
+    expiredEvents.forEach(event => {
+      this.addLogEntry(`${event.description} has ended.`, 'system')
     })
 
     this.setState({ activeEconomicEvents: updatedEvents })
@@ -1193,11 +1302,11 @@ export class GameRoom implements GameActions {
 
   // Check if an economic event is active
   public isEconomicEventActive(type: EconomicEventType): boolean {
-    return this.state.activeEconomicEvents.some((e) => e.type === type)
+    return this.state.activeEconomicEvents.some(e => e.type === type)
   }
 
   // New method for handling tax decision
-  public chooseTaxOption(playerIndex: number, choice: "flat" | "percentage") {
+  public chooseTaxOption(playerIndex: number, choice: 'flat' | 'percentage') {
     const taxDecision = this.state.awaitingTaxDecision
     if (!taxDecision || taxDecision.playerIndex !== playerIndex) return
 
@@ -1205,15 +1314,15 @@ export class GameRoom implements GameActions {
     if (!player) return
 
     const amount =
-      choice === "flat" ? taxDecision.flatAmount : taxDecision.percentageAmount
+      choice === 'flat' ? taxDecision.flatAmount : taxDecision.percentageAmount
 
-    this.setState({ awaitingTaxDecision: null, phase: "resolving_space" })
-    this.setState({ awaitingTaxDecision: undefined, phase: "resolving_space" })
+    this.setState({ awaitingTaxDecision: null, phase: 'resolving_space' })
+    this.setState({ awaitingTaxDecision: undefined, phase: 'resolving_space' })
     this.payTax(playerIndex, amount)
 
     this.addLogEntry(
-      `${player.name} chose to pay ${choice === "percentage" ? "10%" : "flat £200"} (£${amount})`,
-      "tax",
+      `${player.name} chose to pay ${choice === 'percentage' ? '10%' : 'flat £200'} (£${amount})`,
+      'tax',
       playerIndex,
     )
   }
@@ -1223,12 +1332,12 @@ export class GameRoom implements GameActions {
 
     // Validate turn order
     const turnValidation = validatePlayerTurn(this.state, playerIndex, [
-      "awaiting_buy_decision",
+      'awaiting_buy_decision',
     ])
     if (!turnValidation.valid) {
       this.addLogEntry(
-        turnValidation.error || "Invalid action",
-        "system",
+        turnValidation.error || 'Invalid action',
+        'system',
         playerIndex,
       )
       return
@@ -1236,33 +1345,33 @@ export class GameRoom implements GameActions {
 
     const player = this.state.players[playerIndex]
     const property = this.state.spaces.find(
-      (s) => s.id === propertyId,
+      s => s.id === propertyId,
     ) as Property
 
     if (!player || !property) {
-      this.addLogEntry("Property or player not found", "system", playerIndex)
+      this.addLogEntry('Property or player not found', 'system', playerIndex)
       return
     }
 
     if (property.owner !== undefined) {
-      this.addLogEntry("This property is already owned", "system", playerIndex)
+      this.addLogEntry('This property is already owned', 'system', playerIndex)
       return
     }
 
     // Validate cash
     const price = getCurrentPropertyPrice(this.state, property)
-    const cashValidation = validateCash(player, price, "buy property")
+    const cashValidation = validateCash(player, price, 'buy property')
     if (!cashValidation.valid) {
       this.addLogEntry(
-        cashValidation.error || "Insufficient funds",
-        "system",
+        cashValidation.error || 'Insufficient funds',
+        'system',
         playerIndex,
       )
       return
     }
 
     this.setState({
-      spaces: this.state.spaces.map((s) =>
+      spaces: this.state.spaces.map(s =>
         s.id === propertyId ? { ...(s as Property), owner: playerIndex } : s,
       ),
       players: this.state.players.map((p, i) =>
@@ -1274,12 +1383,12 @@ export class GameRoom implements GameActions {
             }
           : p,
       ),
-      phase: "resolving_space",
+      phase: 'resolving_space',
     })
 
     this.addLogEntry(
       `${player.name} bought ${property.name} for £${price}`,
-      "buy",
+      'buy',
       playerIndex,
     )
   }
@@ -1291,7 +1400,7 @@ export class GameRoom implements GameActions {
   public payRent(playerIndex: number, propertyId: number, diceTotal: number) {
     const payer = this.state.players[playerIndex]
     const property = this.state.spaces.find(
-      (s) => s.id === propertyId,
+      s => s.id === propertyId,
     ) as Property
 
     if (!payer || !property || property.owner === undefined) return
@@ -1323,13 +1432,13 @@ export class GameRoom implements GameActions {
       if (jackpotShare > 0) {
         this.addLogEntry(
           `${payer.name} paid £${rent} rent for mortgaged ${property.name} (£${ownerShare} to ${owner?.name}, £${jackpotShare} to Jackpot)`,
-          "rent",
+          'rent',
           playerIndex,
         )
       } else {
         this.addLogEntry(
           `${payer.name} paid £${rent} rent to ${owner?.name}`,
-          "rent",
+          'rent',
           playerIndex,
         )
       }
@@ -1360,21 +1469,21 @@ export class GameRoom implements GameActions {
     if (!debtor) return
 
     this.setState({
-      phase: "awaiting_rent_negotiation",
+      phase: 'awaiting_rent_negotiation',
       pendingRentNegotiation: {
         debtorIndex,
         creditorIndex,
         propertyId,
         rentAmount,
         debtorCanAfford: debtor.cash,
-        status: "creditor_decision",
+        status: 'creditor_decision',
       },
     })
 
     const creditor = this.state.players[creditorIndex]
     this.addLogEntry(
       `${debtor.name} cannot afford £${rentAmount} rent. Negotiation started with ${creditor?.name}`,
-      "rent",
+      'rent',
       debtorIndex,
     )
   }
@@ -1388,14 +1497,14 @@ export class GameRoom implements GameActions {
     const debtor = this.state.players[negotiation.debtorIndex]
 
     this.setState({
-      phase: "resolving_space",
+      phase: 'resolving_space',
       pendingRentNegotiation: null,
       utilityMultiplierOverride: null,
     })
 
     this.addLogEntry(
       `${creditor?.name} forgave £${negotiation.rentAmount} rent owed by ${debtor?.name}`,
-      "rent",
+      'rent',
       negotiation.creditorIndex,
     )
   }
@@ -1403,7 +1512,7 @@ export class GameRoom implements GameActions {
   // Creditor proposes an IOU (payment plan)
   public offerPaymentPlan(partialPayment: number, interestRate: number) {
     const negotiation = this.state.pendingRentNegotiation
-    if (!negotiation || negotiation.status !== "creditor_decision") return
+    if (!negotiation || negotiation.status !== 'creditor_decision') return
 
     const creditor = this.state.players[negotiation.creditorIndex]
     const debtor = this.state.players[negotiation.debtorIndex]
@@ -1412,7 +1521,7 @@ export class GameRoom implements GameActions {
     this.setState({
       pendingRentNegotiation: {
         ...negotiation,
-        status: "debtor_decision",
+        status: 'debtor_decision',
         proposedIOU: {
           partialPayment: Math.floor(partialPayment),
           interestRate,
@@ -1422,7 +1531,7 @@ export class GameRoom implements GameActions {
 
     this.addLogEntry(
       `${creditor.name} offered a payment plan to ${debtor.name}: £${partialPayment} now, rest as IOU at ${interestRate * 100}% interest`,
-      "rent",
+      'rent',
       negotiation.creditorIndex,
     )
   }
@@ -1430,7 +1539,12 @@ export class GameRoom implements GameActions {
   // Debtor accepts the proposed payment plan
   public acceptPaymentPlan() {
     const negotiation = this.state.pendingRentNegotiation
-    if (!negotiation || negotiation.status !== "debtor_decision" || !negotiation.proposedIOU) return
+    if (
+      !negotiation ||
+      negotiation.status !== 'debtor_decision' ||
+      !negotiation.proposedIOU
+    )
+      return
 
     const { debtorIndex, creditorIndex, rentAmount, proposedIOU } = negotiation
     const { partialPayment, interestRate } = proposedIOU
@@ -1443,7 +1557,9 @@ export class GameRoom implements GameActions {
     const actualPayment = Math.floor(Math.min(partialPayment, debtor.cash))
     const remainingDebt = Math.round(rentAmount - actualPayment)
 
-    const property = this.state.spaces.find((s) => s.id === negotiation.propertyId) as Property
+    const property = this.state.spaces.find(
+      s => s.id === negotiation.propertyId,
+    ) as Property
     const isMortgaged = property?.mortgaged || false
     const jackpotCutRate = isMortgaged ? 0.2 : 0
 
@@ -1459,7 +1575,7 @@ export class GameRoom implements GameActions {
       currentAmount: remainingDebt,
       interestRate: interestRate,
       turnCreated: this.state.turn,
-      reason: `Rent for ${property?.name || "property"}`,
+      reason: `Rent for ${property?.name || 'property'}`,
       jackpotCutRate: jackpotCutRate > 0 ? jackpotCutRate : undefined,
       interestDue: 0,
       durationRounds: this.state.settings.iouDurationRounds,
@@ -1485,14 +1601,14 @@ export class GameRoom implements GameActions {
         return p
       }),
       jackpot: this.state.jackpot + jackpotShare,
-      phase: "resolving_space",
+      phase: 'resolving_space',
       pendingRentNegotiation: null,
       utilityMultiplierOverride: null,
     })
 
     this.addLogEntry(
       `${debtor.name} accepted the payment plan from ${creditor.name}`,
-      "rent",
+      'rent',
       debtorIndex,
     )
   }
@@ -1500,7 +1616,7 @@ export class GameRoom implements GameActions {
   // Debtor rejects the proposed payment plan
   public rejectPaymentPlan() {
     const negotiation = this.state.pendingRentNegotiation
-    if (!negotiation || negotiation.status !== "debtor_decision") return
+    if (!negotiation || negotiation.status !== 'debtor_decision') return
 
     const creditor = this.state.players[negotiation.creditorIndex]
     const debtor = this.state.players[negotiation.debtorIndex]
@@ -1508,14 +1624,14 @@ export class GameRoom implements GameActions {
     this.setState({
       pendingRentNegotiation: {
         ...negotiation,
-        status: "creditor_decision",
+        status: 'creditor_decision',
         proposedIOU: undefined,
       },
     })
 
     this.addLogEntry(
       `${debtor?.name} rejected the payment plan. ${creditor?.name} must choose another option.`,
-      "rent",
+      'rent',
       negotiation.debtorIndex,
     )
   }
@@ -1535,7 +1651,9 @@ export class GameRoom implements GameActions {
     const actualPayment = Math.floor(Math.min(partialPayment, debtor.cash))
     const remainingDebt = Math.round(rentAmount - actualPayment)
 
-    const property = this.state.spaces.find((s) => s.id === negotiation.propertyId) as Property
+    const property = this.state.spaces.find(
+      s => s.id === negotiation.propertyId,
+    ) as Property
     const isMortgaged = property?.mortgaged || false
     const jackpotCutRate = isMortgaged ? 0.2 : 0
 
@@ -1551,7 +1669,7 @@ export class GameRoom implements GameActions {
       currentAmount: remainingDebt,
       interestRate: this.state.settings.iouInterestRate,
       turnCreated: this.state.turn,
-      reason: `Rent for ${property?.name || "property"}`,
+      reason: `Rent for ${property?.name || 'property'}`,
       jackpotCutRate: jackpotCutRate > 0 ? jackpotCutRate : undefined,
       interestDue: 0,
       durationRounds: this.state.settings.iouDurationRounds,
@@ -1577,14 +1695,14 @@ export class GameRoom implements GameActions {
         return p
       }),
       jackpot: this.state.jackpot + jackpotShare,
-      phase: "resolving_space",
+      phase: 'resolving_space',
       pendingRentNegotiation: null,
       utilityMultiplierOverride: null,
     })
 
     this.addLogEntry(
       `${debtor.name} paid £${actualPayment} now, owes £${remainingDebt} IOU to ${creditor.name}`,
-      "rent",
+      'rent',
       debtorIndex,
     )
   }
@@ -1594,7 +1712,7 @@ export class GameRoom implements GameActions {
     const debtor = this.state.players[debtorIndex]
     if (!debtor) return
 
-    const iou = debtor.iousPayable.find((i) => i.id === iouId)
+    const iou = debtor.iousPayable.find(i => i.id === iouId)
     if (!iou) return
 
     const creditor = this.state.players[iou.creditorId]
@@ -1639,10 +1757,14 @@ export class GameRoom implements GameActions {
             ...p,
             cash: p.cash - paymentAmount,
             iousPayable: iouPaidOff
-              ? p.iousPayable.filter((io) => io.id !== iouId)
-              : p.iousPayable.map((io) =>
+              ? p.iousPayable.filter(io => io.id !== iouId)
+              : p.iousPayable.map(io =>
                   io.id === iouId
-                    ? { ...io, currentAmount: remainingPrincipal, interestDue: remainingInterest }
+                    ? {
+                        ...io,
+                        currentAmount: remainingPrincipal,
+                        interestDue: remainingInterest,
+                      }
                     : io,
                 ),
           }
@@ -1652,10 +1774,14 @@ export class GameRoom implements GameActions {
             ...p,
             cash: p.cash + creditorShare,
             iousReceivable: iouPaidOff
-              ? p.iousReceivable.filter((io) => io.id !== iouId)
-              : p.iousReceivable.map((io) =>
+              ? p.iousReceivable.filter(io => io.id !== iouId)
+              : p.iousReceivable.map(io =>
                   io.id === iouId
-                    ? { ...io, currentAmount: remainingPrincipal, interestDue: remainingInterest }
+                    ? {
+                        ...io,
+                        currentAmount: remainingPrincipal,
+                        interestDue: remainingInterest,
+                      }
                     : io,
                 ),
           }
@@ -1667,15 +1793,15 @@ export class GameRoom implements GameActions {
 
     if (iouPaidOff) {
       this.addLogEntry(
-        `${debtor.name} paid off IOU of £${paymentAmount} to ${creditor.name}${jackpotShare > 0 ? ` (£${jackpotShare} added to Jackpot)` : ""}`,
-        "rent",
+        `${debtor.name} paid off IOU of £${paymentAmount} to ${creditor.name}${jackpotShare > 0 ? ` (£${jackpotShare} added to Jackpot)` : ''}`,
+        'rent',
         debtorIndex,
       )
     } else {
       const remainingTotal = remainingPrincipal + remainingInterest
       this.addLogEntry(
-        `${debtor.name} paid £${paymentAmount} on IOU, £${remainingTotal} remaining to ${creditor.name}${jackpotShare > 0 ? ` (£${jackpotShare} added to Jackpot)` : ""}`,
-        "rent",
+        `${debtor.name} paid £${paymentAmount} on IOU, £${remainingTotal} remaining to ${creditor.name}${jackpotShare > 0 ? ` (£${jackpotShare} added to Jackpot)` : ''}`,
+        'rent',
         debtorIndex,
       )
     }
@@ -1696,7 +1822,8 @@ export class GameRoom implements GameActions {
       const creditorTotals: Record<number, number> = {}
       player.iousPayable.forEach(iou => {
         const amount = iou.currentAmount + (iou.interestDue || 0)
-        creditorTotals[iou.creditorId] = (creditorTotals[iou.creditorId] || 0) + amount
+        creditorTotals[iou.creditorId] =
+          (creditorTotals[iou.creditorId] || 0) + amount
       })
 
       let leadCreditorId = -1
@@ -1708,22 +1835,24 @@ export class GameRoom implements GameActions {
         }
       }
 
-      const representativeIou = player.iousPayable.find(iou => iou.creditorId === leadCreditorId)
+      const representativeIou = player.iousPayable.find(
+        iou => iou.creditorId === leadCreditorId,
+      )
       if (leadCreditorId !== -1 && representativeIou) {
         this.setState({
-          phase: "awaiting_foreclosure_decision",
+          phase: 'awaiting_foreclosure_decision',
           pendingForeclosure: {
             debtorIndex: playerIndex,
             creditorIndex: leadCreditorId,
             iouId: representativeIou.id,
-            amountOwed: maxOwed
+            amountOwed: maxOwed,
           },
-          pendingDebtService: null
+          pendingDebtService: null,
         })
         this.addLogEntry(
           `⚠️ ${player.name} cannot afford debt service! Lead creditor ${this.state.players[leadCreditorId]?.name} must decide how to proceed.`,
-          "system",
-          playerIndex
+          'system',
+          playerIndex,
         )
         return
       }
@@ -1735,14 +1864,16 @@ export class GameRoom implements GameActions {
         return {
           ...p,
           cash: p.cash - debtService.totalInterestDue,
-          iousPayable: p.iousPayable.map(iou => ({ ...iou, interestDue: 0 }))
+          iousPayable: p.iousPayable.map(iou => ({ ...iou, interestDue: 0 })),
         }
       }
-      
+
       // Creditors receive their share
       const interestToReceive = debtService.ious
         .filter(di => {
-          const debtorIou = this.state.players[playerIndex]?.iousPayable.find(pIou => pIou.id === di.id)
+          const debtorIou = this.state.players[playerIndex]?.iousPayable.find(
+            pIou => pIou.id === di.id,
+          )
           return debtorIou?.creditorId === i
         })
         .reduce((sum, di) => sum + di.interestDue, 0)
@@ -1756,7 +1887,7 @@ export class GameRoom implements GameActions {
               return { ...iou, interestDue: 0 }
             }
             return iou
-          })
+          }),
         }
       }
       return p
@@ -1764,14 +1895,14 @@ export class GameRoom implements GameActions {
 
     this.setState({
       players: updatedPlayers,
-      phase: "resolving_space",
-      pendingDebtService: null
+      phase: 'resolving_space',
+      pendingDebtService: null,
     })
 
     this.addLogEntry(
       `💰 ${player.name} paid £${debtService.totalInterestDue} in debt service interest to creditors`,
-      "system",
-      playerIndex
+      'system',
+      playerIndex,
     )
 
     // Continue resolving the space
@@ -1779,7 +1910,10 @@ export class GameRoom implements GameActions {
   }
 
   // Creditor decides how to handle missed debt service
-  public handleForeclosureDecision(decision: "restructure" | "foreclose", propertyId?: number) {
+  public handleForeclosureDecision(
+    decision: 'restructure' | 'foreclose',
+    propertyId?: number,
+  ) {
     const foreclosure = this.state.pendingForeclosure
     if (!foreclosure) return
 
@@ -1787,7 +1921,7 @@ export class GameRoom implements GameActions {
     const creditor = this.state.players[foreclosure.creditorIndex]
     if (!debtor || !creditor) return
 
-    if (decision === "restructure") {
+    if (decision === 'restructure') {
       // Lead Creditor decides to restructure ALL due interest for the debtor
       const updatedPlayers = this.state.players.map((p, i) => {
         if (i === foreclosure.debtorIndex) {
@@ -1796,11 +1930,11 @@ export class GameRoom implements GameActions {
             iousPayable: p.iousPayable.map(iou => ({
               ...iou,
               currentAmount: iou.currentAmount + (iou.interestDue || 0),
-              interestDue: 0
-            }))
+              interestDue: 0,
+            })),
           }
         }
-        
+
         // Update all creditors' receivable IOUs for this debtor
         const debtorIouIds = debtor.iousPayable.map(iou => iou.id)
         return {
@@ -1810,28 +1944,28 @@ export class GameRoom implements GameActions {
               return {
                 ...iou,
                 currentAmount: iou.currentAmount + (iou.interestDue || 0),
-                interestDue: 0
+                interestDue: 0,
               }
             }
             return iou
-          })
+          }),
         }
       })
 
       this.setState({
         players: updatedPlayers,
-        phase: "resolving_space",
-        pendingForeclosure: null
+        phase: 'resolving_space',
+        pendingForeclosure: null,
       })
 
       this.addLogEntry(
         `🤝 Lead creditor ${creditor.name} mandated a general restructuring of ${debtor.name}'s debts. All due interest capitalized.`,
-        "system",
-        foreclosure.creditorIndex
+        'system',
+        foreclosure.creditorIndex,
       )
-      
+
       this.resolveSpace(foreclosure.debtorIndex)
-    } else if (decision === "foreclose") {
+    } else if (decision === 'foreclose') {
       // Find the representative IOU
       const iou = debtor.iousPayable.find(i => i.id === foreclosure.iouId)
       if (!iou) return
@@ -1844,7 +1978,13 @@ export class GameRoom implements GameActions {
           // Transfer ownership
           const updatedSpaces = this.state.spaces.map((s, idx) => {
             if (idx === propertyId) {
-              return { ...s, owner: foreclosure.creditorIndex, mortgaged: false, houses: 0, hotel: false }
+              return {
+                ...s,
+                owner: foreclosure.creditorIndex,
+                mortgaged: false,
+                houses: 0,
+                hotel: false,
+              }
             }
             return s
           })
@@ -1852,7 +1992,10 @@ export class GameRoom implements GameActions {
           // Update player properties lists
           const updatedPlayers = this.state.players.map((p, i) => {
             if (i === foreclosure.debtorIndex) {
-              return { ...p, properties: p.properties.filter(id => id !== propertyId) }
+              return {
+                ...p,
+                properties: p.properties.filter(id => id !== propertyId),
+              }
             }
             if (i === foreclosure.creditorIndex) {
               return { ...p, properties: [...p.properties, propertyId] }
@@ -1863,14 +2006,14 @@ export class GameRoom implements GameActions {
           this.setState({
             spaces: updatedSpaces,
             players: updatedPlayers,
-            phase: "resolving_space",
-            pendingForeclosure: null
+            phase: 'resolving_space',
+            pendingForeclosure: null,
           })
 
           this.addLogEntry(
             `🏠 Foreclosure! Lead creditor ${creditor.name} seized ${property.name} from ${debtor.name}.`,
-            "system",
-            foreclosure.creditorIndex
+            'system',
+            foreclosure.creditorIndex,
           )
 
           this.resolveSpace(foreclosure.debtorIndex)
@@ -1880,44 +2023,58 @@ export class GameRoom implements GameActions {
         if (iou.roundsRemaining > 0) {
           this.addLogEntry(
             `🚫 ${creditor.name} cannot force liquidation yet. The IOU term has ${iou.roundsRemaining} rounds remaining.`,
-            "system",
-            foreclosure.creditorIndex
+            'system',
+            foreclosure.creditorIndex,
           )
           return
         }
 
         // Force liquidation of ALL due amounts (expired IOUs + all interest)
-        const expiredIOUs = debtor.iousPayable.filter(i => (i.roundsRemaining || 0) <= 0)
-        const totalInterestDue = debtor.iousPayable.reduce((sum, i) => sum + (i.interestDue || 0), 0)
-        const totalPrincipalDue = expiredIOUs.reduce((sum, i) => sum + i.currentAmount, 0)
+        const expiredIOUs = debtor.iousPayable.filter(
+          i => (i.roundsRemaining || 0) <= 0,
+        )
+        const totalInterestDue = debtor.iousPayable.reduce(
+          (sum, i) => sum + (i.interestDue || 0),
+          0,
+        )
+        const totalPrincipalDue = expiredIOUs.reduce(
+          (sum, i) => sum + i.currentAmount,
+          0,
+        )
         const totalDue = totalInterestDue + totalPrincipalDue
 
         this.addLogEntry(
           `⚖️ Lead creditor ${creditor.name} demanded immediate settlement of all £${totalDue} due obligations.`,
-          "system",
-          foreclosure.creditorIndex
+          'system',
+          foreclosure.creditorIndex,
         )
-        
+
         if (debtor.cash < totalDue) {
           // Debtor cannot afford to settle all due obligations
           this.setState({ pendingForeclosure: null })
-          this.offerRestructuring(foreclosure.debtorIndex);
+          this.offerRestructuring(foreclosure.debtorIndex, foreclosure.creditorIndex, totalDue)
         } else {
           // Pay off all expired IOUs and all interest
           this.setState({ pendingForeclosure: null })
-          
+
           // Use payIOU for each expired IOU (this handles principal + interest)
           expiredIOUs.forEach(eIou => {
-            this.payIOU(foreclosure.debtorIndex, eIou.id, eIou.currentAmount + (eIou.interestDue || 0))
+            this.payIOU(
+              foreclosure.debtorIndex,
+              eIou.id,
+              eIou.currentAmount + (eIou.interestDue || 0),
+            )
           })
 
           // Pay remaining interest on non-expired IOUs
-          const remainingIousWithInterest = this.state.players[foreclosure.debtorIndex]!.iousPayable.filter(i => (i.interestDue || 0) > 0)
+          const remainingIousWithInterest = this.state.players[
+            foreclosure.debtorIndex
+          ]!.iousPayable.filter(i => (i.interestDue || 0) > 0)
           remainingIousWithInterest.forEach(rIou => {
             this.payIOU(foreclosure.debtorIndex, rIou.id, rIou.interestDue)
           })
 
-          this.setState({ phase: "resolving_space" })
+          this.setState({ phase: 'resolving_space' })
           this.resolveSpace(foreclosure.debtorIndex)
         }
       }
@@ -1926,7 +2083,7 @@ export class GameRoom implements GameActions {
 
   // Apply interest to all IOUs at end of turn
   public applyIOUInterest(playerIndex: number) {
-    const activePlayers = this.state.players.filter((p) => !p.bankrupt)
+    const activePlayers = this.state.players.filter(p => !p.bankrupt)
     const activeCount = activePlayers.length
     if (activeCount === 0) return
 
@@ -1935,21 +2092,21 @@ export class GameRoom implements GameActions {
       if (p.bankrupt || p.iousPayable.length === 0) return p
 
       let totalInterestThisTurn = 0
-      const updatedIousPayable = p.iousPayable.map((iou) => {
+      const updatedIousPayable = p.iousPayable.map(iou => {
         // Interest per turn = Round Interest / Number of Active Players
         // This ensures that after a full round, the total interest equals what's due.
         const interestPerTurn = (iou.interestRate || 0) / activeCount
         const interest = Math.round(iou.currentAmount * interestPerTurn)
-        
+
         if (interest > 0) {
           totalInterestThisTurn += interest
           anyUpdated = true
           // We add interest to interestDue, which is payable on GO.
           // We don't add to currentAmount yet to avoid compounding within the round,
           // and to keep interestDue as the "due" amount.
-          return { 
-            ...iou, 
-            interestDue: (iou.interestDue || 0) + interest 
+          return {
+            ...iou,
+            interestDue: (iou.interestDue || 0) + interest,
           }
         }
         return iou
@@ -1965,23 +2122,29 @@ export class GameRoom implements GameActions {
       // Now sync iousReceivable for all creditors
       const finalPlayers = updatedPlayers.map((p, idx) => {
         if (p.bankrupt) return p
-        
+
         // Find any IOUs where this player is the creditor
         let receivedUpdated = false
-        const updatedIousReceivable = p.iousReceivable.map((ir) => {
+        const updatedIousReceivable = p.iousReceivable.map(ir => {
           // Find the corresponding IOU in the debtor's iousPayable
           const debtor = updatedPlayers[ir.debtorId]
           if (!debtor) return ir
-          
-          const updatedIou = debtor.iousPayable.find((up) => up.id === ir.id)
-          if (updatedIou && (updatedIou.interestDue !== ir.interestDue || updatedIou.currentAmount !== ir.currentAmount)) {
+
+          const updatedIou = debtor.iousPayable.find(up => up.id === ir.id)
+          if (
+            updatedIou &&
+            (updatedIou.interestDue !== ir.interestDue ||
+              updatedIou.currentAmount !== ir.currentAmount)
+          ) {
             receivedUpdated = true
             return updatedIou
           }
           return ir
         })
 
-        return receivedUpdated ? { ...p, iousReceivable: updatedIousReceivable } : p
+        return receivedUpdated
+          ? { ...p, iousReceivable: updatedIousReceivable }
+          : p
       })
 
       this.setState({ players: finalPlayers })
@@ -1990,10 +2153,10 @@ export class GameRoom implements GameActions {
 
   // Update rounds remaining for all IOUs at end of round
   public updateIOURounds() {
-    const updatedPlayers = this.state.players.map((p) => {
+    const updatedPlayers = this.state.players.map(p => {
       if (p.bankrupt || p.iousPayable.length === 0) return p
 
-      const updatedIousPayable = p.iousPayable.map((iou) => ({
+      const updatedIousPayable = p.iousPayable.map(iou => ({
         ...iou,
         roundsRemaining: Math.max(0, iou.roundsRemaining - 1),
       }))
@@ -2002,13 +2165,15 @@ export class GameRoom implements GameActions {
     })
 
     // Sync receivables
-    const finalPlayers = updatedPlayers.map((p) => {
+    const finalPlayers = updatedPlayers.map(p => {
       if (p.bankrupt) return p
 
-      const updatedIousReceivable = p.iousReceivable.map((ir) => {
+      const updatedIousReceivable = p.iousReceivable.map(ir => {
         const debtor = updatedPlayers[ir.debtorId]
-        const updatedIou = debtor?.iousPayable.find((up) => up.id === ir.id)
-        return updatedIou ? { ...ir, roundsRemaining: updatedIou.roundsRemaining } : ir
+        const updatedIou = debtor?.iousPayable.find(up => up.id === ir.id)
+        return updatedIou
+          ? { ...ir, roundsRemaining: updatedIou.roundsRemaining }
+          : ir
       })
 
       return { ...p, iousReceivable: updatedIousReceivable }
@@ -2043,7 +2208,7 @@ export class GameRoom implements GameActions {
 
       this.addLogEntry(
         `⚖️ Jail Penalty: ${player.name} paid £${penaltyAmount} (based on net worth) to the Jackpot`,
-        "jail",
+        'jail',
         playerIndex,
       )
 
@@ -2068,7 +2233,7 @@ export class GameRoom implements GameActions {
     if (propertyIdToTransfer != null) {
       // Transfer property as payment
       const propertyToTransfer = this.state.spaces.find(
-        (s) => s.id === propertyIdToTransfer,
+        s => s.id === propertyIdToTransfer,
       ) as Property
       if (!propertyToTransfer || propertyToTransfer.owner !== debtorIndex)
         return
@@ -2082,7 +2247,7 @@ export class GameRoom implements GameActions {
       const difference = rentAmount - propertyValue
 
       this.setState({
-        spaces: this.state.spaces.map((s) =>
+        spaces: this.state.spaces.map(s =>
           s.id === propertyIdToTransfer
             ? ({ ...s, owner: creditorIndex } as Property)
             : s,
@@ -2090,7 +2255,7 @@ export class GameRoom implements GameActions {
         players: this.state.players.map((p, i) => {
           if (i === debtorIndex) {
             const newProps = p.properties.filter(
-              (pid) => pid !== propertyIdToTransfer,
+              pid => pid !== propertyIdToTransfer,
             )
             // If debtor owes more than property value, pay the difference from cash
             const cashChange = difference > 0 ? Math.min(difference, p.cash) : 0
@@ -2107,14 +2272,14 @@ export class GameRoom implements GameActions {
           }
           return p
         }),
-        phase: "resolving_space",
+        phase: 'resolving_space',
         pendingRentNegotiation: null,
         utilityMultiplierOverride: null,
       })
 
       this.addLogEntry(
         `${debtor.name} transferred ${propertyToTransfer.name} to ${creditor.name} as rent payment`,
-        "rent",
+        'rent',
         debtorIndex,
       )
     } else {
@@ -2140,7 +2305,7 @@ export class GameRoom implements GameActions {
       })
       this.addLogEntry(
         `${player.name} paid £${amount} in taxes to the Jackpot`,
-        "tax",
+        'tax',
         playerIndex,
       )
     } else if (this.state.settings.enableBankruptcyRestructuring) {
@@ -2156,11 +2321,7 @@ export class GameRoom implements GameActions {
     const currentPlayer = this.state.players[this.state.currentPlayerIndex]
     const isDoubles = roll?.isDoubles && currentPlayer && !currentPlayer.inJail
 
-    if (
-      isDoubles &&
-      currentPlayer &&
-      !currentPlayer.bankrupt
-    ) {
+    if (isDoubles && currentPlayer && !currentPlayer.bankrupt) {
       const newConsecutiveDoubles = this.state.consecutiveDoubles
 
       // Three doubles in a row = go to jail (already incremented in rollDice)
@@ -2170,7 +2331,7 @@ export class GameRoom implements GameActions {
         )
         this.addLogEntry(
           `${currentPlayer.name} rolled 3 doubles in a row and went to Jail!`,
-          "jail",
+          'jail',
           this.state.currentPlayerIndex,
         )
         this.goToJail(this.state.currentPlayerIndex)
@@ -2182,7 +2343,7 @@ export class GameRoom implements GameActions {
         `[GameRoom] ${currentPlayer.name} rolled doubles (${newConsecutiveDoubles}/3). Allowing another roll.`,
       )
       this.setState({
-        phase: "rolling",
+        phase: 'rolling',
         diceRoll: null,
         lastDiceRoll: null,
         consecutiveDoubles: newConsecutiveDoubles,
@@ -2207,7 +2368,7 @@ export class GameRoom implements GameActions {
     let newConsecutiveDoubles = 0
 
     if (isDoubles) {
-      // This part should theoretically not be reached due to the return above, 
+      // This part should theoretically not be reached due to the return above,
       // but keeping it consistent with the logic for safety or future refactors.
       newConsecutiveDoubles = this.state.consecutiveDoubles
     } else {
@@ -2226,10 +2387,10 @@ export class GameRoom implements GameActions {
     }
 
     // Check if we completed a full round (back to player 0 or first non-bankrupt player)
-    const activePlayers = this.state.players.filter((p) => !p.bankrupt)
+    const activePlayers = this.state.players.filter(p => !p.bankrupt)
 
     // Safety check: if phase is still "moving" and diceRoll exists, move the player first
-    if (this.state.phase === "moving" && this.state.diceRoll) {
+    if (this.state.phase === 'moving' && this.state.diceRoll) {
       console.log(
         `[GameRoom] endTurn called while phase is "moving". Moving player ${this.state.currentPlayerIndex} first.`,
       )
@@ -2252,7 +2413,7 @@ export class GameRoom implements GameActions {
       }
     }
 
-    const firstActiveIndex = this.state.players.findIndex((p) => !p.bankrupt)
+    const firstActiveIndex = this.state.players.findIndex(p => !p.bankrupt)
     const completedRound =
       nextPlayerIndex <= this.state.currentPlayerIndex &&
       nextPlayerIndex === firstActiveIndex &&
@@ -2260,7 +2421,7 @@ export class GameRoom implements GameActions {
 
     let newRoundsCompleted = this.state.roundsCompleted
     let newGoSalary = this.state.currentGoSalary
-    let newMarketHistory = [...this.state.marketHistory]
+    const newMarketHistory = [...this.state.marketHistory]
 
     if (completedRound) {
       newRoundsCompleted = this.state.roundsCompleted + 1
@@ -2273,7 +2434,7 @@ export class GameRoom implements GameActions {
       ) {
         this.addLogEntry(
           `💹 Inflation! GO salary increased to £${calculatedSalary}`,
-          "system",
+          'system',
         )
       }
       newGoSalary = calculatedSalary
@@ -2283,6 +2444,7 @@ export class GameRoom implements GameActions {
         round: newRoundsCompleted,
         inflation: newGoSalary,
         gini: calculateGiniCoefficient(this.state),
+        moneyInCirculation: calculateMoneyInCirculation(this.state),
       })
 
       // Update economic events at end of round
@@ -2298,7 +2460,7 @@ export class GameRoom implements GameActions {
     const nextPlayer = this.state.players[nextPlayerIndex]
     this.setState({
       currentPlayerIndex: nextPlayerIndex,
-      phase: nextPlayer?.inJail ? "jail_decision" : "rolling",
+      phase: nextPlayer?.inJail ? 'jail_decision' : 'rolling',
       diceRoll: null,
       lastDiceRoll: null,
       consecutiveDoubles: 0,
@@ -2324,28 +2486,28 @@ export class GameRoom implements GameActions {
       consecutiveDoubles: 0, // Reset doubles counter when going to jail
       diceRoll: null,
       lastDiceRoll: null,
-      phase: "jail_decision", // Set phase to jail decision
+      phase: 'jail_decision', // Set phase to jail decision
     })
 
     if (player) {
-      const reason = wasThreeDoubles ? " (3 doubles in a row)" : ""
+      const reason = wasThreeDoubles ? ' (3 doubles in a row)' : ''
       this.addLogEntry(
         `${player.name} went to Jail!${reason}`,
-        "jail",
+        'jail',
         playerIndex,
       )
     }
 
     // Do NOT end turn immediately to allow client to show animation/message.
     // The player must click "End Turn" or AI will handle it.
-    this.setState({ phase: "resolving_space" })
+    this.setState({ phase: 'resolving_space' })
   }
 
-  public getOutOfJail(playerIndex: number, method: "roll" | "pay" | "card") {
+  public getOutOfJail(playerIndex: number, method: 'roll' | 'pay' | 'card') {
     const player = this.state.players[playerIndex]
     if (!player) return
 
-    if (method === "pay") {
+    if (method === 'pay') {
       if (player.cash >= 50) {
         this.setState({
           players: this.state.players.map((p, i) =>
@@ -2353,10 +2515,10 @@ export class GameRoom implements GameActions {
               ? { ...p, cash: p.cash - 50, inJail: false, jailTurns: 0 }
               : p,
           ),
-          phase: "rolling",
+          phase: 'rolling',
         })
       }
-    } else if (method === "card") {
+    } else if (method === 'card') {
       if (player.jailFreeCards > 0) {
         this.setState({
           players: this.state.players.map((p, i) =>
@@ -2369,10 +2531,10 @@ export class GameRoom implements GameActions {
                 }
               : p,
           ),
-          phase: "rolling",
+          phase: 'rolling',
         })
       }
-    } else if (method === "roll") {
+    } else if (method === 'roll') {
       const roll = this.rollDice()
       if (roll.isDoubles) {
         this.setState({
@@ -2413,13 +2575,13 @@ export class GameRoom implements GameActions {
 
     // Validate turn order
     const turnValidation = validatePlayerTurn(this.state, playerIndex, [
-      "rolling",
-      "resolving_space",
+      'rolling',
+      'resolving_space',
     ])
     if (!turnValidation.valid) {
       this.addLogEntry(
-        turnValidation.error || "Invalid action",
-        "system",
+        turnValidation.error || 'Invalid action',
+        'system',
         playerIndex,
       )
       return
@@ -2427,7 +2589,7 @@ export class GameRoom implements GameActions {
 
     const player = this.state.players[playerIndex]
     if (!player) {
-      this.addLogEntry("Player not found", "system", playerIndex)
+      this.addLogEntry('Player not found', 'system', playerIndex)
       return
     }
 
@@ -2439,20 +2601,20 @@ export class GameRoom implements GameActions {
     )
     if (!buildingValidation.valid) {
       this.addLogEntry(
-        buildingValidation.error || "Cannot build house",
-        "system",
+        buildingValidation.error || 'Cannot build house',
+        'system',
         playerIndex,
       )
       return
     }
 
     const property = this.state.spaces.find(
-      (s) => s.id === propertyId,
+      s => s.id === propertyId,
     ) as Property
     if (!property || property.houses >= 4 || !property.buildingCost) {
       this.addLogEntry(
-        "Cannot build more houses on this property",
-        "system",
+        'Cannot build more houses on this property',
+        'system',
         playerIndex,
       )
       return
@@ -2460,16 +2622,16 @@ export class GameRoom implements GameActions {
 
     // Calculate actual building cost (may be modified by economic events)
     let buildingCost = property.buildingCost
-    if (this.isEconomicEventActive("housing_boom")) {
+    if (this.isEconomicEventActive('housing_boom')) {
       buildingCost = Math.floor(buildingCost * 1.5) // 50% increase during housing boom
     }
 
     // Validate cash
-    const cashValidation = validateCash(player, buildingCost, "build house")
+    const cashValidation = validateCash(player, buildingCost, 'build house')
     if (!cashValidation.valid) {
       this.addLogEntry(
-        cashValidation.error || "Insufficient funds",
-        "system",
+        cashValidation.error || 'Insufficient funds',
+        'system',
         playerIndex,
       )
       return
@@ -2482,14 +2644,14 @@ export class GameRoom implements GameActions {
     ) {
       this.addLogEntry(
         `🏠 Housing shortage! No houses available to build.`,
-        "system",
+        'system',
         playerIndex,
       )
       return
     }
 
     this.setState({
-      spaces: this.state.spaces.map((s) =>
+      spaces: this.state.spaces.map(s =>
         s.id === propertyId ? { ...s, houses: (s as Property).houses + 1 } : s,
       ),
       players: this.state.players.map((p, i) =>
@@ -2505,11 +2667,11 @@ export class GameRoom implements GameActions {
     const scarcityWarning =
       this.state.settings.enableHousingScarcity && housesLeft <= 5
         ? ` (${housesLeft} houses left!)`
-        : ""
-    const boomWarning = this.isEconomicEventActive("housing_boom") ? " 🏗️" : ""
+        : ''
+    const boomWarning = this.isEconomicEventActive('housing_boom') ? ' 🏗️' : ''
     this.addLogEntry(
       `${player.name} built a house on ${property.name} for £${buildingCost}${scarcityWarning}${boomWarning}`,
-      "system",
+      'system',
       playerIndex,
     )
 
@@ -2527,7 +2689,7 @@ export class GameRoom implements GameActions {
     const player = this.state.players[playerIndex]
     if (!player) return
     const property = this.state.spaces.find(
-      (s) => s.id === propertyId,
+      s => s.id === propertyId,
     ) as Property
     if (
       !property ||
@@ -2540,14 +2702,14 @@ export class GameRoom implements GameActions {
 
     // Calculate actual building cost (may be modified by economic events)
     let buildingCost = property.buildingCost
-    if (this.isEconomicEventActive("housing_boom")) {
+    if (this.isEconomicEventActive('housing_boom')) {
       buildingCost = Math.floor(buildingCost * 1.5) // 50% increase during housing boom
     }
 
     if (player.cash < buildingCost) {
       this.addLogEntry(
-        `Cannot afford £${buildingCost} to build hotel${this.isEconomicEventActive("housing_boom") ? " (Housing Boom prices!)" : ""}`,
-        "system",
+        `Cannot afford £${buildingCost} to build hotel${this.isEconomicEventActive('housing_boom') ? ' (Housing Boom prices!)' : ''}`,
+        'system',
         playerIndex,
       )
       return
@@ -2560,7 +2722,7 @@ export class GameRoom implements GameActions {
     ) {
       this.addLogEntry(
         `🏨 Hotel shortage! No hotels available to build.`,
-        "system",
+        'system',
         playerIndex,
       )
       return
@@ -2570,10 +2732,10 @@ export class GameRoom implements GameActions {
       (s): s is Property =>
         isProperty(s) && s.colorGroup === property.colorGroup,
     )
-    if (!groupProperties.every((p) => p.houses === 4 || p.hotel)) return
+    if (!groupProperties.every(p => p.houses === 4 || p.hotel)) return
 
     this.setState({
-      spaces: this.state.spaces.map((s) =>
+      spaces: this.state.spaces.map(s =>
         s.id === propertyId ? { ...s, houses: 0, hotel: true } : s,
       ),
       players: this.state.players.map((p, i) =>
@@ -2592,11 +2754,11 @@ export class GameRoom implements GameActions {
     const scarcityWarning =
       this.state.settings.enableHousingScarcity && hotelsLeft <= 3
         ? ` (${hotelsLeft} hotels left!)`
-        : ""
-    const boomWarning = this.isEconomicEventActive("housing_boom") ? " 🏗️" : ""
+        : ''
+    const boomWarning = this.isEconomicEventActive('housing_boom') ? ' 🏗️' : ''
     this.addLogEntry(
       `${player.name} built a hotel on ${property.name} for £${buildingCost}${scarcityWarning}${boomWarning}`,
-      "system",
+      'system',
       playerIndex,
     )
 
@@ -2614,14 +2776,14 @@ export class GameRoom implements GameActions {
     const player = this.state.players[playerIndex]
     if (!player) return
     const property = this.state.spaces.find(
-      (s) => s.id === propertyId,
+      s => s.id === propertyId,
     ) as Property
     if (!property || property.owner !== playerIndex || property.houses <= 0)
       return
 
     const sellValue = Math.floor((property.buildingCost ?? 0) / 2)
     this.setState({
-      spaces: this.state.spaces.map((s) =>
+      spaces: this.state.spaces.map(s =>
         s.id === propertyId ? { ...s, houses: (s as Property).houses - 1 } : s,
       ),
       players: this.state.players.map((p, i) =>
@@ -2634,7 +2796,7 @@ export class GameRoom implements GameActions {
     })
     this.addLogEntry(
       `${player.name} sold a house on ${property.name} for £${sellValue}`,
-      "system",
+      'system',
       playerIndex,
     )
   }
@@ -2644,7 +2806,7 @@ export class GameRoom implements GameActions {
     const player = this.state.players[playerIndex]
     if (!player) return
     const property = this.state.spaces.find(
-      (s) => s.id === propertyId,
+      s => s.id === propertyId,
     ) as Property
     if (!property || property.owner !== playerIndex || !property.hotel) return
 
@@ -2655,7 +2817,7 @@ export class GameRoom implements GameActions {
     ) {
       this.addLogEntry(
         `🏠 Cannot sell hotel - not enough houses available (need 4, have ${this.state.availableHouses})`,
-        "system",
+        'system',
         playerIndex,
       )
       return
@@ -2663,7 +2825,7 @@ export class GameRoom implements GameActions {
 
     const sellValue = Math.floor((property.buildingCost ?? 0) / 2)
     this.setState({
-      spaces: this.state.spaces.map((s) =>
+      spaces: this.state.spaces.map(s =>
         s.id === propertyId ? { ...s, houses: 4, hotel: false } : s,
       ),
       players: this.state.players.map((p, i) =>
@@ -2679,7 +2841,7 @@ export class GameRoom implements GameActions {
     })
     this.addLogEntry(
       `${player.name} sold a hotel on ${property.name} for £${sellValue}`,
-      "system",
+      'system',
       playerIndex,
     )
   }
@@ -2689,13 +2851,13 @@ export class GameRoom implements GameActions {
 
     // Validate turn order
     const turnValidation = validatePlayerTurn(this.state, playerIndex, [
-      "rolling",
-      "resolving_space",
+      'rolling',
+      'resolving_space',
     ])
     if (!turnValidation.valid) {
       this.addLogEntry(
-        turnValidation.error || "Invalid action",
-        "system",
+        turnValidation.error || 'Invalid action',
+        'system',
         playerIndex,
       )
       return
@@ -2710,14 +2872,14 @@ export class GameRoom implements GameActions {
     )
     if (!mortgageValidation.valid) {
       this.addLogEntry(
-        mortgageValidation.error || "Cannot mortgage property",
-        "system",
+        mortgageValidation.error || 'Cannot mortgage property',
+        'system',
         playerIndex,
       )
       return
     }
 
-    const space = this.state.spaces.find((s) => s.id === propertyId) as Property
+    const space = this.state.spaces.find(s => s.id === propertyId) as Property
     if (!space) return
 
     // Calculate jackpot contribution (15% of mortgage value)
@@ -2725,7 +2887,7 @@ export class GameRoom implements GameActions {
     const playerReceives = space.mortgageValue - jackpotContribution
 
     this.setState({
-      spaces: this.state.spaces.map((s) =>
+      spaces: this.state.spaces.map(s =>
         s.id === propertyId ? { ...s, mortgaged: true } : s,
       ),
       players: this.state.players.map((p, i) =>
@@ -2737,7 +2899,7 @@ export class GameRoom implements GameActions {
     if (owner) {
       this.addLogEntry(
         `${owner.name} mortgaged ${space.name} (received £${playerReceives}, £${jackpotContribution} added to jackpot)`,
-        "system",
+        'system',
         playerIndex,
       )
     }
@@ -2748,13 +2910,13 @@ export class GameRoom implements GameActions {
 
     // Validate turn order
     const turnValidation = validatePlayerTurn(this.state, playerIndex, [
-      "rolling",
-      "resolving_space",
+      'rolling',
+      'resolving_space',
     ])
     if (!turnValidation.valid) {
       this.addLogEntry(
-        turnValidation.error || "Invalid action",
-        "system",
+        turnValidation.error || 'Invalid action',
+        'system',
         playerIndex,
       )
       return
@@ -2769,14 +2931,14 @@ export class GameRoom implements GameActions {
     )
     if (!mortgageValidation.valid) {
       this.addLogEntry(
-        mortgageValidation.error || "Cannot unmortgage property",
-        "system",
+        mortgageValidation.error || 'Cannot unmortgage property',
+        'system',
         playerIndex,
       )
       return
     }
 
-    const space = this.state.spaces.find((s) => s.id === propertyId) as Property
+    const space = this.state.spaces.find(s => s.id === propertyId) as Property
     if (!space) return
 
     const unmortgageCost = Math.floor(space.mortgageValue * 1.1)
@@ -2784,7 +2946,7 @@ export class GameRoom implements GameActions {
     if (!player) return
 
     this.setState({
-      spaces: this.state.spaces.map((s) =>
+      spaces: this.state.spaces.map(s =>
         s.id === propertyId ? { ...s, mortgaged: false } : s,
       ),
       players: this.state.players.map((p, i) =>
@@ -2793,7 +2955,7 @@ export class GameRoom implements GameActions {
     })
     this.addLogEntry(
       `${player.name} unmortgaged ${space.name} for £${unmortgageCost}`,
-      "system",
+      'system',
       playerIndex,
     )
   }
@@ -2805,7 +2967,7 @@ export class GameRoom implements GameActions {
     if (!this.state.settings.enablePropertyInsurance) return 0
 
     const property = this.state.spaces.find(
-      (s) => s.id === propertyId,
+      s => s.id === propertyId,
     ) as Property
     if (!property) return 0
 
@@ -2819,7 +2981,7 @@ export class GameRoom implements GameActions {
     if (!this.state.settings.enablePropertyInsurance) return
 
     const property = this.state.spaces.find(
-      (s) => s.id === propertyId,
+      s => s.id === propertyId,
     ) as Property
     const player = this.state.players[playerIndex]
 
@@ -2829,7 +2991,7 @@ export class GameRoom implements GameActions {
     if (player.cash < insuranceCost) {
       this.addLogEntry(
         `${player.name} cannot afford £${insuranceCost} insurance for ${property.name}`,
-        "system",
+        'system',
         playerIndex,
       )
       return
@@ -2839,7 +3001,7 @@ export class GameRoom implements GameActions {
     const newPaidUntilRound = this.state.roundsCompleted + coverageRounds
 
     this.setState({
-      spaces: this.state.spaces.map((s) =>
+      spaces: this.state.spaces.map(s =>
         s.id === propertyId
           ? ({
               ...s,
@@ -2855,7 +3017,7 @@ export class GameRoom implements GameActions {
 
     this.addLogEntry(
       `${player.name} insured ${property.name} for £${insuranceCost} (covers ${coverageRounds} rounds)`,
-      "system",
+      'system',
       playerIndex,
     )
   }
@@ -2865,7 +3027,7 @@ export class GameRoom implements GameActions {
     const currentRound = this.state.roundsCompleted
     const expiredProperties: string[] = []
 
-    const updatedSpaces = this.state.spaces.map((s) => {
+    const updatedSpaces = this.state.spaces.map(s => {
       if (
         isProperty(s) &&
         s.isInsured &&
@@ -2884,8 +3046,8 @@ export class GameRoom implements GameActions {
     if (expiredProperties.length > 0) {
       this.setState({ spaces: updatedSpaces })
       this.addLogEntry(
-        `Insurance expired on: ${expiredProperties.join(", ")}`,
-        "system",
+        `Insurance expired on: ${expiredProperties.join(', ')}`,
+        'system',
       )
     }
   }
@@ -2895,7 +3057,7 @@ export class GameRoom implements GameActions {
     if (!this.state.settings.enablePropertyInsurance) return false
 
     const property = this.state.spaces.find(
-      (s) => s.id === propertyId,
+      s => s.id === propertyId,
     ) as Property
     if (!property) return false
 
@@ -2915,11 +3077,10 @@ export class GameRoom implements GameActions {
     const rate = this.state.settings.appreciationRate * multiplier
     const appreciatedProperties: string[] = []
 
-    const updatedSpaces = this.state.spaces.map((s) => {
+    const updatedSpaces = this.state.spaces.map(s => {
       if (isProperty(s) && s.colorGroup === colorGroup) {
         // Use precision to avoid floating point issues
-        const newMultiplier =
-          Math.round((s.valueMultiplier + rate) * 100) / 100
+        const newMultiplier = Math.round((s.valueMultiplier + rate) * 100) / 100
         const cappedMultiplier = Math.min(2.0, newMultiplier) // Cap at 2x
 
         if (cappedMultiplier !== s.valueMultiplier) {
@@ -2934,8 +3095,8 @@ export class GameRoom implements GameActions {
       this.setState({ spaces: updatedSpaces })
       const percentChange = Math.round(rate * 100)
       this.addLogEntry(
-        `📈 ${colorGroup.replace("_", " ")} properties appreciated ${percentChange}%!`,
-        "system",
+        `📈 ${colorGroup.replace('_', ' ')} properties appreciated ${percentChange}%!`,
+        'system',
       )
     }
   }
@@ -2947,11 +3108,10 @@ export class GameRoom implements GameActions {
 
     const depreciatedProperties: string[] = []
 
-    const updatedSpaces = this.state.spaces.map((s) => {
+    const updatedSpaces = this.state.spaces.map(s => {
       if (isProperty(s) && s.colorGroup === colorGroup) {
         // Use precision to avoid floating point issues
-        const newMultiplier =
-          Math.round((s.valueMultiplier - rate) * 100) / 100
+        const newMultiplier = Math.round((s.valueMultiplier - rate) * 100) / 100
         const cappedMultiplier = Math.max(0.5, newMultiplier) // Floor at 0.5x
 
         if (cappedMultiplier !== s.valueMultiplier) {
@@ -2966,8 +3126,8 @@ export class GameRoom implements GameActions {
       this.setState({ spaces: updatedSpaces })
       const percentChange = Math.round(rate * 100)
       this.addLogEntry(
-        `📉 ${colorGroup.replace("_", " ")} properties depreciated ${percentChange}%!`,
-        "system",
+        `📉 ${colorGroup.replace('_', ' ')} properties depreciated ${percentChange}%!`,
+        'system',
       )
     }
   }
@@ -2978,11 +3138,10 @@ export class GameRoom implements GameActions {
 
     const rate = changePercent / 100
 
-    const updatedSpaces = this.state.spaces.map((s) => {
+    const updatedSpaces = this.state.spaces.map(s => {
       if (isProperty(s)) {
         // Use precision to avoid floating point issues
-        const newMultiplier =
-          Math.round((s.valueMultiplier + rate) * 100) / 100
+        const newMultiplier = Math.round((s.valueMultiplier + rate) * 100) / 100
         return {
           ...s,
           valueMultiplier: Math.max(0.5, Math.min(2.0, newMultiplier)),
@@ -2996,12 +3155,12 @@ export class GameRoom implements GameActions {
     if (changePercent > 0) {
       this.addLogEntry(
         `📈 Market rally! All properties appreciated ${changePercent}%`,
-        "system",
+        'system',
       )
     } else {
       this.addLogEntry(
         `📉 Market downturn! All properties depreciated ${Math.abs(changePercent)}%`,
-        "system",
+        'system',
       )
     }
   }
@@ -3009,7 +3168,7 @@ export class GameRoom implements GameActions {
   // Get effective property value (base price × multiplier)
   public getEffectivePropertyValue(propertyId: number): number {
     const property = this.state.spaces.find(
-      (s) => s.id === propertyId,
+      s => s.id === propertyId,
     ) as Property
     if (!property) return 0
 
@@ -3019,7 +3178,7 @@ export class GameRoom implements GameActions {
   // Get effective mortgage value
   public getEffectiveMortgageValue(propertyId: number): number {
     const property = this.state.spaces.find(
-      (s) => s.id === propertyId,
+      s => s.id === propertyId,
     ) as Property
     if (!property) return 0
 
@@ -3040,7 +3199,7 @@ export class GameRoom implements GameActions {
     let netWorth = player.cash
 
     // Add property values
-    this.state.spaces.forEach((space) => {
+    this.state.spaces.forEach(space => {
       if (isProperty(space) && space.owner === playerIndex) {
         if (!space.mortgaged) {
           // Use precision-safe effective value
@@ -3078,8 +3237,8 @@ export class GameRoom implements GameActions {
   public takeLoan(playerIndex: number, amount: number) {
     if (!this.state.settings.enableBankLoans) {
       this.addLogEntry(
-        "Bank loans are disabled for this game.",
-        "system",
+        'Bank loans are disabled for this game.',
+        'system',
         playerIndex,
       )
       return
@@ -3091,13 +3250,13 @@ export class GameRoom implements GameActions {
     // Validate loan amount
     const maxLoan = this.getMaxLoanAmount(playerIndex)
     if (amount <= 0) {
-      this.addLogEntry("Invalid loan amount.", "system", playerIndex)
+      this.addLogEntry('Invalid loan amount.', 'system', playerIndex)
       return
     }
     if (amount > maxLoan) {
       this.addLogEntry(
         `Cannot borrow £${amount}. Maximum available: £${maxLoan}`,
-        "system",
+        'system',
         playerIndex,
       )
       return
@@ -3108,7 +3267,7 @@ export class GameRoom implements GameActions {
     if (amount < minLoan) {
       this.addLogEntry(
         `Minimum loan amount is £${minLoan}`,
-        "system",
+        'system',
         playerIndex,
       )
       return
@@ -3141,7 +3300,7 @@ export class GameRoom implements GameActions {
     )
     this.addLogEntry(
       `🏦 ${player.name} took a loan of £${amount} (${interestPercent}% interest/turn)`,
-      "system",
+      'system',
       playerIndex,
     )
   }
@@ -3151,9 +3310,9 @@ export class GameRoom implements GameActions {
     const player = this.state.players[playerIndex]
     if (!player || player.bankrupt) return
 
-    const loanIndex = player.bankLoans.findIndex((l) => l.id === loanId)
+    const loanIndex = player.bankLoans.findIndex(l => l.id === loanId)
     if (loanIndex === -1) {
-      this.addLogEntry("Loan not found.", "system", playerIndex)
+      this.addLogEntry('Loan not found.', 'system', playerIndex)
       return
     }
 
@@ -3161,13 +3320,13 @@ export class GameRoom implements GameActions {
 
     // Validate repayment amount
     if (amount <= 0) {
-      this.addLogEntry("Invalid repayment amount.", "system", playerIndex)
+      this.addLogEntry('Invalid repayment amount.', 'system', playerIndex)
       return
     }
     if (amount > player.cash) {
       this.addLogEntry(
         `Insufficient funds. You have £${player.cash}`,
-        "system",
+        'system',
         playerIndex,
       )
       return
@@ -3179,20 +3338,20 @@ export class GameRoom implements GameActions {
     let updatedLoans: typeof player.bankLoans
     if (remainingDebt <= 0) {
       // Loan fully repaid - remove it
-      updatedLoans = player.bankLoans.filter((l) => l.id !== loanId)
+      updatedLoans = player.bankLoans.filter(l => l.id !== loanId)
       this.addLogEntry(
         `🏦 ${player.name} fully repaid a loan of £${actualRepayment}!`,
-        "system",
+        'system',
         playerIndex,
       )
     } else {
       // Partial repayment
-      updatedLoans = player.bankLoans.map((l) =>
+      updatedLoans = player.bankLoans.map(l =>
         l.id === loanId ? { ...l, totalOwed: remainingDebt } : l,
       )
       this.addLogEntry(
         `🏦 ${player.name} repaid £${actualRepayment} on loan (£${remainingDebt} remaining)`,
-        "system",
+        'system',
         playerIndex,
       )
     }
@@ -3219,12 +3378,12 @@ export class GameRoom implements GameActions {
     if (!player || player.bankrupt || player.bankLoans.length === 0) return
 
     // Check for banking crisis - double interest rates
-    const interestMultiplier = this.isEconomicEventActive("banking_crisis")
+    const interestMultiplier = this.isEconomicEventActive('banking_crisis')
       ? 2
       : 1
 
     let totalInterest = 0
-    const updatedLoans = player.bankLoans.map((loan) => {
+    const updatedLoans = player.bankLoans.map(loan => {
       const interest = Math.ceil(
         loan.totalOwed * loan.interestRate * interestMultiplier,
       )
@@ -3250,7 +3409,7 @@ export class GameRoom implements GameActions {
       })
       this.addLogEntry(
         `📈 ${player.name}'s loans accrued £${totalInterest} in interest (total debt: £${updatedLoans.reduce((sum, l) => sum + l.totalOwed, 0)}, £${totalInterest} added to Jackpot)`,
-        "system",
+        'system',
         playerIndex,
       )
     }
@@ -3258,7 +3417,7 @@ export class GameRoom implements GameActions {
 
   public addLogEntry(
     message: string,
-    type: GameLogEntry["type"],
+    type: GameLogEntry['type'],
     playerIndex?: number,
   ) {
     const entry: GameLogEntry = {
@@ -3271,22 +3430,22 @@ export class GameRoom implements GameActions {
     this.setState({ gameLog: [...this.state.gameLog.slice(-49), entry] })
   }
 
-  public drawCard(playerIndex: number, type: "chance" | "community_chest") {
+  public drawCard(playerIndex: number, type: 'chance' | 'community_chest') {
     const deck =
-      type === "chance" ? this.state.chanceDeck : this.state.communityChestDeck
+      type === 'chance' ? this.state.chanceDeck : this.state.communityChestDeck
     const card = deck[0]
     const player = this.state.players[playerIndex]
     if (!card || !player) return
 
     this.addLogEntry(
-      `${player.name} drew ${type === "chance" ? "Chance" : "Community Chest"}: "${card.text}"`,
-      "card",
+      `${player.name} drew ${type === 'chance' ? 'Chance' : 'Community Chest'}: "${card.text}"`,
+      'card',
       playerIndex,
     )
     this.applyCardEffect(card, playerIndex)
 
     const updatedDeck = [...deck.slice(1), card]
-    if (type === "chance") this.setState({ chanceDeck: updatedDeck })
+    if (type === 'chance') this.setState({ chanceDeck: updatedDeck })
     else this.setState({ communityChestDeck: updatedDeck })
   }
 
@@ -3306,7 +3465,7 @@ export class GameRoom implements GameActions {
     }
 
     if (effect.positionChange !== undefined) {
-      if (effect.positionChange === "jail") {
+      if (effect.positionChange === 'jail') {
         this.goToJail(playerIndex)
         return
       } else {
@@ -3344,7 +3503,7 @@ export class GameRoom implements GameActions {
       const playerProperties = getPlayerProperties(this.state, playerIndex)
       let totalCost = 0
       let insuredSavings = 0
-      playerProperties.forEach((prop) => {
+      playerProperties.forEach(prop => {
         // Phase 3: Check if property is insured - insured properties don't pay repair costs
         if (this.isPropertyInsured(prop.id)) {
           if (prop.hotel) insuredSavings += effect.perHotelCost ?? 0
@@ -3358,7 +3517,7 @@ export class GameRoom implements GameActions {
       if (insuredSavings > 0) {
         this.addLogEntry(
           `${player.name} saved £${insuredSavings} thanks to property insurance!`,
-          "system",
+          'system',
           playerIndex,
         )
       }
@@ -3366,12 +3525,14 @@ export class GameRoom implements GameActions {
 
     let jackpotUpdate = this.state.jackpot
     if (effect.jackpotPercentage && this.state.jackpot > 0) {
-      const winAmount = Math.floor(this.state.jackpot * effect.jackpotPercentage)
+      const winAmount = Math.floor(
+        this.state.jackpot * effect.jackpotPercentage,
+      )
       cashChange += winAmount
       jackpotUpdate -= winAmount
       this.addLogEntry(
         `🎉 ${player.name} won £${winAmount} from the Lottery (${Math.round(effect.jackpotPercentage * 100)}% of the Jackpot)!`,
-        "system",
+        'system',
         playerIndex,
       )
     }
@@ -3424,7 +3585,7 @@ export class GameRoom implements GameActions {
 
     // Store pending bankruptcy info and offer restructuring choice
     this.setState({
-      phase: "awaiting_bankruptcy_decision",
+      phase: 'awaiting_bankruptcy_decision',
       pendingBankruptcy: {
         playerIndex,
         creditorIndex,
@@ -3434,7 +3595,7 @@ export class GameRoom implements GameActions {
 
     this.addLogEntry(
       `⚠️ ${player.name} is facing bankruptcy! They can choose Chapter 11 restructuring or declare full bankruptcy.`,
-      "bankrupt",
+      'bankrupt',
       playerIndex,
     )
   }
@@ -3458,10 +3619,11 @@ export class GameRoom implements GameActions {
               inChapter11: true,
               chapter11TurnsRemaining: turnsToRepay,
               chapter11DebtTarget: debtAmount,
+              chapter11CreditorIndex: creditorIndex,
             }
           : p,
       ),
-      phase: "resolving_space",
+      phase: 'resolving_space',
       pendingBankruptcy: null,
       // Clear trades involving this player during restructuring
       trade:
@@ -3474,7 +3636,7 @@ export class GameRoom implements GameActions {
 
     this.addLogEntry(
       `📋 ${player.name} entered Chapter 11 restructuring! They have ${turnsToRepay} turns to pay off £${debtAmount} or will be liquidated.`,
-      "bankrupt",
+      'bankrupt',
       playerIndex,
     )
   }
@@ -3484,7 +3646,7 @@ export class GameRoom implements GameActions {
     const pending = (this.state as any).pendingBankruptcy
     if (!pending) {
       console.warn(
-        "[GameRoom] declineRestructuring called but no pending bankruptcy",
+        '[GameRoom] declineRestructuring called but no pending bankruptcy',
       )
       return
     }
@@ -3498,8 +3660,8 @@ export class GameRoom implements GameActions {
     this.setState({
       pendingBankruptcy: null,
       phase:
-        this.state.phase === "awaiting_bankruptcy_decision"
-          ? "resolving_space"
+        this.state.phase === 'awaiting_bankruptcy_decision'
+          ? 'resolving_space'
           : this.state.phase,
     })
     this.declareBankruptcy(playerIndex, creditorIndex)
@@ -3532,17 +3694,17 @@ export class GameRoom implements GameActions {
         })
         this.addLogEntry(
           `🎉 ${player.name} successfully emerged from Chapter 11 restructuring!`,
-          "bankrupt",
+          'bankrupt',
           playerIndex,
         )
       } else {
         // Failed to meet obligations - full liquidation
         this.addLogEntry(
           `💀 ${player.name} failed to meet Chapter 11 obligations and will be liquidated!`,
-          "bankrupt",
+          'bankrupt',
           playerIndex,
         )
-        this.declareBankruptcy(playerIndex)
+        this.declareBankruptcy(playerIndex, player.chapter11CreditorIndex)
       }
     } else {
       // Update turns remaining
@@ -3559,7 +3721,7 @@ export class GameRoom implements GameActions {
       )
       this.addLogEntry(
         `📊 ${player.name} Chapter 11: ${newTurnsRemaining} turns left, ${progress}% of £${player.chapter11DebtTarget} target`,
-        "system",
+        'system',
         playerIndex,
       )
     }
@@ -3573,7 +3735,7 @@ export class GameRoom implements GameActions {
     let housesToReturn = 0
     let hotelsToReturn = 0
 
-    this.state.spaces.forEach((s) => {
+    this.state.spaces.forEach(s => {
       if (isProperty(s) && s.owner === playerIndex) {
         if (s.hotel) {
           hotelsToReturn += 1
@@ -3608,8 +3770,8 @@ export class GameRoom implements GameActions {
             jailFreeCards: p.jailFreeCards + player.jailFreeCards,
             // Hardening: Transfer receivables to creditor and update their creditorId
             iousReceivable: [
-              ...p.iousReceivable.filter((iou) => iou.debtorId !== playerIndex),
-              ...player.iousReceivable.map((iou) => ({
+              ...p.iousReceivable.filter(iou => iou.debtorId !== playerIndex),
+              ...player.iousReceivable.map(iou => ({
                 ...iou,
                 creditorId: creditorIndex,
               })),
@@ -3618,17 +3780,17 @@ export class GameRoom implements GameActions {
         }
         // Hardening: Update other players' IOUs
         const updatedPayable = p.iousPayable
-          .map((iou) =>
+          .map(iou =>
             iou.creditorId === playerIndex && creditorIndex != null
               ? { ...iou, creditorId: creditorIndex }
               : iou,
           )
           .filter(
-            (iou) => iou.creditorId !== playerIndex || creditorIndex != null,
+            iou => iou.creditorId !== playerIndex || creditorIndex != null,
           )
 
         const updatedReceivable = p.iousReceivable.filter(
-          (iou) => iou.debtorId !== playerIndex,
+          iou => iou.debtorId !== playerIndex,
         )
 
         return {
@@ -3637,7 +3799,7 @@ export class GameRoom implements GameActions {
           iousReceivable: updatedReceivable,
         }
       }),
-      spaces: this.state.spaces.map((s) =>
+      spaces: this.state.spaces.map(s =>
         isProperty(s) && s.owner === playerIndex
           ? {
               ...s,
@@ -3666,14 +3828,14 @@ export class GameRoom implements GameActions {
           : this.state.auction,
       // Hardening: Reset phase if we were in a sub-phase for this player
       phase:
-        this.state.phase === "auction" ||
-        this.state.phase === "trading" ||
-        this.state.phase === "awaiting_bankruptcy_decision" ||
-        this.state.phase === "awaiting_rent_negotiation"
-          ? "resolving_space"
+        this.state.phase === 'auction' ||
+        this.state.phase === 'trading' ||
+        this.state.phase === 'awaiting_bankruptcy_decision' ||
+        this.state.phase === 'awaiting_rent_negotiation'
+          ? 'resolving_space'
           : this.state.phase,
     })
-    this.addLogEntry(`${player.name} went bankrupt!`, "bankrupt", playerIndex)
+    this.addLogEntry(`${player.name} went bankrupt!`, 'bankrupt', playerIndex)
 
     this.checkWinCondition()
 
@@ -3683,19 +3845,21 @@ export class GameRoom implements GameActions {
   }
 
   public checkWinCondition() {
-    const activePlayers = this.state.players.filter((p) => !p.bankrupt)
+    const activePlayers = this.state.players.filter(p => !p.bankrupt)
     if (activePlayers.length === 1) {
-      this.setState({ winner: activePlayers[0]!.id, phase: "game_over" })
+      this.setState({ winner: activePlayers[0]!.id, phase: 'game_over' })
     }
   }
 
   public startAuction(propertyId: number) {
-    let startingBidder = this.state.currentPlayerIndex
+    const startingBidder = this.state.currentPlayerIndex
     const property = this.state.spaces.find(
-      (s) => s.id === propertyId,
+      s => s.id === propertyId,
     ) as Property
     // Starting bid is 10% of property value (minimum £10)
-    const currentPrice = property ? getCurrentPropertyPrice(this.state, property) : 100
+    const currentPrice = property
+      ? getCurrentPropertyPrice(this.state, property)
+      : 100
     const startingBid = Math.max(10, Math.floor(currentPrice * 0.1))
 
     this.setState({
@@ -3706,11 +3870,11 @@ export class GameRoom implements GameActions {
         activePlayerIndex: startingBidder,
         passedPlayers: [],
       },
-      phase: "auction",
+      phase: 'auction',
     })
     this.addLogEntry(
       `🔨 Auction started for ${property?.name}! Minimum opening bid: £${startingBid}`,
-      "auction",
+      'auction',
     )
   }
 
@@ -3720,12 +3884,14 @@ export class GameRoom implements GameActions {
     if (!auction) return 10
 
     const property = this.state.spaces.find(
-      (s) => s.id === propertyId,
+      s => s.id === propertyId,
     ) as Property
 
     if (auction.currentBid === 0) {
       // Opening bid: 10% of property value (minimum £10)
-      const currentPrice = property ? getCurrentPropertyPrice(this.state, property) : 100
+      const currentPrice = property
+        ? getCurrentPropertyPrice(this.state, property)
+        : 100
       return Math.max(10, Math.floor(currentPrice * 0.1))
     }
 
@@ -3747,7 +3913,7 @@ export class GameRoom implements GameActions {
       )
       this.addLogEntry(
         `It's not ${player.name}'s turn to bid`,
-        "system",
+        'system',
         playerIndex,
       )
       return
@@ -3759,7 +3925,7 @@ export class GameRoom implements GameActions {
     if (amount < minimumBid) {
       this.addLogEntry(
         `Bid must be at least £${minimumBid}`,
-        "system",
+        'system',
         playerIndex,
       )
       return
@@ -3769,7 +3935,7 @@ export class GameRoom implements GameActions {
     if (amount > player.cash) {
       this.addLogEntry(
         `${player.name} cannot afford £${amount} bid (has £${player.cash})`,
-        "system",
+        'system',
         playerIndex,
       )
       return
@@ -3794,7 +3960,7 @@ export class GameRoom implements GameActions {
       },
     })
 
-    this.addLogEntry(`${player.name} bid £${amount}`, "auction", playerIndex)
+    this.addLogEntry(`${player.name} bid £${amount}`, 'auction', playerIndex)
   }
 
   public passAuction(playerIndex: number) {
@@ -3810,14 +3976,14 @@ export class GameRoom implements GameActions {
       )
       this.addLogEntry(
         `It's not ${player.name}'s turn to bid`,
-        "system",
+        'system',
         playerIndex,
       )
       return
     }
 
     if (player) {
-      this.addLogEntry(`${player.name} passed`, "auction", playerIndex)
+      this.addLogEntry(`${player.name} passed`, 'auction', playerIndex)
     }
 
     const passed = [...this.state.auction.passedPlayers, playerIndex]
@@ -3852,12 +4018,12 @@ export class GameRoom implements GameActions {
     const auction = this.state.auction
     if (!auction) return
 
-    const property = this.state.spaces.find((s) => s.id === auction.propertyId)
+    const property = this.state.spaces.find(s => s.id === auction.propertyId)
 
     if (auction.highestBidder !== null && auction.currentBid > 0) {
       const winner = this.state.players[auction.highestBidder]!
       this.setState({
-        spaces: this.state.spaces.map((s) =>
+        spaces: this.state.spaces.map(s =>
           s.id === auction.propertyId
             ? { ...s, owner: auction.highestBidder }
             : s,
@@ -3872,18 +4038,18 @@ export class GameRoom implements GameActions {
             : p,
         ),
         auction: null,
-        phase: "resolving_space",
+        phase: 'resolving_space',
       })
       this.addLogEntry(
         `🎉 ${winner.name} won ${property?.name} for £${auction.currentBid}!`,
-        "auction",
+        'auction',
       )
     } else {
       // No bids - property goes back to the bank
-      this.setState({ auction: null, phase: "resolving_space" })
+      this.setState({ auction: null, phase: 'resolving_space' })
       this.addLogEntry(
         `No bids placed. ${property?.name} remains unowned.`,
-        "auction",
+        'auction',
       )
     }
   }
@@ -3901,11 +4067,11 @@ export class GameRoom implements GameActions {
           propertiesRequested: [],
           jailCardsRequested: 0,
         },
-        status: "draft",
+        status: 'draft',
         counterOffer: null,
         counterOfferMadeBy: null,
       },
-      phase: "trading",
+      phase: 'trading',
       previousPhase: this.state.phase,
     })
   }
@@ -3917,22 +4083,58 @@ export class GameRoom implements GameActions {
   }
 
   public proposeTrade(offer: TradeOffer) {
+    const fromPlayer = this.state.players[offer.fromPlayer]
+    if (fromPlayer) {
+      const requestedPropertyIds = [...offer.propertiesRequested].sort(
+        (a, b) => a - b,
+      )
+      const tradeHistoryKey = `${offer.toPlayer}-set:${requestedPropertyIds.join(',')}`
+      const existingHistory = fromPlayer.tradeHistory ?? {}
+      const currentTurnHistory = existingHistory[tradeHistoryKey] ?? {
+        attempts: 0,
+        lastOffer: 0,
+      }
+
+      this.setState({
+        players: this.state.players.map((player, index) =>
+          index === offer.fromPlayer
+            ? {
+                ...player,
+                lastTradeTurn: this.state.turn,
+                tradeHistory: {
+                  ...existingHistory,
+                  [tradeHistoryKey]: {
+                    ...currentTurnHistory,
+                    lastOffer: offer.cashOffered,
+                    lastOfferTurn: this.state.turn,
+                  },
+                },
+              }
+            : player,
+        ),
+      })
+    }
+
     this.setState({
       trade: {
         offer,
-        status: "pending",
+        status: 'pending',
         counterOffer: null,
         counterOfferMadeBy: null,
       },
-      phase: "trading",
+      phase: 'trading',
     })
   }
 
-  private validateTradeOffer(offer: TradeOffer): { valid: boolean; error?: string } {
+  private validateTradeOffer(offer: TradeOffer): {
+    valid: boolean
+    error?: string
+  } {
     const fromPlayer = this.state.players[offer.fromPlayer]
     const toPlayer = this.state.players[offer.toPlayer]
 
-    if (!fromPlayer || !toPlayer) return { valid: false, error: "Invalid players" }
+    if (!fromPlayer || !toPlayer)
+      return { valid: false, error: 'Invalid players' }
 
     // Check cash
     // ALLOW negative cash for receiving player if it's a gift or beneficial trade
@@ -3962,13 +4164,13 @@ export class GameRoom implements GameActions {
 
     // Check properties
     for (const propId of offer.propertiesOffered) {
-      const prop = this.state.spaces.find((s) => s.id === propId) as
+      const prop = this.state.spaces.find(s => s.id === propId) as
         | Property
         | undefined
       if (!prop || prop.owner !== offer.fromPlayer)
         return {
           valid: false,
-          error: `${fromPlayer.name} no longer owns ${prop?.name || "property"}`,
+          error: `${fromPlayer.name} no longer owns ${prop?.name || 'property'}`,
         }
       if (prop.houses > 0 || prop.hotel)
         return {
@@ -3978,13 +4180,13 @@ export class GameRoom implements GameActions {
     }
 
     for (const propId of offer.propertiesRequested) {
-      const prop = this.state.spaces.find((s) => s.id === propId) as
+      const prop = this.state.spaces.find(s => s.id === propId) as
         | Property
         | undefined
       if (!prop || prop.owner !== offer.toPlayer)
         return {
           valid: false,
-          error: `${toPlayer.name} no longer owns ${prop?.name || "property"}`,
+          error: `${toPlayer.name} no longer owns ${prop?.name || 'property'}`,
         }
       if (prop.houses > 0 || prop.hotel)
         return {
@@ -4002,10 +4204,10 @@ export class GameRoom implements GameActions {
 
     const validation = this.validateTradeOffer(trade.offer)
     if (!validation.valid) {
-      this.addLogEntry(`Trade failed: ${validation.error}`, "system")
+      this.addLogEntry(`Trade failed: ${validation.error}`, 'system')
       this.setState({
         trade: null,
-        phase: this.state.previousPhase ?? "resolving_space",
+        phase: this.state.previousPhase ?? 'resolving_space',
         previousPhase: null,
       })
       return
@@ -4024,7 +4226,7 @@ export class GameRoom implements GameActions {
               offer.jailCardsRequested,
             properties: [
               ...p.properties.filter(
-                (id) => !offer.propertiesOffered.includes(id),
+                id => !offer.propertiesOffered.includes(id),
               ),
               ...offer.propertiesRequested,
             ],
@@ -4040,7 +4242,7 @@ export class GameRoom implements GameActions {
               offer.jailCardsOffered,
             properties: [
               ...p.properties.filter(
-                (id) => !offer.propertiesRequested.includes(id),
+                id => !offer.propertiesRequested.includes(id),
               ),
               ...offer.propertiesOffered,
             ],
@@ -4048,7 +4250,7 @@ export class GameRoom implements GameActions {
         }
         return p
       }),
-      spaces: this.state.spaces.map((s) => {
+      spaces: this.state.spaces.map(s => {
         if (!isProperty(s)) return s
         if (offer.propertiesOffered.includes(s.id))
           return { ...s, owner: offer.toPlayer }
@@ -4057,28 +4259,28 @@ export class GameRoom implements GameActions {
         return s
       }),
       trade: null,
-      phase: this.state.previousPhase ?? "resolving_space",
+      phase: this.state.previousPhase ?? 'resolving_space',
       previousPhase: null,
     })
-    this.addLogEntry(`Trade completed!`, "trade")
+    this.addLogEntry(`Trade completed!`, 'trade')
   }
 
   public rejectTrade() {
     const trade = this.state.trade
     if (trade) {
       // If there's a counter-offer, rejecting it should go back to the original offer
-      if (trade.status === "counter_pending" && trade.counterOffer) {
+      if (trade.status === 'counter_pending' && trade.counterOffer) {
         this.setState({
           trade: {
             ...trade,
             counterOffer: null,
             counterOfferMadeBy: null,
-            status: "pending",
+            status: 'pending',
           },
         })
         this.addLogEntry(
           `${this.state.players[trade.offer.fromPlayer]?.name} rejected the counter-offer. Original offer still pending.`,
-          "trade",
+          'trade',
           trade.offer.fromPlayer,
         )
         return
@@ -4088,7 +4290,16 @@ export class GameRoom implements GameActions {
       const initiator = this.state.players[trade.offer.fromPlayer]
       if (initiator && initiator.isAI) {
         const newHistory = { ...(initiator.tradeHistory || {}) }
-        trade.offer.propertiesRequested.forEach((propId) => {
+        const requestedPropertyIds = [...trade.offer.propertiesRequested].sort(
+          (a, b) => a - b,
+        )
+        const setHistoryKey = `${trade.offer.toPlayer}-set:${requestedPropertyIds.join(',')}`
+        const existingSetHistory = newHistory[setHistoryKey] ?? {
+          attempts: 0,
+          lastOffer: 0,
+        }
+
+        trade.offer.propertiesRequested.forEach(propId => {
           const key = `${trade.offer.toPlayer}-${propId}`
           const current = newHistory[key] || { attempts: 0, lastOffer: 0 }
           newHistory[key] = {
@@ -4096,6 +4307,11 @@ export class GameRoom implements GameActions {
             lastOffer: trade.offer.cashOffered,
           }
         })
+        newHistory[setHistoryKey] = {
+          attempts: existingSetHistory.attempts + 1,
+          lastOffer: trade.offer.cashOffered,
+          lastOfferTurn: this.state.turn,
+        }
         this.setState({
           players: this.state.players.map((p, i) =>
             i === trade.offer.fromPlayer
@@ -4108,7 +4324,7 @@ export class GameRoom implements GameActions {
 
     this.setState({
       trade: null,
-      phase: this.state.previousPhase ?? "resolving_space",
+      phase: this.state.previousPhase ?? 'resolving_space',
       previousPhase: null,
     })
   }
@@ -4116,24 +4332,24 @@ export class GameRoom implements GameActions {
   public cancelTrade() {
     this.setState({
       trade: null,
-      phase: this.state.previousPhase ?? "resolving_space",
+      phase: this.state.previousPhase ?? 'resolving_space',
       previousPhase: null,
     })
   }
 
   public counterOffer(counterOffer: TradeOffer) {
     const trade = this.state.trade
-    if (!trade || trade.status !== "pending") return
+    if (!trade || trade.status !== 'pending') return
 
     // Only the receiver can make a counter-offer
     if (counterOffer.fromPlayer !== trade.offer.toPlayer) {
-      console.warn("[GameRoom] Only the receiver can make a counter-offer")
+      console.warn('[GameRoom] Only the receiver can make a counter-offer')
       return
     }
 
     // Check if this player has already made a counter-offer
     if (trade.counterOfferMadeBy === counterOffer.fromPlayer) {
-      console.warn("[GameRoom] Player has already made a counter-offer")
+      console.warn('[GameRoom] Player has already made a counter-offer')
       return
     }
 
@@ -4144,19 +4360,25 @@ export class GameRoom implements GameActions {
     if (!receiver || !originalInitiator) return
 
     // Validate cash amounts
-    if (counterOffer.cashOffered > 0 && counterOffer.cashOffered > receiver.cash) {
+    if (
+      counterOffer.cashOffered > 0 &&
+      counterOffer.cashOffered > receiver.cash
+    ) {
       this.addLogEntry(
         `${receiver.name} doesn't have enough cash for counter-offer`,
-        "system",
+        'system',
         counterOffer.fromPlayer,
       )
       return
     }
 
-    if (counterOffer.cashRequested > 0 && counterOffer.cashRequested > originalInitiator.cash) {
+    if (
+      counterOffer.cashRequested > 0 &&
+      counterOffer.cashRequested > originalInitiator.cash
+    ) {
       this.addLogEntry(
         `${originalInitiator.name} doesn't have enough cash for this counter-offer`,
-        "system",
+        'system',
         counterOffer.fromPlayer,
       )
       return
@@ -4164,20 +4386,20 @@ export class GameRoom implements GameActions {
 
     // Validate properties (mortgaged properties are allowed - buyer assumes mortgage debt)
     const receiverProps = this.state.spaces.filter(
-      (s) =>
-        (s.type === "property" ||
-          s.type === "railroad" ||
-          s.type === "utility") &&
+      s =>
+        (s.type === 'property' ||
+          s.type === 'railroad' ||
+          s.type === 'utility') &&
         (s as Property).owner === counterOffer.fromPlayer &&
         (s as Property).houses === 0 &&
         !(s as Property).hotel,
     )
 
     const initiatorProps = this.state.spaces.filter(
-      (s) =>
-        (s.type === "property" ||
-          s.type === "railroad" ||
-          s.type === "utility") &&
+      s =>
+        (s.type === 'property' ||
+          s.type === 'railroad' ||
+          s.type === 'utility') &&
         (s as Property).owner === counterOffer.toPlayer &&
         (s as Property).houses === 0 &&
         !(s as Property).hotel,
@@ -4185,18 +4407,18 @@ export class GameRoom implements GameActions {
 
     // Check if all offered properties are valid
     const invalidOffered = counterOffer.propertiesOffered.some(
-      (id) => !receiverProps.find((p) => p.id === id),
+      id => !receiverProps.find(p => p.id === id),
     )
 
     // Check if all requested properties are valid
     const invalidRequested = counterOffer.propertiesRequested.some(
-      (id) => !initiatorProps.find((p) => p.id === id),
+      id => !initiatorProps.find(p => p.id === id),
     )
 
     if (invalidOffered || invalidRequested) {
       this.addLogEntry(
-        "Invalid properties in counter-offer",
-        "system",
+        'Invalid properties in counter-offer',
+        'system',
         counterOffer.fromPlayer,
       )
       return
@@ -4208,28 +4430,28 @@ export class GameRoom implements GameActions {
         ...trade,
         counterOffer,
         counterOfferMadeBy: counterOffer.fromPlayer,
-        status: "counter_pending",
+        status: 'counter_pending',
       },
     })
 
     this.addLogEntry(
       `${receiver.name} made a counter-offer to ${originalInitiator.name}`,
-      "trade",
+      'trade',
       counterOffer.fromPlayer,
     )
   }
 
   public acceptCounterOffer() {
     const trade = this.state.trade
-    if (!trade || trade.status !== "counter_pending" || !trade.counterOffer)
+    if (!trade || trade.status !== 'counter_pending' || !trade.counterOffer)
       return
 
     const validation = this.validateTradeOffer(trade.counterOffer)
     if (!validation.valid) {
-      this.addLogEntry(`Counter-offer failed: ${validation.error}`, "system")
+      this.addLogEntry(`Counter-offer failed: ${validation.error}`, 'system')
       this.setState({
         trade: null,
-        phase: this.state.previousPhase ?? "resolving_space",
+        phase: this.state.previousPhase ?? 'resolving_space',
         previousPhase: null,
       })
       return
@@ -4258,7 +4480,7 @@ export class GameRoom implements GameActions {
               counterOffer.jailCardsRequested,
             properties: [
               ...p.properties.filter(
-                (id) => !counterOffer.propertiesOffered.includes(id),
+                id => !counterOffer.propertiesOffered.includes(id),
               ),
               ...counterOffer.propertiesRequested,
             ],
@@ -4276,7 +4498,7 @@ export class GameRoom implements GameActions {
               counterOffer.jailCardsOffered,
             properties: [
               ...p.properties.filter(
-                (id) => !counterOffer.propertiesRequested.includes(id),
+                id => !counterOffer.propertiesRequested.includes(id),
               ),
               ...counterOffer.propertiesOffered,
             ],
@@ -4284,7 +4506,7 @@ export class GameRoom implements GameActions {
         }
         return p
       }),
-      spaces: this.state.spaces.map((s) => {
+      spaces: this.state.spaces.map(s => {
         if (!isProperty(s)) return s
         if (counterOffer.propertiesOffered.includes(s.id))
           return { ...s, owner: counterOffer.toPlayer }
@@ -4293,13 +4515,13 @@ export class GameRoom implements GameActions {
         return s
       }),
       trade: null,
-      phase: this.state.previousPhase ?? "resolving_space",
+      phase: this.state.previousPhase ?? 'resolving_space',
       previousPhase: null,
     })
 
     this.addLogEntry(
       `Counter-offer accepted! Trade completed between ${originalReceiver.name} and ${originalInitiator.name}`,
-      "trade",
+      'trade',
     )
   }
 

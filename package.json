@@ -3,8 +3,15 @@
   "module": "index.ts",
   "type": "module",
   "private": true,
+  "scripts": {
+    "dev": "bun run index.ts",
+    "test": "bun test",
+    "lint": "eslint src --ext .ts,.tsx"
+  },
   "devDependencies": {
-    "@types/bun": "latest"
+    "@types/bun": "latest",
+    "globals": "^17.4.0",
+    "typescript-eslint": "^8.56.1"
   },
   "peerDependencies": {
     "typescript": "^5"
