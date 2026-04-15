@@ -16,22 +16,18 @@ export const CardDisplay: React.FC<CardDisplayProps> = ({ card, onClose }) => {
   const cardTitle = isChance ? 'CHANCE' : 'COMMUNITY CHEST'
 
   return (
-    <AnimatePresence>
-      <motion.div
-        initial={{ opacity: 0, scale: 0.3, rotateY: -180 }}
-        animate={{ opacity: 1, scale: 1, rotateY: 0 }}
-        exit={{ opacity: 0, scale: 0.3, rotateY: 180 }}
-        transition={{
-          type: 'spring',
-          stiffness: 200,
-          damping: 20,
-          duration: 0.6,
-        }}
+    <motion.div
+      initial={{ opacity: 0, scale: 0.3, rotateY: -180 }}
+      animate={{ opacity: 1, scale: 1, rotateY: 0 }}
+      exit={{ opacity: 0, scale: 0.3, rotateY: 180 }}
+      transition={{
+        type: 'spring',
+        stiffness: 200,
+        damping: 20,
+        duration: 0.6,
+      }}
         style={{
-          position: 'fixed',
-          top: '20%',
-          left: '30%',
-          transform: 'translate(-50%, -50%)',
+          position: 'relative',
           width: '280px',
           maxWidth: '90vw',
           aspectRatio: '5/7',
@@ -123,6 +119,5 @@ export const CardDisplay: React.FC<CardDisplayProps> = ({ card, onClose }) => {
           {onClose && 'Click to close'}
         </div>
       </motion.div>
-    </AnimatePresence>
   )
 }

@@ -22,6 +22,8 @@ import { GamePanel } from './components/GamePanel'
 import { isProperty } from './utils/helpers'
 import { useIsMobile } from './utils/useIsMobile'
 
+import { ErrorBoundary } from './components/ErrorBoundary'
+
 export default function App() {
   const isMobile = useIsMobile()
   const phase = useGameStore(s => s.phase)
@@ -112,11 +114,11 @@ export default function App() {
         const nextPlayer = reclaimablePlayers[0]
         if (nextPlayer) {
           console.log(`[Identity] Auto-claiming player ${nextPlayer.name}`)
-          useGameStore.getState().assignPlayer(nextPlayer.index, clientId)
+          useGameStore.getState().assignPlayer(nextPlayer.index, clientId, isMobile)
         }
       }
     }
-  }, [players, phase, myPlayerIndex, clientId])
+  }, [players, phase, myPlayerIndex, clientId, isMobile])
 
   // If our client ID is already bound to an AI-controlled seat, reclaim it automatically.
   React.useEffect(() => {
@@ -130,8 +132,8 @@ export default function App() {
     console.log(
       `[Identity] Reclaiming AI seat ${myPlayerIndex} (${matchedSeat.name}) for client ${clientId}`,
     )
-    useGameStore.getState().assignPlayer(myPlayerIndex, clientId)
-  }, [phase, myPlayerIndex, players, clientId])
+    useGameStore.getState().assignPlayer(myPlayerIndex, clientId, isMobile)
+  }, [phase, myPlayerIndex, players, clientId, isMobile])
 
   const currentPlayer =
     currentPlayerIndex >= 0 && currentPlayerIndex < players.length
@@ -408,30 +410,6 @@ export default function App() {
     players,
   ])
 
-  // AI auction bid execution - separate handler for auction phase
-  // (We'll keep this as a secondary check, but the main AI turn execution above should handle it now)
-  React.useEffect(() => {
-    if (!connected) return
-    if (phase !== 'auction' || !auction) return
-
-    const activeBidder = players[auction.activePlayerIndex]
-    if (!activeBidder || !activeBidder.isAI || activeBidder.bankrupt) return
-    if (myPlayerIndex === -1) return
-
-    // Only one client should trigger AI turns
-    const firstHumanIndex = players.findIndex(p => !p.isAI)
-    if (firstHumanIndex === -1) return
-    if (myPlayerIndex !== firstHumanIndex) return
-
-    const aiDelay = setTimeout(() => {
-      console.log(
-        `[App] Triggering AI auction bid for ${activeBidder.name} (player ${auction.activePlayerIndex})`,
-      )
-      useGameStore.getState().executeAITurn()
-    }, 1200)
-
-    return () => clearTimeout(aiDelay)
-  }, [phase, auction?.activePlayerIndex, players, connected, myPlayerIndex])
   // AI trade response
   React.useEffect(() => {
     if (!connected) return
@@ -451,78 +429,8 @@ export default function App() {
           return () => clearTimeout(aiDelay)
         }
       }
-      // Handle counter-offers (AI is original initiator)
-      if (trade?.status === 'counter_pending') {
-        const originalInitiator = players[trade.offer.fromPlayer]
-        if (originalInitiator?.isAI) {
-          const firstHumanIndex = players.findIndex(p => !p.isAI)
-          if (firstHumanIndex === -1) return
-          if (myPlayerIndex !== firstHumanIndex) return
-          const aiDelay = setTimeout(() => {
-            useGameStore.getState().executeAITradeResponse()
-          }, 2000)
-          return () => clearTimeout(aiDelay)
-        }
-      }
     }
   }, [phase, trade?.status, connected, players, myPlayerIndex])
-  // AI rent negotiation response
-  React.useEffect(() => {
-    if (!connected) return
-    if (myPlayerIndex === -1) return
-    if (phase === 'awaiting_rent_negotiation' && pendingRentNegotiation) {
-      const creditor = players[pendingRentNegotiation.creditorIndex]
-      if (creditor?.isAI && !creditor.bankrupt) {
-        const firstHumanIndex = players.findIndex(p => !p.isAI)
-        if (firstHumanIndex === -1) return
-        if (myPlayerIndex !== firstHumanIndex) return
-        const aiDelay = setTimeout(() => {
-          useGameStore.getState().executeAITurn()
-        }, 2000)
-        return () => clearTimeout(aiDelay)
-      }
-    }
-  }, [phase, pendingRentNegotiation, connected, players, myPlayerIndex])
-  // AI bankruptcy decision
-  React.useEffect(() => {
-    if (!connected) return
-    if (myPlayerIndex === -1) return
-    if (phase === 'awaiting_bankruptcy_decision') {
-      const pending = (useGameStore.getState() as any).pendingBankruptcy
-      if (pending) {
-        const bankruptPlayer = players[pending.playerIndex]
-        if (bankruptPlayer?.isAI && !bankruptPlayer.bankrupt) {
-          const firstHumanIndex = players.findIndex(p => !p.isAI)
-          if (firstHumanIndex === -1) return
-          if (myPlayerIndex !== firstHumanIndex) return
-          const aiDelay = setTimeout(() => {
-            useGameStore.getState().executeAITurn()
-          }, 2000)
-          return () => clearTimeout(aiDelay)
-        }
-      }
-    }
-  }, [phase, connected, players, myPlayerIndex])
-
-  // AI foreclosure decision
-  React.useEffect(() => {
-    if (!connected) return
-    if (phase === 'awaiting_foreclosure_decision' && pendingForeclosure) {
-      const creditor = players[pendingForeclosure.creditorIndex]
-      if (creditor?.isAI && !creditor.bankrupt) {
-        // Only host triggers AI
-        if (myPlayerIndex === -1) return
-        const firstHumanIndex = players.findIndex(p => !p.isAI)
-        if (firstHumanIndex === -1) return
-        if (myPlayerIndex !== firstHumanIndex) return
-
-        const aiDelay = setTimeout(() => {
-          useGameStore.getState().executeAITurn()
-        }, 2000)
-        return () => clearTimeout(aiDelay)
-      }
-    }
-  }, [phase, pendingForeclosure, connected, players, myPlayerIndex])
 
   const handleRollDice = () => {
     if (isRolling) return
@@ -749,16 +657,17 @@ export default function App() {
     return <MultiplayerLobby />
   }
   return (
-    <div
-      style={{
-        display: 'flex',
-        flexDirection: 'column',
-        minHeight: '100vh',
-        backgroundColor: '#1a1a2a',
-        position: 'relative',
-        overflow: 'visible', // Changed to visible so UserPanel expanded content isn't clipped
-      }}
-    >
+    <ErrorBoundary>
+      <div
+        style={{
+          display: 'flex',
+          flexDirection: 'column',
+          minHeight: '100vh',
+          backgroundColor: '#1a1a2a',
+          position: 'relative',
+          overflow: 'visible', // Changed to visible so UserPanel expanded content isn't clipped
+        }}
+      >
       {/* Burger Menu - Consolidated menu for game controls */}
       <BurgerMenu
         isMuted={isMuted}
@@ -889,33 +798,39 @@ export default function App() {
           <PlayerTokens />
 
           {/* Card Display in Center of Screen */}
-          {lastCardDrawn && showCard && (
-            <div
-              id="screen-center-card-container"
-              style={{
-                position: 'fixed',
-                top: '50%',
-                left: '50%',
-                transform: 'translate(-50%, -50%)',
-                width: '100vw',
-                height: '100vh',
-                pointerEvents: 'none',
-                zIndex: 10000,
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-              }}
-            >
-              <CardDisplay
-                card={lastCardDrawn}
-                onClose={() => {
-                  setShowCard(false)
-                  // Mark this card as shown so it doesn't reappear
-                  setLastShownCardId(lastCardDrawn.id)
+          <AnimatePresence>
+            {lastCardDrawn && showCard && (
+              <motion.div
+                key="card-container"
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                exit={{ opacity: 0 }}
+                id="screen-center-card-container"
+                style={{
+                  position: 'fixed',
+                  top: '50%',
+                  left: '50%',
+                  transform: 'translate(-50%, -50%)',
+                  width: '100vw',
+                  height: '100vh',
+                  pointerEvents: 'none',
+                  zIndex: 10000,
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
                 }}
-              />
-            </div>
-          )}
+              >
+                <CardDisplay
+                  card={lastCardDrawn}
+                  onClose={() => {
+                    setShowCard(false)
+                    // Mark this card as shown so it doesn't reappear
+                    setLastShownCardId(lastCardDrawn.id)
+                  }}
+                />
+              </motion.div>
+            )}
+          </AnimatePresence>
           {/* Property Details Modal in Center of Screen */}
           {selectedProperty && (
             <div
@@ -1042,12 +957,13 @@ export default function App() {
 
       <PlayerSelectionModal
         onPlayerSelected={index => {
-          useGameStore.getState().assignPlayer(index, clientId)
+          useGameStore.getState().assignPlayer(index, clientId, isMobile)
         }}
       />
 
       {/* Bottom - User Panel (All Players) - Rendered LAST to ensure it's on top */}
       <UserPanel myPlayerIndex={myPlayerIndex ?? -1} />
     </div>
+    </ErrorBoundary>
   )
 }

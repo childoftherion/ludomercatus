@@ -69,6 +69,7 @@ export interface IOU {
   reason: string // e.g., "Rent for Boardwalk"
   jackpotCutRate?: number // Optional percentage (0.0-1.0) of each payment that goes to Jackpot instead of creditor
   interestDue: number // Interest accumulated that is due at GO
+  interestFraction?: number // Fractional interest accumulated but not yet due
   durationRounds: number // How many rounds the IOU is valid for
   roundsRemaining: number // How many rounds left before the principal is due
 }
@@ -220,9 +221,6 @@ export interface TradeState {
     | 'accepted'
     | 'rejected'
     | 'cancelled'
-    | 'counter_pending'
-  counterOffer: TradeOffer | null // Counter-offer made by receiver
-  counterOfferMadeBy: number | null // Player index who made the counter-offer (to track one per player)
 }
 
 // Game event log entry

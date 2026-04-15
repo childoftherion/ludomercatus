@@ -257,12 +257,11 @@ export const getMoneyInCirculationFromHistory = (
  * Calculate Gini coefficient for wealth inequality (0 = perfect equality, 1 = perfect inequality)
  */
 export const calculateGiniCoefficient = (state: GameState): number => {
-  const activePlayers = state.players.filter(p => !p.bankrupt)
-  if (activePlayers.length <= 1) return 0
+  if (state.players.length <= 1) return 0
 
-  const netWorths = activePlayers
-    .map((_, i) =>
-      calculateNetWorth(state, state.players.indexOf(activePlayers[i]!)),
+  const netWorths = state.players
+    .map((player, i) =>
+      player.bankrupt ? 0 : calculateNetWorth(state, i),
     )
     .sort((a, b) => a - b)
 
@@ -279,8 +278,17 @@ export const calculateGiniCoefficient = (state: GameState): number => {
     weightedSum += cumulativeSum
   }
 
-  // Gini = (2 * weightedSum) / (n * totalWealth) - (n + 1) / n
-  const gini = (2 * weightedSum) / (n * totalWealth) - (n + 1) / n
+  // Gini = (n + 1)/n - (2 * sum((n - i) * y_i)) / (n * sum(y_i))
+  // Where y_i is sorted in ascending order
+  // A simpler equivalent formula:
+  // Gini = (2 * sum(i * y_i)) / (n * sum(y_i)) - (n + 1) / n
+  // Note: i is 1-indexed in this formula
+  let sumIY = 0
+  for (let i = 0; i < n; i++) {
+    sumIY += (i + 1) * netWorths[i]!
+  }
+
+  const gini = (2 * sumIY) / (n * totalWealth) - (n + 1) / n
 
   return Math.max(0, Math.min(1, gini))
 }

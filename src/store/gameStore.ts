@@ -65,7 +65,6 @@ type GameStore = GameState & {
   rejectTrade: () => void
   cancelTrade: () => void
   counterOffer: (counterOffer: TradeOffer) => void
-  acceptCounterOffer: () => void
   executeAITurn: () => void
   executeAITradeResponse: () => void
   chooseTaxOption: (playerIndex: number, choice: 'flat' | 'percentage') => void
@@ -118,7 +117,7 @@ type GameStore = GameState & {
     isMobile?: boolean,
   ) => void
   updatePlayer: (index: number, name: string, token: string) => void
-  assignPlayer: (index: number, clientId: string) => void
+  assignPlayer: (index: number, clientId: string, isMobile?: boolean) => void
   startGame: () => void
 
   rooms: { id: string; players: number }[]
@@ -351,7 +350,6 @@ export const useGameStore = create<GameStore>((set, get) => ({
     'rejectTrade',
     'cancelTrade',
     'counterOffer',
-    'acceptCounterOffer',
     'executeAITurn',
     'executeAITradeResponse',
     'chooseTaxOption',
