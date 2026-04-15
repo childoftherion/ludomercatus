@@ -4,6 +4,69 @@
 
 ---
 
+## Quick start (clone to Desktop and run)
+
+Use this when you want a **fresh copy on your Desktop** with one command. You need **[Git](https://git-scm.com/downloads)** on your `PATH`.
+
+**Bun** is detected automatically: if `bun` is missing, the scripts run the [official Bun installers](https://bun.sh/docs/installation) (`curl … | bash` on macOS/Linux, **`irm https://bun.sh/install.ps1 | iex`** on Windows—including when you use **Git Bash**, which invokes PowerShell for that step). On Unix, **`curl`** or **`wget`** is required for the Bun install script.
+
+The scripts live in this repository under [`scripts/quickstart.sh`](scripts/quickstart.sh) and [`scripts/quickstart.ps1`](scripts/quickstart.ps1). They detect the OS, resolve your **Desktop** folder, **`git clone`** [https://github.com/childoftherion/ludomercatus](https://github.com/childoftherion/ludomercatus) into `Desktop/ludomercatus` (or **`git pull`** if that folder already exists from a previous run), then run **`bun install`** and **`bun run dev`**. Open **http://localhost:3000** when the server starts.
+
+### macOS, Linux, or Windows (Git Bash)
+
+In **Terminal** (macOS/Linux) or **Git Bash** (Windows), paste:
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/childoftherion/ludomercatus/main/scripts/quickstart.sh | bash
+```
+
+If you prefer `wget`:
+
+```bash
+wget -qO- https://raw.githubusercontent.com/childoftherion/ludomercatus/main/scripts/quickstart.sh | bash
+```
+
+### Windows (PowerShell)
+
+Open **PowerShell** (not Command Prompt). If script execution from the internet is blocked, allow scripts for your user once:
+
+```powershell
+Set-ExecutionPolicy -Scope CurrentUser RemoteSigned
+```
+
+Then run:
+
+```powershell
+irm https://raw.githubusercontent.com/childoftherion/ludomercatus/main/scripts/quickstart.ps1 | iex
+```
+
+(`irm` is an alias for `Invoke-RestMethod`; it downloads the script and `iex` runs it.)
+
+To use a custom folder under PowerShell before `irm ... | iex`:
+
+```powershell
+$env:LUDOMERCATUS_TARGET = "$HOME\Code\ludomercatus"
+irm https://raw.githubusercontent.com/childoftherion/ludomercatus/main/scripts/quickstart.ps1 | iex
+```
+
+### Overrides (optional)
+
+| Variable | Effect |
+|----------|--------|
+| `LUDOMERCATUS_TARGET` | Full path to the clone directory (default: `Desktop/ludomercatus`) |
+| `LUDOMERCATUS_REPO_URL` | Git remote URL (default: `https://github.com/childoftherion/ludomercatus.git`) |
+
+Example (bash—the variables must be visible to the shell that runs the downloaded script):
+
+```bash
+export LUDOMERCATUS_TARGET="$HOME/Code/ludomercatus"
+curl -fsSL https://raw.githubusercontent.com/childoftherion/ludomercatus/main/scripts/quickstart.sh | bash
+```
+
+If you **already cloned** the repo yourself, skip the one-liners and use [Installation](#installation) and [Running the game](#running-the-game) below.
+
+---
+
 ## What you get
 
 - **Classic loop**: roll, move, buy or auction properties, pay rent, build houses and hotels, Chance and Community Chest, jail, GO salary, bankruptcy, and win conditions.
@@ -72,6 +135,9 @@ ludomercatus/
   package.json
   NEEDS.md                 # Roadmap / issues / testing checklist
   AGENTS.md                  # Contributor & agent guidelines
+  scripts/
+    quickstart.sh            # Desktop clone + bun install + dev (Unix / Git Bash)
+    quickstart.ps1           # Same for Windows PowerShell
   src/
     App.tsx                  # Main UI shell, modals, AI triggers
     style.css
