@@ -7,12 +7,62 @@ $RepoUrl = if ($env:LUDOMERCATUS_REPO_URL) { $env:LUDOMERCATUS_REPO_URL } else {
 $Desktop = [Environment]::GetFolderPath("Desktop")
 $Target = if ($env:LUDOMERCATUS_TARGET) { $env:LUDOMERCATUS_TARGET } else { Join-Path $Desktop "ludomercatus" }
 
-function Require-Cmd {
-    param([string]$Name, [string]$HelpUrl)
-    if (-not (Get-Command $Name -ErrorAction SilentlyContinue)) {
-        Write-Error "Missing '$Name'. Install from: $HelpUrl"
+function Update-PathFromEnvironment {
+    $machine = [Environment]::GetEnvironmentVariable("Path", "Machine")
+    $user = [Environment]::GetEnvironmentVariable("Path", "User")
+    $segments = @($machine, $user | Where-Object { $_ })
+    if ($segments.Count -gt 0) {
+        $env:PATH = ($segments -join ";")
+    }
+    $gitCandidates = @((Join-Path $env:ProgramFiles "Git\cmd"))
+    if (${env:ProgramFiles(x86)}) {
+        $gitCandidates += (Join-Path ${env:ProgramFiles(x86)} "Git\cmd")
+    }
+    foreach ($gitDir in $gitCandidates) {
+        if (Test-Path (Join-Path $gitDir "git.exe")) {
+            if ($env:PATH -notlike "*$gitDir*") {
+                $env:PATH = "$gitDir;$env:PATH"
+            }
+            break
+        }
+    }
+}
+
+function Ensure-Git {
+    Update-PathFromEnvironment
+    if (Get-Command git -ErrorAction SilentlyContinue) {
+        Write-Host "Found Git: $((Get-Command git).Source) ($(git --version))"
+        return
+    }
+
+    Write-Host "Git not found. Attempting to install Git for Windows..." -ForegroundColor Cyan
+
+    if (Get-Command winget -ErrorAction SilentlyContinue) {
+        winget install --id Git.Git -e --source winget --accept-package-agreements --accept-source-agreements
+    } elseif (Get-Command choco -ErrorAction SilentlyContinue) {
+        choco install git.install -y
+    } else {
+        Write-Error @"
+Could not install Git automatically (winget and Chocolatey were not found).
+Install Git from: https://git-scm.com/download/win
+Then open a new PowerShell window and run this script again.
+"@
         exit 1
     }
+
+    Update-PathFromEnvironment
+
+    if (-not (Get-Command git -ErrorAction SilentlyContinue)) {
+        Write-Error @"
+Git was installed but is not on PATH in this session.
+Open a new PowerShell window and run this script again, or add Git\cmd to your PATH:
+  $(Join-Path $env:ProgramFiles 'Git\cmd')
+https://git-scm.com/download/win
+"@
+        exit 1
+    }
+
+    Write-Host "Git is ready: $((Get-Command git).Source) ($(git --version))"
 }
 
 function Add-BunToPath {
@@ -56,7 +106,7 @@ Write-Host "  Desktop: $Desktop"
 Write-Host "  Target:  $Target"
 Write-Host ""
 
-Require-Cmd "git" "https://git-scm.com/download/win"
+Ensure-Git
 Ensure-Bun
 
 if (Test-Path $Target) {

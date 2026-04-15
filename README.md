@@ -6,7 +6,9 @@
 
 ## Quick start (clone to Desktop and run)
 
-Use this when you want a **fresh copy on your Desktop** with one command. You need **[Git](https://git-scm.com/downloads)** on your `PATH`.
+Use this when you want a **fresh copy on your Desktop** with one command.
+
+**Git** is detected automatically. If `git` is missing, the scripts try to install it: on **Windows** (PowerShell or **Git Bash**) via **`winget`** or **Chocolatey**; on **macOS** via **Homebrew** (`brew install git`); on **Linux** via **`apt`**, **`dnf`**, **`yum`**, **`zypper`**, **`pacman`**, or **`apk`** (these typically use **`sudo`** and may ask for your password). If auto-install is not possible, install Git manually from [git-scm.com/downloads](https://git-scm.com/downloads).
 
 **Bun** is detected automatically: if `bun` is missing, the scripts run the [official Bun installers](https://bun.sh/docs/installation) (`curl … | bash` on macOS/Linux, **`irm https://bun.sh/install.ps1 | iex`** on Windows—including when you use **Git Bash**, which invokes PowerShell for that step). On Unix, **`curl`** or **`wget`** is required for the Bun install script.
 
