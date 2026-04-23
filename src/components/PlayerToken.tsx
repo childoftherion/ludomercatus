@@ -1,11 +1,11 @@
-import React from 'react'
-import { motion, AnimatePresence } from 'framer-motion'
-import { useGameStore } from '../store/gameStore'
+import React from "react"
+import { motion, AnimatePresence } from "framer-motion"
+import { useGameStore } from "../store/gameStore"
 import {
   getSpacePositionForToken,
   getBoardDimensions,
   subscribeToBoardDimensions,
-} from './Board'
+} from "./Board"
 
 // Calculate pixel position for a token on the board
 const getTokenPixelPosition = (
@@ -184,9 +184,9 @@ export const PlayerToken = ({ playerIndex }: { playerIndex: number }) => {
       setTimeout(updatePosition, 50)
     }
 
-    window.addEventListener('resize', handleResize)
+    window.addEventListener("resize", handleResize)
     return () => {
-      window.removeEventListener('resize', handleResize)
+      window.removeEventListener("resize", handleResize)
       unsubscribe()
     }
   }, [playerIndex, player?.position, players, player?.bankrupt, player?.id])
@@ -199,46 +199,46 @@ export const PlayerToken = ({ playerIndex }: { playerIndex: number }) => {
   return (
     <motion.div
       style={{
-        position: 'absolute',
-        width: '28px',
-        height: '28px',
-        borderRadius: '50%',
+        position: "absolute",
+        width: "28px",
+        height: "28px",
+        borderRadius: "50%",
         background: `radial-gradient(circle at 30% 30%, ${player.color}, #000)`,
-        border: '2px solid #fff',
+        border: "2px solid #fff",
         boxShadow: `
           0 4px 6px rgba(0, 0, 0, 0.4),
           inset 0 -4px 4px rgba(0,0,0,0.2),
           inset 0 4px 4px rgba(255,255,255,0.4)
         `,
         zIndex: 50 + playerIndex,
-        display: 'flex',
-        alignItems: 'center',
-        justifyContent: 'center',
-        fontSize: '16px',
-        cursor: 'pointer',
+        display: "flex",
+        alignItems: "center",
+        justifyContent: "center",
+        fontSize: "16px",
+        cursor: "pointer",
       }}
       initial={{ x: initialX, y: initialY, scale: 0 }}
       animate={{
         x: position.x,
         y: Array.isArray(position.y)
           ? position.y.map((yVal, i) =>
-              i % 2 === 0 ? (typeof yVal === 'number' ? yVal - 5 : yVal) : yVal,
+              i % 2 === 0 ? (typeof yVal === "number" ? yVal - 5 : yVal) : yVal,
             )
           : position.y,
         scale: 1,
       }}
       transition={{
-        type: Array.isArray(position.x) ? 'tween' : 'spring',
+        type: Array.isArray(position.x) ? "tween" : "spring",
         duration: Array.isArray(position.x) ? position.x.length * 0.2 : 0.5,
-        ease: 'easeInOut',
+        ease: "easeInOut",
         stiffness: 120,
         damping: 14,
         mass: 0.8,
       }}
       whileHover={{ scale: 1.2, zIndex: 100 }}
-      title={`${player.name} - £${player.cash}`}
+      title={`${player.name} - $${player.cash}`}
     >
-      <span style={{ filter: 'drop-shadow(0 2px 2px rgba(0,0,0,0.5))' }}>
+      <span style={{ filter: "drop-shadow(0 2px 2px rgba(0,0,0,0.5))" }}>
         {player.token}
       </span>
     </motion.div>
@@ -251,17 +251,17 @@ export const PlayerTokens = () => {
   return (
     <div
       style={{
-        position: 'absolute',
+        position: "absolute",
         top: 0,
         left: 0,
-        width: '100%',
-        height: '100%',
-        pointerEvents: 'none',
+        width: "100%",
+        height: "100%",
+        pointerEvents: "none",
       }}
     >
       <AnimatePresence>
         {players.map((player: any, index: number) => (
-          <div key={player.id} style={{ pointerEvents: 'auto' }}>
+          <div key={player.id} style={{ pointerEvents: "auto" }}>
             <PlayerToken playerIndex={index} />
           </div>
         ))}

@@ -3,31 +3,40 @@ import type {
   Player,
   Property,
   MarketHistoryEntry,
-} from '../../types/game'
+} from "../../types/game"
 
 const isProperty = (space: any): space is Property => {
   return (
-    space.type === 'property' ||
-    space.type === 'railroad' ||
-    space.type === 'utility'
+    space.type === "property" ||
+    space.type === "railroad" ||
+    space.type === "utility"
   )
 }
 
 /** Check if an economic event is currently active */
-export const isEconomicEventActive = (state: GameState, type: string): boolean => {
-  return state.activeEconomicEvents?.some(e => e.type === type) ?? false
+export const isEconomicEventActive = (
+  state: GameState,
+  type: string,
+): boolean => {
+  return state.activeEconomicEvents?.some((e) => e.type === type) ?? false
 }
 
 /**
  * Apply economic event modifiers to a rent amount.
  * Centralizes rent-affecting event logic so rent.ts and GameRoom stay consistent.
  */
-export const applyRentEventModifier = (state: GameState, rent: number): number => {
-  if (isEconomicEventActive(state, 'recession')) return Math.round(rent * 0.75)
-  if (isEconomicEventActive(state, 'market_crash')) return Math.round(rent * 0.8)
-  if (isEconomicEventActive(state, 'market_crash_1')) return Math.round(rent * 0.85)
-  if (isEconomicEventActive(state, 'market_crash_2')) return Math.round(rent * 1.15)
-  if (isEconomicEventActive(state, 'bull_market')) return Math.round(rent * 1.2)
+export const applyRentEventModifier = (
+  state: GameState,
+  rent: number,
+): number => {
+  if (isEconomicEventActive(state, "recession")) return Math.round(rent * 0.75)
+  if (isEconomicEventActive(state, "market_crash"))
+    return Math.round(rent * 0.8)
+  if (isEconomicEventActive(state, "market_crash_1"))
+    return Math.round(rent * 0.85)
+  if (isEconomicEventActive(state, "market_crash_2"))
+    return Math.round(rent * 1.15)
+  if (isEconomicEventActive(state, "bull_market")) return Math.round(rent * 1.2)
   return rent
 }
 
@@ -35,11 +44,18 @@ export const applyRentEventModifier = (state: GameState, rent: number): number =
  * Apply economic event modifiers to a property price.
  * Centralizes price-affecting event logic for getCurrentPropertyPrice and similar callers.
  */
-export const applyPriceEventModifier = (state: GameState, price: number): number => {
-  if (isEconomicEventActive(state, 'market_crash')) return Math.round(price * 0.8)
-  if (isEconomicEventActive(state, 'market_crash_1')) return Math.round(price * 1.15)
-  if (isEconomicEventActive(state, 'market_crash_2')) return Math.round(price * 0.85)
-  if (isEconomicEventActive(state, 'bull_market')) return Math.round(price * 1.2)
+export const applyPriceEventModifier = (
+  state: GameState,
+  price: number,
+): number => {
+  if (isEconomicEventActive(state, "market_crash"))
+    return Math.round(price * 0.8)
+  if (isEconomicEventActive(state, "market_crash_1"))
+    return Math.round(price * 1.15)
+  if (isEconomicEventActive(state, "market_crash_2"))
+    return Math.round(price * 0.85)
+  if (isEconomicEventActive(state, "bull_market"))
+    return Math.round(price * 1.2)
   return Math.round(price)
 }
 
@@ -52,6 +68,61 @@ export const getCurrentPropertyPrice = (
 ): number => {
   const basePrice = property.price * property.valueMultiplier
   return applyPriceEventModifier(state, basePrice)
+}
+
+/**
+ * Validate debt invariants to ensure data integrity
+ * Checks:
+ * - IOU roundsRemaining ≥ 0
+ * - totalDebt matches sum of loans
+ * - No orphaned IOUs (referencing missing players)
+ *
+ * Returns array of error messages, empty if all invariants pass
+ */
+export const validateDebtInvariants = (state: GameState): string[] => {
+  const errors: string[] = []
+
+  for (const player of state.players) {
+    // Check IOU roundsRemaining ≥ 0 for payable IOUs
+    for (const iou of player.iousPayable) {
+      if (iou.roundsRemaining < 0) {
+        errors.push(
+          `Player ${player.name} (ID ${player.id}) has IOU ${iou.id} with negative roundsRemaining: ${iou.roundsRemaining}`,
+        )
+      }
+
+      // Check that creditor exists
+      const creditor = state.players.find((p) => p.id === iou.creditorId)
+      if (!creditor) {
+        errors.push(
+          `Player ${player.name} (ID ${player.id}) has IOU ${iou.id} referencing missing creditor ID ${iou.creditorId}`,
+        )
+      }
+    }
+
+    // Check that debtor exists for receivable IOUs
+    for (const iou of player.iousReceivable) {
+      const debtor = state.players.find((p) => p.id === iou.debtorId)
+      if (!debtor) {
+        errors.push(
+          `Player ${player.name} (ID ${player.id}) has receivable IOU ${iou.id} referencing missing debtor ID ${iou.debtorId}`,
+        )
+      }
+    }
+
+    // Check that totalDebt matches sum of loans
+    const loanSum = player.bankLoans.reduce(
+      (sum, loan) => sum + loan.totalOwed,
+      0,
+    )
+    if (player.totalDebt !== loanSum) {
+      errors.push(
+        `Player ${player.name} (ID ${player.id}) totalDebt (${player.totalDebt}) does not match sum of bankLoans (${loanSum})`,
+      )
+    }
+  }
+
+  return errors
 }
 
 /**
@@ -105,7 +176,7 @@ export const calculateNetWorth = (
     }
   }
 
-  // Add value of jail free cards (estimated at £50 each)
+  // Add value of jail free cards (estimated at $50 each)
   netWorth += player.jailFreeCards * 50
 
   return Math.round(netWorth)
@@ -124,24 +195,24 @@ export const calculateTenPercentTax = (
 
 /**
  * Get the optimal tax choice for a player
- * Returns the lower of: £200 flat tax OR 10% of net worth
+ * Returns the lower of: $200 flat tax OR 10% of net worth
  */
 export const getOptimalTaxChoice = (
   state: GameState,
   playerIndex: number,
-): { choice: 'flat' | 'percentage'; amount: number } => {
+): { choice: "flat" | "percentage"; amount: number } => {
   const tenPercent = calculateTenPercentTax(state, playerIndex)
   const flatTax = 200
 
   if (tenPercent < flatTax) {
-    return { choice: 'percentage', amount: tenPercent }
+    return { choice: "percentage", amount: tenPercent }
   }
-  return { choice: 'flat', amount: flatTax }
+  return { choice: "flat", amount: flatTax }
 }
 
 /**
  * Calculate the current GO salary based on inflation
- * Base: £200, increases by £25 every 2 full rounds, capped at £350
+ * Base: $200, increases by $25 every 2 full rounds, capped at $350
  */
 export const calculateGoSalary = (roundsCompleted: number): number => {
   const BASE_SALARY = 200
@@ -212,7 +283,7 @@ export const getPreviousMarketHistoryEntry = (
   return marketHistory[marketHistory.length - 2] ?? null
 }
 
-export type MarketHistoryTrendDirection = 'up' | 'down' | 'flat'
+export type MarketHistoryTrendDirection = "up" | "down" | "flat"
 
 export interface InflationTrend {
   direction: MarketHistoryTrendDirection
@@ -230,11 +301,11 @@ export const getInflationTrendFromHistory = (
   const previous = getPreviousMarketHistoryEntry(marketHistory)
 
   if (!latest || !previous) {
-    return { direction: 'flat', delta: 0, percentage: 0 }
+    return { direction: "flat", delta: 0, percentage: 0 }
   }
 
   const delta = latest.inflation - previous.inflation
-  const direction = delta > 0 ? 'up' : delta < 0 ? 'down' : 'flat'
+  const direction = delta > 0 ? "up" : delta < 0 ? "down" : "flat"
   const base = previous.inflation === 0 ? 1 : previous.inflation
 
   return {
@@ -260,9 +331,7 @@ export const calculateGiniCoefficient = (state: GameState): number => {
   if (state.players.length <= 1) return 0
 
   const netWorths = state.players
-    .map((player, i) =>
-      player.bankrupt ? 0 : calculateNetWorth(state, i),
-    )
+    .map((player, i) => (player.bankrupt ? 0 : calculateNetWorth(state, i)))
     .sort((a, b) => a - b)
 
   const n = netWorths.length

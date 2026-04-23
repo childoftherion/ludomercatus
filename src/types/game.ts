@@ -1,25 +1,25 @@
 export type SpaceType =
-  | 'go'
-  | 'property'
-  | 'railroad'
-  | 'utility'
-  | 'tax'
-  | 'chance'
-  | 'community_chest'
-  | 'jail'
-  | 'go_to_jail'
-  | 'free_parking'
-  | 'corner'
+  | "go"
+  | "property"
+  | "railroad"
+  | "utility"
+  | "tax"
+  | "chance"
+  | "community_chest"
+  | "jail"
+  | "go_to_jail"
+  | "free_parking"
+  | "corner"
 
 export type ColorGroup =
-  | 'brown'
-  | 'light_blue'
-  | 'pink'
-  | 'orange'
-  | 'red'
-  | 'yellow'
-  | 'green'
-  | 'dark_blue'
+  | "brown"
+  | "light_blue"
+  | "pink"
+  | "orange"
+  | "red"
+  | "yellow"
+  | "green"
+  | "dark_blue"
   | null
 
 export interface Space {
@@ -31,7 +31,7 @@ export interface Space {
 }
 
 export interface Property extends Space {
-  type: 'property' | 'railroad' | 'utility'
+  type: "property" | "railroad" | "utility"
   price: number
   baseRent: number
   rents: number[]
@@ -74,7 +74,7 @@ export interface IOU {
   roundsRemaining: number // How many rounds left before the principal is due
 }
 
-export type AIDifficulty = 'easy' | 'medium' | 'hard'
+export type AIDifficulty = "easy" | "medium" | "hard"
 
 export interface Player {
   id: number
@@ -124,19 +124,19 @@ export interface RestructuringPlan {
   rentReduction: number // e.g., 0.5 for 50% of rent collected
 }
 
-export type CardType = 'chance' | 'community_chest' | 'economic_event'
+export type CardType = "chance" | "community_chest" | "economic_event"
 
 // Economic Event types for Phase 2
 export type EconomicEventType =
-  | 'recession' // All rents reduced by 25% for X turns
-  | 'housing_boom' // Building costs increase 50% for X turns
-  | 'tax_holiday' // No income tax for X turns
-  | 'market_crash' // Property values drop 20% for X turns
-  | 'market_crash_1' // Rent decreases 15%, property values increase 15% (Speculative Bubble)
-  | 'market_crash_2' // Rent increases 15%, property values decrease 15% (Yield Crisis)
-  | 'bull_market' // Property values increase 20% for X turns
-  | 'banking_crisis' // Interest rates double for X turns
-  | 'economic_stimulus' // All players collect £100
+  | "recession" // All rents reduced by 25% for X turns
+  | "housing_boom" // Building costs increase 50% for X turns
+  | "tax_holiday" // No income tax for X turns
+  | "market_crash" // Property values drop 20% for X turns
+  | "market_crash_1" // Rent decreases 15%, property values increase 15% (Speculative Bubble)
+  | "market_crash_2" // Rent increases 15%, property values decrease 15% (Yield Crisis)
+  | "bull_market" // Property values increase 20% for X turns
+  | "banking_crisis" // Interest rates double for X turns
+  | "economic_stimulus" // All players collect $100
 
 export interface ActiveEconomicEvent {
   type: EconomicEventType
@@ -147,7 +147,7 @@ export interface ActiveEconomicEvent {
 // CardEffect describes what a card does (immutable approach)
 export interface CardEffect {
   cashChange?: number
-  positionChange?: number | 'jail'
+  positionChange?: number | "jail"
   jailFreeCard?: boolean
   collectFromEach?: number // Collect $ from each player
   payToEach?: number // Pay $ to each player
@@ -174,22 +174,22 @@ export type DiceRoll = {
 }
 
 export type GamePhase =
-  | 'setup'
-  | 'lobby'
-  | 'rolling'
-  | 'moving'
-  | 'resolving_space'
-  | 'awaiting_buy_decision' // Player deciding to buy or auction
-  | 'awaiting_tax_decision' // Player choosing between flat tax or percentage
-  | 'awaiting_rent_negotiation' // Player negotiating rent payment (Phase 3)
-  | 'awaiting_bankruptcy_decision' // Player choosing bankruptcy or restructuring (Phase 3)
-  | 'awaiting_debt_service' // Player must pay GO-based debt obligations
-  | 'awaiting_foreclosure_decision' // Creditor choosing how to handle missed IOU payment
-  | 'trading'
-  | 'building'
-  | 'auction'
-  | 'jail_decision' // Player in jail choosing action
-  | 'game_over'
+  | "setup"
+  | "lobby"
+  | "rolling"
+  | "moving"
+  | "resolving_space"
+  | "awaiting_buy_decision" // Player deciding to buy or auction
+  | "awaiting_tax_decision" // Player choosing between flat tax or percentage
+  | "awaiting_rent_negotiation" // Player negotiating rent payment (Phase 3)
+  | "awaiting_bankruptcy_decision" // Player choosing bankruptcy or restructuring (Phase 3)
+  | "awaiting_debt_service" // Player must pay GO-based debt obligations
+  | "awaiting_foreclosure_decision" // Creditor choosing how to handle missed IOU payment
+  | "trading"
+  | "building"
+  | "auction"
+  | "jail_decision" // Player in jail choosing action
+  | "game_over"
 
 // Auction state for when a property goes to auction
 export interface AuctionState {
@@ -215,12 +215,7 @@ export interface TradeOffer {
 // Trade state
 export interface TradeState {
   offer: TradeOffer
-  status:
-    | 'draft'
-    | 'pending'
-    | 'accepted'
-    | 'rejected'
-    | 'cancelled'
+  status: "draft" | "pending" | "accepted" | "rejected" | "cancelled"
 }
 
 // Game event log entry
@@ -230,17 +225,17 @@ export interface GameLogEntry {
   playerIndex?: number
   message: string
   type:
-    | 'roll'
-    | 'move'
-    | 'buy'
-    | 'rent'
-    | 'card'
-    | 'jail'
-    | 'tax'
-    | 'auction'
-    | 'trade'
-    | 'bankrupt'
-    | 'system'
+    | "roll"
+    | "move"
+    | "buy"
+    | "rent"
+    | "card"
+    | "jail"
+    | "tax"
+    | "auction"
+    | "trade"
+    | "bankrupt"
+    | "system"
 }
 
 // Game settings that can be configured at game start
@@ -264,6 +259,7 @@ export interface GameSettings {
   enableRentNegotiation: boolean // Allow rent payment plans and IOUs
   iouInterestRate: number // Interest rate on IOUs per turn (e.g., 0.05 for 5%)
   iouDurationRounds: number // Default duration of IOUs in rounds
+  iouJackpotCutRate: number // Percentage of IOU payments that go to Jackpot (e.g., 0.2 for 20%)
 
   // Phase 3: Property Insurance
   enablePropertyInsurance: boolean // Allow players to insure properties
@@ -297,6 +293,7 @@ export const DEFAULT_GAME_SETTINGS: GameSettings = {
   enableRentNegotiation: true,
   iouInterestRate: 0.05, // 5% interest per turn
   iouDurationRounds: 5, // 5 rounds by default
+  iouJackpotCutRate: 0.2, // 20% of IOU payments go to Jackpot
   enablePropertyInsurance: true,
   insuranceCostPercent: 0.05, // 5% of property value
   enablePropertyValueFluctuation: true,
@@ -367,7 +364,7 @@ export interface GameState {
     propertyId: number
     rentAmount: number
     debtorCanAfford: number
-    status: 'creditor_decision' | 'debtor_decision'
+    status: "creditor_decision" | "debtor_decision"
     proposedIOU?: {
       partialPayment: number
       interestRate: number

@@ -25,7 +25,7 @@ The objective is to bankrupt all other players by acquiring, developing, and tra
 
 - Total bank supply is unlimited.
 - Denominations:
-  - £1, £5, £10, £20, £50, £100, £500 (or equivalent currency)
+  - $1, $5, $10, $20, $50, $100, $500 (or equivalent currency)
 
 ### 2.3 Cards
 
@@ -53,19 +53,19 @@ The objective is to bankrupt all other players by acquiring, developing, and tra
 - Minimum: 2
 - Maximum: 8
 - Each player starts with:
-  - £1500 cash
+  - $1500 cash
   - One token
   - No properties
 
 ### 3.1 Starting Cash Breakdown
 
-- £500 × 2
-- £100 × 4
-- £50 × 1
-- £20 × 2
-- £10 × 1
-- £5 × 1
-- £1 × 5
+- $500 × 2
+- $100 × 4
+- $50 × 1
+- $20 × 2
+- $10 × 1
+- $5 × 1
+- $1 × 5
 
 ---
 
@@ -106,7 +106,7 @@ Each turn proceeds in the following order:
 
 ### 7.1 GO
 
-- Collect £200 when:
+- Collect $200 when:
   - Landing on GO
   - Passing GO
 
@@ -130,10 +130,10 @@ Each turn proceeds in the following order:
 ### 7.3 Railroads
 
 - Rent depends on number owned:
-  - 1 railroad: £25
-  - 2 railroads: £50
-  - 3 railroads: £100
-  - 4 railroads: £200
+  - 1 railroad: $25
+  - 2 railroads: $50
+  - 3 railroads: $100
+  - 4 railroads: $200
 
 ### 7.4 Utilities
 
@@ -153,11 +153,11 @@ Each turn proceeds in the following order:
 
 ### 7.7 Income Tax
 
-- Pay £200 (standard rules).
+- Pay $200 (standard rules).
 
 ### 7.8 Luxury Tax
 
-- Pay £100.
+- Pay $100.
 
 ### 7.9 Jail
 
@@ -172,19 +172,19 @@ Each turn proceeds in the following order:
   - Drawing certain cards
   - Rolling three doubles
 - Move directly to Jail.
-- Do **not** collect £200.
+- Do **not** collect $200.
 
 #### 7.9.3 Getting Out of Jail
 
 Player may:
 
 - Roll doubles (up to 3 turns)
-- Pay £50 before rolling
+- Pay $50 before rolling
 - Use a “Get Out of Jail Free” card
 
 If doubles not rolled after 3 turns:
 
-- Must pay £50
+- Must pay $50
 - Then move according to dice roll
 
 ---
@@ -242,7 +242,7 @@ Rules:
 
 - Triggered when a player declines to buy unowned property.
 - Banker conducts auction.
-- Any bid allowed, including £1.
+- Any bid allowed, including $1.
 - Highest bidder pays bank.
 
 ---

@@ -1,19 +1,19 @@
-import React from 'react'
-import { motion, AnimatePresence } from 'framer-motion'
-import { useGameStore } from '../store/gameStore'
-import { getCurrentPropertyPrice } from '../logic/rules/economics'
-import { audioManager } from '../utils/audio'
-import type { AuctionState, Property, Player } from '../types/game'
+import React from "react"
+import { motion, AnimatePresence } from "framer-motion"
+import { useGameStore } from "../store/gameStore"
+import { getCurrentPropertyPrice } from "../logic/rules/economics"
+import { audioManager } from "../utils/audio"
+import type { AuctionState, Property, Player } from "../types/game"
 
 export const AuctionModal: React.FC = () => {
-  const auction = useGameStore(s => s.auction)
-  const activeEconomicEvents = useGameStore(s => s.activeEconomicEvents)
-  const players = useGameStore(s => s.players)
-  const spaces = useGameStore(s => s.spaces)
-  const clientId = useGameStore(s => s.clientId)
+  const auction = useGameStore((s) => s.auction)
+  const activeEconomicEvents = useGameStore((s) => s.activeEconomicEvents)
+  const players = useGameStore((s) => s.players)
+  const spaces = useGameStore((s) => s.spaces)
+  const clientId = useGameStore((s) => s.clientId)
 
   const myPlayerIndex = React.useMemo(() => {
-    return players.findIndex(p => p.clientId === clientId)
+    return players.findIndex((p) => p.clientId === clientId)
   }, [players, clientId])
 
   const [bidAmount, setBidAmount] = React.useState(0)
@@ -21,14 +21,14 @@ export const AuctionModal: React.FC = () => {
   const [position, setPosition] = React.useState({ x: 0, y: 0 })
 
   const property = auction
-    ? (spaces.find(s => s.id === auction.propertyId) as Property)
+    ? (spaces.find((s) => s.id === auction.propertyId) as Property)
     : null
 
   const currentPrice = property
     ? getCurrentPropertyPrice(useGameStore.getState(), property)
     : 0
 
-  // Calculate minimum bid: 10% increment or £10, whichever is higher
+  // Calculate minimum bid: 10% increment or $10, whichever is higher
   const minIncrement = auction
     ? Math.max(10, Math.floor(auction.currentBid * 0.1))
     : 0
@@ -62,7 +62,7 @@ export const AuctionModal: React.FC = () => {
   const handleBid = () => {
     if (!canBid || !auction) {
       console.warn(
-        '[AuctionModal] Attempted to bid for non-human player or not your turn',
+        "[AuctionModal] Attempted to bid for non-human player or not your turn",
       )
       return
     }
@@ -79,7 +79,7 @@ export const AuctionModal: React.FC = () => {
   const handlePass = () => {
     if (!canBid || !auction) {
       console.warn(
-        '[AuctionModal] Attempted to pass for non-human player or not your turn',
+        "[AuctionModal] Attempted to pass for non-human player or not your turn",
       )
       return
     }
@@ -92,7 +92,7 @@ export const AuctionModal: React.FC = () => {
         minimumBid,
         minimumBid + Math.max(10, Math.floor(minimumBid * 0.25)),
         minimumBid + Math.max(20, Math.floor(minimumBid * 0.5)),
-      ].filter(b => b <= activePlayer.cash)
+      ].filter((b) => b <= activePlayer.cash)
     : []
 
   React.useEffect(() => {
@@ -126,12 +126,12 @@ export const AuctionModal: React.FC = () => {
     const timer1 = setTimeout(updatePosition, 0)
     const timer2 = setTimeout(updatePosition, 50)
     const timer3 = setTimeout(updatePosition, 200)
-    window.addEventListener('resize', updatePosition)
+    window.addEventListener("resize", updatePosition)
     return () => {
       clearTimeout(timer1)
       clearTimeout(timer2)
       clearTimeout(timer3)
-      window.removeEventListener('resize', updatePosition)
+      window.removeEventListener("resize", updatePosition)
     }
   }, [])
 
@@ -141,78 +141,78 @@ export const AuctionModal: React.FC = () => {
     <AnimatePresence>
       <motion.div
         role="dialog"
-        aria-label={`Auction for ${property?.name ?? 'property'}`}
+        aria-label={`Auction for ${property?.name ?? "property"}`}
         ref={modalRef}
         initial={{ opacity: 0, scale: 0.9 }}
         animate={{ opacity: 1, scale: 1 }}
         exit={{ opacity: 0, scale: 0.9 }}
         style={{
-          position: 'fixed',
+          position: "fixed",
           left: `${position.x}px`,
           top: `${position.y}px`,
-          width: window.innerWidth < 768 ? 'calc(100% - 16px)' : '320px',
-          maxWidth: '440px',
-          maxHeight: 'calc(100vh - 24px)',
-          overflowY: 'auto',
-          backgroundColor: 'rgba(10, 10, 20, 0.95)',
-          color: 'white',
-          borderRadius: '12px',
-          boxShadow: '0 8px 32px rgba(0,0,0,0.5)',
-          border: '1px solid rgba(255,255,255,0.1)',
+          width: window.innerWidth < 768 ? "calc(100% - 16px)" : "320px",
+          maxWidth: "440px",
+          maxHeight: "calc(100vh - 24px)",
+          overflowY: "auto",
+          backgroundColor: "rgba(10, 10, 20, 0.95)",
+          color: "white",
+          borderRadius: "12px",
+          boxShadow: "0 8px 32px rgba(0,0,0,0.5)",
+          border: "1px solid rgba(255,255,255,0.1)",
           zIndex: 1000,
-          display: 'flex',
-          flexDirection: 'column',
+          display: "flex",
+          flexDirection: "column",
         }}
       >
-        <div style={{ padding: '20px' }}>
-          <h2 style={{ margin: '0 0 16px 0', textAlign: 'center' }}>Auction</h2>
+        <div style={{ padding: "20px" }}>
+          <h2 style={{ margin: "0 0 16px 0", textAlign: "center" }}>Auction</h2>
 
           {/* Property info */}
           <div
             style={{
-              backgroundColor: '#333',
-              padding: '16px',
-              borderRadius: '8px',
-              marginBottom: '16px',
-              textAlign: 'center',
+              backgroundColor: "#333",
+              padding: "16px",
+              borderRadius: "8px",
+              marginBottom: "16px",
+              textAlign: "center",
             }}
           >
-            <h3 style={{ margin: '0 0 8px 0' }}>
-              {property?.name ?? 'Property'}
+            <h3 style={{ margin: "0 0 8px 0" }}>
+              {property?.name ?? "Property"}
             </h3>
-            <p style={{ margin: 0, color: '#ccc' }}>
-              Market Price: £{currentPrice}
+            <p style={{ margin: 0, color: "#ccc" }}>
+              Market Price: ${currentPrice}
             </p>
           </div>
 
           {/* Current bid info */}
           <div
             style={{
-              backgroundColor: '#1a472a',
-              padding: '16px',
-              borderRadius: '8px',
-              marginBottom: '16px',
-              textAlign: 'center',
+              backgroundColor: "#1a472a",
+              padding: "16px",
+              borderRadius: "8px",
+              marginBottom: "16px",
+              textAlign: "center",
             }}
           >
-            <p style={{ margin: '0 0 4px 0', color: '#ccc', fontSize: '14px' }}>
-              {auction.currentBid === 0 ? 'Opening Bid' : 'Current Bid'}
+            <p style={{ margin: "0 0 4px 0", color: "#ccc", fontSize: "14px" }}>
+              {auction.currentBid === 0 ? "Opening Bid" : "Current Bid"}
             </p>
             <p
               style={{
                 margin: 0,
-                fontSize: '32px',
-                fontWeight: 'bold',
-                color: '#4CAF50',
+                fontSize: "32px",
+                fontWeight: "bold",
+                color: "#4CAF50",
               }}
             >
               {auction.currentBid === 0
-                ? `£${minimumBid}+`
-                : `£${auction.currentBid}`}
+                ? `$${minimumBid}+`
+                : `$${auction.currentBid}`}
             </p>
             {highestBidder && (
-              <p style={{ margin: '8px 0 0 0', color: '#ccc' }}>
-                by{' '}
+              <p style={{ margin: "8px 0 0 0", color: "#ccc" }}>
+                by{" "}
                 <span style={{ color: highestBidder.color }}>
                   {highestBidder.name}
                 </span>
@@ -220,9 +220,9 @@ export const AuctionModal: React.FC = () => {
             )}
             {auction.currentBid > 0 && (
               <p
-                style={{ margin: '4px 0 0 0', color: '#888', fontSize: '12px' }}
+                style={{ margin: "4px 0 0 0", color: "#888", fontSize: "12px" }}
               >
-                Min next bid: £{minimumBid} (+{minIncrement})
+                Min next bid: ${minimumBid} (+{minIncrement})
               </p>
             )}
           </div>
@@ -230,26 +230,26 @@ export const AuctionModal: React.FC = () => {
           {/* Active bidder panel */}
           <div
             style={{
-              backgroundColor: '#444',
-              padding: '16px',
-              borderRadius: '8px',
-              marginBottom: '16px',
+              backgroundColor: "#444",
+              padding: "16px",
+              borderRadius: "8px",
+              marginBottom: "16px",
             }}
           >
             <h3
               style={{
-                margin: '0 0 12px 0',
+                margin: "0 0 12px 0",
                 color: activePlayer?.color,
-                textAlign: 'center',
+                textAlign: "center",
               }}
             >
               {activePlayer?.name}'s Turn to Bid
               {activePlayer?.isAI && (
                 <span
                   style={{
-                    fontSize: '14px',
-                    color: '#FF9800',
-                    marginLeft: '8px',
+                    fontSize: "14px",
+                    color: "#FF9800",
+                    marginLeft: "8px",
                   }}
                 >
                   (AI)
@@ -258,12 +258,12 @@ export const AuctionModal: React.FC = () => {
             </h3>
             <p
               style={{
-                margin: '0 0 16px 0',
-                textAlign: 'center',
-                color: '#ccc',
+                margin: "0 0 16px 0",
+                textAlign: "center",
+                color: "#ccc",
               }}
             >
-              Available: £{activePlayer?.cash ?? 0}
+              Available: ${activePlayer?.cash ?? 0}
             </p>
 
             {/* Only show bid/pass controls if it's the human player's turn */}
@@ -273,13 +273,13 @@ export const AuctionModal: React.FC = () => {
                 {quickBids.length > 0 && (
                   <div
                     style={{
-                      display: 'flex',
-                      gap: '8px',
-                      marginBottom: '12px',
-                      justifyContent: 'center',
+                      display: "flex",
+                      gap: "8px",
+                      marginBottom: "12px",
+                      justifyContent: "center",
                     }}
                   >
-                    {quickBids.map(amount => (
+                    {quickBids.map((amount) => (
                       <button
                         key={amount}
                         onClick={() => {
@@ -290,16 +290,16 @@ export const AuctionModal: React.FC = () => {
                           audioManager.playBid()
                         }}
                         style={{
-                          padding: '8px 16px',
-                          backgroundColor: '#4CAF50',
-                          color: '#fff',
-                          border: 'none',
-                          borderRadius: '4px',
-                          cursor: 'pointer',
-                          fontWeight: 'bold',
+                          padding: "8px 16px",
+                          backgroundColor: "#4CAF50",
+                          color: "#fff",
+                          border: "none",
+                          borderRadius: "4px",
+                          cursor: "pointer",
+                          fontWeight: "bold",
                         }}
                       >
-                        £{amount}
+                        ${amount}
                       </button>
                     ))}
                   </div>
@@ -308,9 +308,9 @@ export const AuctionModal: React.FC = () => {
                 {/* Custom bid */}
                 <div
                   style={{
-                    display: 'flex',
-                    gap: '8px',
-                    justifyContent: 'center',
+                    display: "flex",
+                    gap: "8px",
+                    justifyContent: "center",
                   }}
                 >
                   <input
@@ -318,7 +318,7 @@ export const AuctionModal: React.FC = () => {
                     min={minimumBid}
                     max={activePlayer?.cash ?? 0}
                     value={bidAmount}
-                    onChange={e =>
+                    onChange={(e) =>
                       setBidAmount(
                         Math.max(
                           minimumBid,
@@ -327,12 +327,12 @@ export const AuctionModal: React.FC = () => {
                       )
                     }
                     style={{
-                      padding: '8px',
-                      width: '100px',
-                      borderRadius: '4px',
-                      border: 'none',
-                      textAlign: 'center',
-                      fontSize: '16px',
+                      padding: "8px",
+                      width: "100px",
+                      borderRadius: "4px",
+                      border: "none",
+                      textAlign: "center",
+                      fontSize: "16px",
                     }}
                   />
                   <button
@@ -342,18 +342,18 @@ export const AuctionModal: React.FC = () => {
                       bidAmount > (activePlayer?.cash ?? 0)
                     }
                     style={{
-                      padding: '8px 24px',
+                      padding: "8px 24px",
                       backgroundColor:
                         bidAmount >= minimumBid &&
                         bidAmount <= (activePlayer?.cash ?? 0)
-                          ? '#4CAF50'
-                          : '#666',
-                      color: '#fff',
-                      border: 'none',
-                      borderRadius: '4px',
+                          ? "#4CAF50"
+                          : "#666",
+                      color: "#fff",
+                      border: "none",
+                      borderRadius: "4px",
                       cursor:
-                        bidAmount >= minimumBid ? 'pointer' : 'not-allowed',
-                      fontWeight: 'bold',
+                        bidAmount >= minimumBid ? "pointer" : "not-allowed",
+                      fontWeight: "bold",
                     }}
                   >
                     Bid
@@ -361,13 +361,13 @@ export const AuctionModal: React.FC = () => {
                   <button
                     onClick={handlePass}
                     style={{
-                      padding: '8px 24px',
-                      backgroundColor: '#f44336',
-                      color: '#fff',
-                      border: 'none',
-                      borderRadius: '4px',
-                      cursor: 'pointer',
-                      fontWeight: 'bold',
+                      padding: "8px 24px",
+                      backgroundColor: "#f44336",
+                      color: "#fff",
+                      border: "none",
+                      borderRadius: "4px",
+                      cursor: "pointer",
+                      fontWeight: "bold",
                     }}
                   >
                     Pass
@@ -376,7 +376,7 @@ export const AuctionModal: React.FC = () => {
               </>
             ) : (
               <div
-                style={{ textAlign: 'center', color: '#888', padding: '16px' }}
+                style={{ textAlign: "center", color: "#888", padding: "16px" }}
               >
                 {activePlayer?.isAI ? (
                   <p style={{ margin: 0 }}>AI is thinking...</p>
@@ -390,9 +390,9 @@ export const AuctionModal: React.FC = () => {
           </div>
 
           {/* Bidders status */}
-          <div style={{ fontSize: '14px' }}>
-            <h4 style={{ margin: '0 0 8px 0', color: '#ccc' }}>Bidders</h4>
-            <div style={{ display: 'flex', flexWrap: 'wrap', gap: '8px' }}>
+          <div style={{ fontSize: "14px" }}>
+            <h4 style={{ margin: "0 0 8px 0", color: "#ccc" }}>Bidders</h4>
+            <div style={{ display: "flex", flexWrap: "wrap", gap: "8px" }}>
               {players.map((p, i) => {
                 const hasPassed = auction.passedPlayers.includes(i)
                 const isActive = i === auction.activePlayerIndex
@@ -402,20 +402,20 @@ export const AuctionModal: React.FC = () => {
                   <div
                     key={p.id}
                     style={{
-                      padding: '4px 12px',
-                      borderRadius: '16px',
+                      padding: "4px 12px",
+                      borderRadius: "16px",
                       backgroundColor: isActive
-                        ? '#4CAF50'
+                        ? "#4CAF50"
                         : hasPassed || isBankrupt
-                          ? '#333'
-                          : '#555',
+                          ? "#333"
+                          : "#555",
                       opacity: hasPassed || isBankrupt ? 0.5 : 1,
-                      color: isActive ? '#fff' : p.color,
-                      fontSize: '12px',
+                      color: isActive ? "#fff" : p.color,
+                      fontSize: "12px",
                     }}
                   >
-                    {p.name} {hasPassed && '(Passed)'}{' '}
-                    {isBankrupt && '(Bankrupt)'}
+                    {p.name} {hasPassed && "(Passed)"}{" "}
+                    {isBankrupt && "(Bankrupt)"}
                   </div>
                 )
               })}

@@ -1,6 +1,6 @@
-import { describe, test, expect, beforeEach } from 'bun:test'
-import { GameRoom } from './GameRoom'
-import type { Property, TradeOffer } from '../types/game'
+import { describe, test, expect, beforeEach } from "bun:test"
+import { GameRoom } from "./GameRoom"
+import type { Property, TradeOffer } from "../types/game"
 
 let room: GameRoom
 
@@ -14,17 +14,17 @@ const setupGame = (playerCount: number = 2) => {
   room.initGame(names, tokens)
 }
 
-describe('Game Logic (Server)', () => {
-  test('initGame creates players', () => {
+describe("Game Logic (Server)", () => {
+  test("initGame creates players", () => {
     setupGame(4)
     const state = room.state
     expect(state.players.length).toBe(4)
-    expect(state.phase).toBe('rolling')
+    expect(state.phase).toBe("rolling")
     expect(state.currentPlayerIndex).toBe(0)
     expect(state.players[0]!.cash).toBe(1500)
   })
 
-  test('rollDice updates state', () => {
+  test("rollDice updates state", () => {
     setupGame()
     const roll = room.rollDice()
     expect(roll).toBeDefined()
@@ -32,25 +32,25 @@ describe('Game Logic (Server)', () => {
     expect(room.state.lastDiceRoll).toEqual(roll)
   })
 
-  test('movePlayer updates position', () => {
+  test("movePlayer updates position", () => {
     setupGame()
     room.movePlayer(0, 5)
     expect(room.state.players[0]!.position).toBe(5)
   })
 
-  test('buyProperty updates ownership', () => {
+  test("buyProperty updates ownership", () => {
     setupGame()
     // Move to a property (e.g. 1)
     room.movePlayer(0, 1) // Old Kent Road / Mediterranean
-    expect(room.state.phase).toBe('awaiting_buy_decision')
+    expect(room.state.phase).toBe("awaiting_buy_decision")
 
     room.buyProperty(1)
     expect((room.state.spaces[1] as Property).owner).toBe(0)
     expect(room.state.players[0]!.cash).toBeLessThan(1500)
-    expect(room.state.phase).toBe('resolving_space')
+    expect(room.state.phase).toBe("resolving_space")
   })
 
-  test('rent calculation and payment', () => {
+  test("rent calculation and payment", () => {
     setupGame()
     // P1 buys property 1
     room.movePlayer(0, 1)
@@ -68,7 +68,7 @@ describe('Game Logic (Server)', () => {
     expect(room.state.players[0]!.cash).toBeGreaterThan(p1Cash)
   })
 
-  test('utility rent rounding with value multiplier', () => {
+  test("utility rent rounding with value multiplier", () => {
     setupGame()
     // Give P0 utility 12 (Electric Company)
     const electricCo = room.state.spaces[12] as Property
@@ -96,9 +96,9 @@ describe('Game Logic (Server)', () => {
     expect(room.state.players[0]!.cash).toBe(p1CashBefore + 29)
   })
 
-  test('IOU interest rounding', () => {
+  test("IOU interest rounding", () => {
     setupGame()
-    // P0 owes P1 an IOU of £100 at 5% interest.
+    // P0 owes P1 an IOU of $100 at 5% interest.
     // Assume 3 rounds of interest (15) have already been accrued into interestDue.
     room.state.players[0]!.iousPayable = [
       {
@@ -109,7 +109,7 @@ describe('Game Logic (Server)', () => {
         currentAmount: 100,
         interestRate: 0.05,
         turnCreated: 0,
-        reason: 'rent',
+        reason: "rent",
         interestDue: 15,
       } as any,
     ]
@@ -120,20 +120,20 @@ describe('Game Logic (Server)', () => {
     // Total owed: 100 principal + 15 interest = 115
     room.payIOU(0, 1, 50)
 
-    // P0 pays £50. Interest (15) is paid first, then £35 goes to principal.
+    // P0 pays $50. Interest (15) is paid first, then $35 goes to principal.
     // 100 - 35 = 65 remaining principal.
     const iou = room.state.players[0]!.iousPayable[0]
     expect(iou?.currentAmount).toBe(65)
   })
 
-  test('jail logic', () => {
+  test("jail logic", () => {
     setupGame()
     room.goToJail(0)
     expect(room.state.players[0]!.inJail).toBe(true)
     expect(room.state.players[0]!.position).toBe(10)
   })
 
-  test('building houses requires monopoly', () => {
+  test("building houses requires monopoly", () => {
     setupGame()
     // Give P0 a monopoly on brown (1, 3)
     room.state.spaces[1] = { ...room.state.spaces[1], owner: 0 } as any
@@ -144,56 +144,56 @@ describe('Game Logic (Server)', () => {
     expect((room.state.spaces[1] as Property).houses).toBe(1)
   })
 
-  test('authorizeAction blocks out-of-turn rollDice', () => {
+  test("authorizeAction blocks out-of-turn rollDice", () => {
     setupGame()
-    room.state.players[0] = { ...room.state.players[0]!, clientId: 'A' } as any
-    room.state.players[1] = { ...room.state.players[1]!, clientId: 'B' } as any
+    room.state.players[0] = { ...room.state.players[0]!, clientId: "A" } as any
+    room.state.players[1] = { ...room.state.players[1]!, clientId: "B" } as any
 
-    const result = (room as any).authorizeAction('B', 'rollDice', [])
+    const result = (room as any).authorizeAction("B", "rollDice", [])
     expect(result.allowed).toBe(false)
   })
 
-  test('authorizeAction enforces movePlayer payload and dice total', () => {
+  test("authorizeAction enforces movePlayer payload and dice total", () => {
     setupGame()
-    room.state.players[0] = { ...room.state.players[0]!, clientId: 'A' } as any
-    room.state.players[1] = { ...room.state.players[1]!, clientId: 'B' } as any
+    room.state.players[0] = { ...room.state.players[0]!, clientId: "A" } as any
+    room.state.players[1] = { ...room.state.players[1]!, clientId: "B" } as any
 
     const roll = room.rollDice()
     expect(roll).toBeDefined()
 
-    const badSteps = (room as any).authorizeAction('A', 'movePlayer', [
+    const badSteps = (room as any).authorizeAction("A", "movePlayer", [
       0,
       roll.total + 1,
     ])
     expect(badSteps.allowed).toBe(false)
 
-    const badPlayer = (room as any).authorizeAction('A', 'movePlayer', [
+    const badPlayer = (room as any).authorizeAction("A", "movePlayer", [
       1,
       roll.total,
     ])
     expect(badPlayer.allowed).toBe(false)
 
-    const good = (room as any).authorizeAction('A', 'movePlayer', [
+    const good = (room as any).authorizeAction("A", "movePlayer", [
       0,
       roll.total,
     ])
     expect(good.allowed).toBe(true)
   })
 
-  test('authorizeAction only allows host to trigger AI', () => {
+  test("authorizeAction only allows host to trigger AI", () => {
     setupGame()
-    room.state.players[0] = { ...room.state.players[0]!, clientId: 'A' } as any
+    room.state.players[0] = { ...room.state.players[0]!, clientId: "A" } as any
     room.state.players[1] = { ...room.state.players[1]!, isAI: true } as any
     room.state.currentPlayerIndex = 1
 
-    const denied = (room as any).authorizeAction('B', 'executeAITurn', [])
+    const denied = (room as any).authorizeAction("B", "executeAITurn", [])
     expect(denied.allowed).toBe(false)
 
-    const allowed = (room as any).authorizeAction('A', 'executeAITurn', [])
+    const allowed = (room as any).authorizeAction("A", "executeAITurn", [])
     expect(allowed.allowed).toBe(true)
   })
 
-  test('AI trade history and cooldown are tracked on propose/reject', () => {
+  test("AI trade history and cooldown are tracked on propose/reject", () => {
     setupGame()
     room.state.players[0] = { ...room.state.players[0]!, isAI: true } as any
     room.state.turn = 11
@@ -212,104 +212,104 @@ describe('Game Logic (Server)', () => {
     room.proposeTrade(offer)
     const afterProposal = room.state.players[0]
     expect(afterProposal?.lastTradeTurn).toBe(11)
-    expect(afterProposal?.tradeHistory?.['1-set:1']?.lastOfferTurn).toBe(11)
+    expect(afterProposal?.tradeHistory?.["1-set:1"]?.lastOfferTurn).toBe(11)
 
     room.rejectTrade()
     const afterReject = room.state.players[0]
-    expect(afterReject?.tradeHistory?.['1-set:1']?.attempts).toBe(1)
-    expect(afterReject?.tradeHistory?.['1-set:1']?.lastOfferTurn).toBe(11)
-    expect(afterReject?.tradeHistory?.['1-1']?.attempts).toBe(1)
+    expect(afterReject?.tradeHistory?.["1-set:1"]?.attempts).toBe(1)
+    expect(afterReject?.tradeHistory?.["1-set:1"]?.lastOfferTurn).toBe(11)
+    expect(afterReject?.tradeHistory?.["1-1"]?.attempts).toBe(1)
   })
 
-  test('assignPlayer allows a human to take over a disconnected AI seat', () => {
+  test("assignPlayer allows a human to take over a disconnected AI seat", () => {
     setupGame(2)
     room.state.players[1] = {
       ...room.state.players[1]!,
       isAI: true,
       isConnected: false,
       clientId: null,
-      aiDifficulty: 'hard',
+      aiDifficulty: "hard",
     } as any
 
-    room.assignPlayer(1, 'human-client')
+    room.assignPlayer(1, "human-client")
 
     const aiSeat = room.state.players[1]
     expect(aiSeat?.isAI).toBe(false)
     expect(aiSeat?.isConnected).toBe(true)
-    expect(aiSeat?.clientId).toBe('human-client')
+    expect(aiSeat?.clientId).toBe("human-client")
     expect(aiSeat?.aiDifficulty).toBe(null)
   })
 
-  test('handlePlayerReconnect converts matching AI seat back to human control', () => {
+  test("handlePlayerReconnect converts matching AI seat back to human control", () => {
     setupGame(2)
     room.state.players[1] = {
       ...room.state.players[1]!,
       isAI: true,
       isConnected: false,
-      clientId: 'disconnected-ai-human',
-      aiDifficulty: 'medium',
+      clientId: "disconnected-ai-human",
+      aiDifficulty: "medium",
     } as any
-    ;(room as any).handlePlayerReconnect('disconnected-ai-human')
+    ;(room as any).handlePlayerReconnect("disconnected-ai-human")
 
     const seat = room.state.players[1]
     expect(seat?.isAI).toBe(false)
     expect(seat?.isConnected).toBe(true)
-    expect(seat?.clientId).toBe('disconnected-ai-human')
+    expect(seat?.clientId).toBe("disconnected-ai-human")
     expect(seat?.aiDifficulty).toBe(null)
   })
 
-  test('assignPlayer blocks takeover of active AI seat', () => {
+  test("assignPlayer blocks takeover of active AI seat", () => {
     setupGame(2)
     room.state.players[1] = {
       ...room.state.players[1]!,
       isAI: true,
       isConnected: true,
-      clientId: 'active-ai-human',
+      clientId: "active-ai-human",
     } as any
 
-    room.assignPlayer(1, 'active-ai-human')
+    room.assignPlayer(1, "active-ai-human")
 
     const aiSeat = room.state.players[1]
     expect(aiSeat?.isAI).toBe(false)
     expect(aiSeat?.isConnected).toBe(true)
-    expect(aiSeat?.clientId).toBe('active-ai-human')
+    expect(aiSeat?.clientId).toBe("active-ai-human")
   })
 
-  test('assignPlayer blocks takeover of active AI seat by another client', () => {
+  test("assignPlayer blocks takeover of active AI seat by another client", () => {
     setupGame(2)
     room.state.players[1] = {
       ...room.state.players[1]!,
       isAI: true,
       isConnected: true,
-      clientId: 'other-client',
+      clientId: "other-client",
     } as any
 
-    room.assignPlayer(1, 'human-override')
+    room.assignPlayer(1, "human-override")
 
     const aiSeat = room.state.players[1]
     expect(aiSeat?.isAI).toBe(true)
     expect(aiSeat?.isConnected).toBe(true)
-    expect(aiSeat?.clientId).toBe('other-client')
+    expect(aiSeat?.clientId).toBe("other-client")
   })
 
-  test('assignPlayer allows claiming a disconnected human seat by a new client', () => {
+  test("assignPlayer allows claiming a disconnected human seat by a new client", () => {
     setupGame(2)
     room.state.players[1] = {
       ...room.state.players[1]!,
       isAI: false,
       isConnected: false,
-      clientId: 'disconnected-human',
+      clientId: "disconnected-human",
     } as any
 
-    room.assignPlayer(1, 'human-rejoin')
+    room.assignPlayer(1, "human-rejoin")
 
     const player = room.state.players[1]
     expect(player?.isAI).toBe(false)
     expect(player?.isConnected).toBe(true)
-    expect(player?.clientId).toBe('human-rejoin')
+    expect(player?.clientId).toBe("human-rejoin")
   })
 
-  test('assignPlayer allows claiming an unowned AI slot', () => {
+  test("assignPlayer allows claiming an unowned AI slot", () => {
     setupGame(2)
     room.state.players[1] = {
       ...room.state.players[1]!,
@@ -318,11 +318,11 @@ describe('Game Logic (Server)', () => {
       clientId: null,
     } as any
 
-    room.assignPlayer(1, 'human-client')
+    room.assignPlayer(1, "human-client")
 
     const aiSeat = room.state.players[1]
     expect(aiSeat?.isAI).toBe(false)
     expect(aiSeat?.isConnected).toBe(true)
-    expect(aiSeat?.clientId).toBe('human-client')
+    expect(aiSeat?.clientId).toBe("human-client")
   })
 })

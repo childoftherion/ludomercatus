@@ -1,14 +1,14 @@
-import React from 'react'
-import { motion } from 'framer-motion'
-import { useGameStore } from '../store/gameStore'
-import type { Property } from '../types/game'
-import { BoardMarketStatus } from './BoardMarketStatus'
-import { getCurrentPropertyPrice } from '../logic/rules/economics';
-import { PropertyTooltip } from './PropertyTooltip';
+import React from "react"
+import { motion } from "framer-motion"
+import { useGameStore } from "../store/gameStore"
+import type { Property } from "../types/game"
+import { BoardMarketStatus } from "./BoardMarketStatus"
+import { getCurrentPropertyPrice } from "../logic/rules/economics"
+import { PropertyTooltip } from "./PropertyTooltip"
 
 // Responsive space size based on viewport - maximize board size for readability
 const getSpaceSize = () => {
-  if (typeof window === 'undefined') return 80
+  if (typeof window === "undefined") return 80
   const vh = window.innerHeight
   const vw = window.innerWidth
   const isMobile = vw <= 768
@@ -96,42 +96,42 @@ const getColorForSpace = (space: {
   type: string
   colorGroup?: string | null
 }): string => {
-  if (space.type === 'railroad') return '#87CEEB'
-  if (space.type === 'utility') return '#90EE90'
-  if (space.type === 'property' && space.colorGroup) {
+  if (space.type === "railroad") return "#87CEEB"
+  if (space.type === "utility") return "#90EE90"
+  if (space.type === "property" && space.colorGroup) {
     const colors: Record<string, string> = {
-      brown: '#8B4513',
-      light_blue: '#87CEEB',
-      pink: '#FF69B4',
-      orange: '#FFA500',
-      red: '#FF0000',
-      yellow: '#FFD700',
-      green: '#008000',
-      dark_blue: '#00008B',
+      brown: "#8B4513",
+      light_blue: "#87CEEB",
+      pink: "#FF69B4",
+      orange: "#FFA500",
+      red: "#FF0000",
+      yellow: "#FFD700",
+      green: "#008000",
+      dark_blue: "#00008B",
     }
-    return colors[space.colorGroup] || '#f0f0f0'
+    return colors[space.colorGroup] || "#f0f0f0"
   }
-  if (space.type === 'go') return '#32CD32'
-  if (space.type === 'jail') return '#808080'
-  if (space.type === 'go_to_jail') return '#FF6347'
-  if (space.type === 'free_parking') return '#FFD700'
-  if (space.type === 'tax') return '#DC143C'
-  if (space.type === 'chance' || space.type === 'community_chest')
-    return '#FF8C00'
-  return '#f0f0f0'
+  if (space.type === "go") return "#32CD32"
+  if (space.type === "jail") return "#808080"
+  if (space.type === "go_to_jail") return "#FF6347"
+  if (space.type === "free_parking") return "#FFD700"
+  if (space.type === "tax") return "#DC143C"
+  if (space.type === "chance" || space.type === "community_chest")
+    return "#FF8C00"
+  return "#f0f0f0"
 }
 
 const getSpaceIcon = (space: { type: string; name: string }) => {
-  if (space.type === 'railroad') return '🚂'
-  if (space.type === 'utility')
-    return space.name.includes('Water') ? '💧' : '💡'
-  if (space.type === 'chance') return '❓'
-  if (space.type === 'community_chest') return '📦'
-  if (space.type === 'go') return '🏁'
-  if (space.type === 'jail') return '🔒'
-  if (space.type === 'go_to_jail') return '👮'
-  if (space.type === 'free_parking') return '🚗'
-  if (space.type === 'tax') return '💰'
+  if (space.type === "railroad") return "🚂"
+  if (space.type === "utility")
+    return space.name.includes("Water") ? "💧" : "💡"
+  if (space.type === "chance") return "❓"
+  if (space.type === "community_chest") return "📦"
+  if (space.type === "go") return "🏁"
+  if (space.type === "jail") return "🔒"
+  if (space.type === "go_to_jail") return "👮"
+  if (space.type === "free_parking") return "🚗"
+  if (space.type === "tax") return "💰"
   return null
 }
 
@@ -145,19 +145,19 @@ const Space = ({
   onPropertyClick?: (property: Property) => void
 }) => {
   const pos = getSpacePosition(space.id, spaceSize)
-  const spaces = useGameStore(s => s.spaces)
-  const activeEconomicEvents = useGameStore(s => s.activeEconomicEvents)
-  const property = spaces.find(s => s.id === space.id) as Property | undefined
+  const spaces = useGameStore((s) => s.spaces)
+  const activeEconomicEvents = useGameStore((s) => s.activeEconomicEvents)
+  const property = spaces.find((s) => s.id === space.id) as Property | undefined
 
-  const [isHovered, setIsHovered] = React.useState(false);
+  const [isHovered, setIsHovered] = React.useState(false)
 
   const icon = getSpaceIcon(space)
-  const isPropertyType = space.type === 'property'
+  const isPropertyType = space.type === "property"
   const isClickableProperty =
     property !== undefined &&
-    (space.type === 'property' ||
-      space.type === 'railroad' ||
-      space.type === 'utility')
+    (space.type === "property" ||
+      space.type === "railroad" ||
+      space.type === "utility")
   const color = getColorForSpace(space)
 
   // Calculate font sizes based on space size - scale proportionally for larger boards
@@ -170,62 +170,64 @@ const Space = ({
     <motion.div
       className={`space space-${space.type}`}
       style={{
-        position: 'absolute',
+        position: "absolute",
         width: spaceSize,
         height: spaceSize,
         left: pos.col * (spaceSize + SPACE_GAP) + BOARD_PADDING,
         top: pos.row * (spaceSize + SPACE_GAP) + BOARD_PADDING,
-        backgroundColor: isPropertyType ? '#FFFFFF' : color,
-        border: '2px solid #333',
-        display: 'flex',
-        flexDirection: 'column',
-        alignItems: 'center',
-        justifyContent: isPropertyType ? 'flex-start' : 'center',
+        backgroundColor: isPropertyType ? "#FFFFFF" : color,
+        border: "2px solid #333",
+        display: "flex",
+        flexDirection: "column",
+        alignItems: "center",
+        justifyContent: isPropertyType ? "flex-start" : "center",
         fontSize: `${fontSize}px`,
-        fontWeight: 'bold',
-        color: '#333',
-        borderRadius: '4px',
-        textAlign: 'center',
-        overflow: 'hidden',
-        boxShadow: '0 2px 4px rgba(0,0,0,0.2)',
-        cursor: isClickableProperty ? 'pointer' : 'default',
+        fontWeight: "bold",
+        color: "#333",
+        borderRadius: "4px",
+        textAlign: "center",
+        overflow: "hidden",
+        boxShadow: "0 2px 4px rgba(0,0,0,0.2)",
+        cursor: isClickableProperty ? "pointer" : "default",
       }}
       whileHover={{ scale: 1.1, zIndex: 100 }}
       onHoverStart={() => setIsHovered(true)}
       onHoverEnd={() => setIsHovered(false)}
-      transition={{ type: 'spring', stiffness: 300, damping: 20 }}
-      onClick={e => {
+      transition={{ type: "spring", stiffness: 300, damping: 20 }}
+      onClick={(e) => {
         e.stopPropagation()
         if (isClickableProperty && onPropertyClick) {
           onPropertyClick(property)
         }
       }}
     >
-      {isHovered && isClickableProperty && property && <PropertyTooltip property={property} />}
+      {isHovered && isClickableProperty && property && (
+        <PropertyTooltip property={property} />
+      )}
       {/* Property Color Bar - Increased visibility */}
       {isPropertyType && (
         <div
           style={{
-            width: '100%',
-            height: '30%',
+            width: "100%",
+            height: "30%",
             backgroundColor: color,
-            borderBottom: '3px solid #333',
-            position: 'relative',
-            minHeight: '20px',
+            borderBottom: "3px solid #333",
+            position: "relative",
+            minHeight: "20px",
           }}
         >
           {/* Houses / Hotel */}
           {property && (property.houses > 0 || property.hotel) && (
             <div
               style={{
-                position: 'absolute',
-                top: '50%',
-                left: '50%',
-                transform: 'translate(-50%, -50%)',
-                width: '100%',
-                display: 'flex',
-                justifyContent: 'center',
-                gap: '2px',
+                position: "absolute",
+                top: "50%",
+                left: "50%",
+                transform: "translate(-50%, -50%)",
+                width: "100%",
+                display: "flex",
+                justifyContent: "center",
+                gap: "2px",
               }}
             >
               {property.hotel ? (
@@ -256,22 +258,22 @@ const Space = ({
       {/* Content Area */}
       <div
         style={{
-          padding: '2px',
-          display: 'flex',
-          flexDirection: 'column',
-          alignItems: 'center',
-          justifyContent: 'center',
-          height: isPropertyType ? '70%' : '100%',
-          width: '100%',
+          padding: "2px",
+          display: "flex",
+          flexDirection: "column",
+          alignItems: "center",
+          justifyContent: "center",
+          height: isPropertyType ? "70%" : "100%",
+          width: "100%",
         }}
       >
         <div
           style={{
-            marginBottom: '1px',
+            marginBottom: "1px",
             lineHeight: 1.1,
-            wordBreak: 'break-word',
-            maxHeight: '60%',
-            overflow: 'hidden',
+            wordBreak: "break-word",
+            maxHeight: "60%",
+            overflow: "hidden",
           }}
         >
           {space.name}
@@ -279,27 +281,27 @@ const Space = ({
 
         {/* Price or Icon for properties */}
         {property &&
-          (property.type === 'property' ||
-            property.type === 'railroad' ||
-            property.type === 'utility') && (
+          (property.type === "property" ||
+            property.type === "railroad" ||
+            property.type === "utility") && (
             <div
               style={{
                 fontSize: `${priceFontSize}px`,
-                marginTop: '1px',
-                fontWeight: 'normal',
+                marginTop: "1px",
+                fontWeight: "normal",
                 flexShrink: 0,
-                display: 'flex',
-                alignItems: 'center',
-                gap: '2px',
+                display: "flex",
+                alignItems: "center",
+                gap: "2px",
               }}
             >
-              £{getCurrentPropertyPrice(useGameStore.getState(), property)}
+              ${getCurrentPropertyPrice(useGameStore.getState(), property)}
               {property.valueMultiplier !== undefined &&
                 property.valueMultiplier !== 1.0 && (
                   <span
                     style={{ fontSize: `${Math.floor(priceFontSize * 0.8)}px` }}
                   >
-                    {property.valueMultiplier > 1 ? '📈' : '📉'}
+                    {property.valueMultiplier > 1 ? "📈" : "📉"}
                   </span>
                 )}
             </div>
@@ -310,7 +312,7 @@ const Space = ({
           <div
             style={{
               fontSize: `${Math.floor(iconSize * 0.6)}px`,
-              marginTop: '1px',
+              marginTop: "1px",
               flexShrink: 0,
             }}
           >
@@ -327,8 +329,8 @@ export const Board = ({
 }: {
   onPropertyClick?: (property: Property) => void
 }) => {
-  const spaces = useGameStore(s => s.spaces)
-  const jackpot = useGameStore(s => s.jackpot)
+  const spaces = useGameStore((s) => s.spaces)
+  const jackpot = useGameStore((s) => s.jackpot)
   const boardRef = React.useRef<HTMLDivElement>(null)
   const containerRef = React.useRef<HTMLDivElement>(null)
   const [spaceSize, setSpaceSize] = React.useState(getSpaceSize())
@@ -386,15 +388,15 @@ export const Board = ({
       }
 
       // Notify all listeners that board dimensions have changed
-      boardDimensionsListeners.forEach(callback => callback())
+      boardDimensionsListeners.forEach((callback) => callback())
     }
 
     // Initial calculation
     updateSpaceSize()
 
     // Listen for resize
-    window.addEventListener('resize', updateSpaceSize)
-    return () => window.removeEventListener('resize', updateSpaceSize)
+    window.addEventListener("resize", updateSpaceSize)
+    return () => window.removeEventListener("resize", updateSpaceSize)
   }, [])
 
   const boardWidth = BOARD_SIZE * (spaceSize + SPACE_GAP) + BOARD_PADDING * 2
@@ -409,33 +411,33 @@ export const Board = ({
       role="region"
       aria-label="Game board"
       style={{
-        position: 'relative',
-        width: '100%',
-        height: '100%',
-        display: 'flex',
-        alignItems: 'flex-start',
-        justifyContent: 'flex-start',
-        backgroundColor: 'transparent',
-        overflow: 'visible',
+        position: "relative",
+        width: "100%",
+        height: "100%",
+        display: "flex",
+        alignItems: "flex-start",
+        justifyContent: "flex-start",
+        backgroundColor: "transparent",
+        overflow: "visible",
       }}
     >
       {/* Background Text */}
       <div
         style={{
-          position: 'absolute',
-          top: '50%',
-          left: '50%',
-          transform: 'translate(-50%, -50%) rotate(-45deg)',
+          position: "absolute",
+          top: "50%",
+          left: "50%",
+          transform: "translate(-50%, -50%) rotate(-45deg)",
           fontSize: `${Math.floor(spaceSize * 1.5)}px`,
-          fontWeight: '900',
+          fontWeight: "900",
           opacity: 0.05,
-          color: '#2E8B57',
-          letterSpacing: '3px',
-          textShadow: '2px 2px 4px rgba(0,0,0,0.3)',
-          pointerEvents: 'none',
-          userSelect: 'none',
+          color: "#2E8B57",
+          letterSpacing: "3px",
+          textShadow: "2px 2px 4px rgba(0,0,0,0.3)",
+          pointerEvents: "none",
+          userSelect: "none",
           zIndex: 10,
-          whiteSpace: 'nowrap',
+          whiteSpace: "nowrap",
         }}
       >
         LUDOMERCATUS
@@ -445,22 +447,22 @@ export const Board = ({
         ref={boardRef}
         id="game-board"
         style={{
-          position: 'absolute',
+          position: "absolute",
           top: 0,
           left: 0,
           width: boardWidth + 12, // Add border width
           height: boardHeight + 12,
-          backgroundColor: '#E8F5E9',
-          borderRadius: '8px',
-          boxShadow: '0 4px 12px rgba(0, 0, 0, 0.3)',
-          border: '6px solid #2E8B57',
-          boxSizing: 'border-box',
+          backgroundColor: "#E8F5E9",
+          borderRadius: "8px",
+          boxShadow: "0 4px 12px rgba(0, 0, 0, 0.3)",
+          border: "6px solid #2E8B57",
+          boxSizing: "border-box",
           zIndex: 1, // Low z-index - board is behind modals and UserPanel
-          overflow: 'visible', // Allow hover tooltips to overflow
+          overflow: "visible", // Allow hover tooltips to overflow
         }}
       >
         {/* Render spaces */}
-        {spaces.map(space => (
+        {spaces.map((space) => (
           <Space
             key={space.id}
             space={space}
@@ -472,15 +474,15 @@ export const Board = ({
         {/* Center board area - Cover full inner area */}
         <div
           style={{
-            position: 'absolute',
+            position: "absolute",
             top: centerTop,
             left: centerLeft,
             width: centerSize,
             height: centerSize,
-            backgroundColor: '#F0F8F0',
-            borderRadius: '8px',
-            border: '3px solid #2E8B57',
-            boxShadow: 'inset 0 2px 8px rgba(0,0,0,0.1)',
+            backgroundColor: "#F0F8F0",
+            borderRadius: "8px",
+            border: "3px solid #2E8B57",
+            boxShadow: "inset 0 2px 8px rgba(0,0,0,0.1)",
           }}
         >
           <BoardMarketStatus centerSize={centerSize} />
@@ -488,21 +490,21 @@ export const Board = ({
           {/* Jackpot Display - Center between card stacks */}
           <div
             style={{
-              position: 'absolute',
-              top: '65%',
-              left: '50%',
-              transform: 'translate(-50%, -50%)',
-              backgroundColor: 'rgba(255, 215, 0, 0.15)',
-              border: '2px solid #FFD700',
-              borderRadius: '20px',
-              padding: '8px 20px',
-              display: 'flex',
-              alignItems: 'center',
-              gap: '10px',
+              position: "absolute",
+              top: "65%",
+              left: "50%",
+              transform: "translate(-50%, -50%)",
+              backgroundColor: "rgba(255, 215, 0, 0.15)",
+              border: "2px solid #FFD700",
+              borderRadius: "20px",
+              padding: "8px 20px",
+              display: "flex",
+              alignItems: "center",
+              gap: "10px",
               zIndex: 5,
-              boxShadow: '0 2px 10px rgba(255, 215, 0, 0.3)',
-              pointerEvents: 'none',
-              whiteSpace: 'nowrap',
+              boxShadow: "0 2px 10px rgba(255, 215, 0, 0.3)",
+              pointerEvents: "none",
+              whiteSpace: "nowrap",
             }}
           >
             <span style={{ fontSize: `${Math.floor(centerSize * 0.04)}px` }}>
@@ -510,23 +512,23 @@ export const Board = ({
             </span>
             <span
               style={{
-                color: '#DAA520',
-                fontWeight: 'bold',
+                color: "#DAA520",
+                fontWeight: "bold",
                 fontSize: `${Math.floor(centerSize * 0.035)}px`,
               }}
             >
-              JACKPOT: £{jackpot}
+              JACKPOT: ${jackpot}
             </span>
           </div>
 
           {/* Card Stacks - Chance and Community Chest with dashed borders */}
           <div
             style={{
-              position: 'absolute',
+              position: "absolute",
               top: 0,
               left: 0,
-              width: '100%',
-              height: '100%',
+              width: "100%",
+              height: "100%",
               zIndex: 2,
             }}
           >
@@ -534,41 +536,41 @@ export const Board = ({
             <motion.div
               initial={{ scale: 0.8, opacity: 0 }}
               animate={{ scale: 1, opacity: 1 }}
-              transition={{ delay: 0.3, type: 'spring', stiffness: 200 }}
+              transition={{ delay: 0.3, type: "spring", stiffness: 200 }}
               style={{
-                position: 'absolute',
-                top: '50%',
-                left: '15%',
-                transform: 'translateY(-50%)',
+                position: "absolute",
+                top: "50%",
+                left: "15%",
+                transform: "translateY(-50%)",
                 width: `${centerSize * 0.18}px`,
                 height: `${centerSize * 0.22}px`,
-                display: 'flex',
-                flexDirection: 'column',
-                alignItems: 'center',
-                justifyContent: 'center',
-                border: '3px dashed #4169E1',
-                borderRadius: '8px',
-                backgroundColor: 'rgba(65, 105, 225, 0.05)',
-                padding: '4px',
+                display: "flex",
+                flexDirection: "column",
+                alignItems: "center",
+                justifyContent: "center",
+                border: "3px dashed #4169E1",
+                borderRadius: "8px",
+                backgroundColor: "rgba(65, 105, 225, 0.05)",
+                padding: "4px",
               }}
             >
               {/* Stack effect - multiple cards */}
-              {[0, 1, 2].map(offset => (
+              {[0, 1, 2].map((offset) => (
                 <div
                   key={offset}
                   style={{
-                    position: 'absolute',
+                    position: "absolute",
                     width: `${centerSize * 0.14}px`,
                     height: `${centerSize * 0.18}px`,
-                    backgroundColor: '#4169E1',
-                    borderRadius: '6px',
-                    border: '2px solid rgba(255,255,255,0.3)',
-                    boxShadow: '0 4px 8px rgba(0,0,0,0.3)',
+                    backgroundColor: "#4169E1",
+                    borderRadius: "6px",
+                    border: "2px solid rgba(255,255,255,0.3)",
+                    boxShadow: "0 4px 8px rgba(0,0,0,0.3)",
                     transform: `translate(${offset * 2}px, ${offset * 2}px) rotate(${offset * -1.5}deg)`,
-                    display: 'flex',
-                    flexDirection: 'column',
-                    alignItems: 'center',
-                    justifyContent: 'center',
+                    display: "flex",
+                    flexDirection: "column",
+                    alignItems: "center",
+                    justifyContent: "center",
                     zIndex: 3 - offset,
                   }}
                 >
@@ -577,7 +579,7 @@ export const Board = ({
                       <div
                         style={{
                           fontSize: `${Math.floor(centerSize * 0.05)}px`,
-                          marginBottom: '4px',
+                          marginBottom: "4px",
                         }}
                       >
                         📦
@@ -585,10 +587,10 @@ export const Board = ({
                       <div
                         style={{
                           fontSize: `${Math.floor(centerSize * 0.015)}px`,
-                          fontWeight: 'bold',
-                          color: '#fff',
-                          textAlign: 'center',
-                          padding: '0 4px',
+                          fontWeight: "bold",
+                          color: "#fff",
+                          textAlign: "center",
+                          padding: "0 4px",
                           lineHeight: 1.1,
                         }}
                       >
@@ -606,41 +608,41 @@ export const Board = ({
             <motion.div
               initial={{ scale: 0.8, opacity: 0 }}
               animate={{ scale: 1, opacity: 1 }}
-              transition={{ delay: 0.5, type: 'spring', stiffness: 200 }}
+              transition={{ delay: 0.5, type: "spring", stiffness: 200 }}
               style={{
-                position: 'absolute',
-                top: '50%',
-                right: '15%',
-                transform: 'translateY(-50%)',
+                position: "absolute",
+                top: "50%",
+                right: "15%",
+                transform: "translateY(-50%)",
                 width: `${centerSize * 0.18}px`,
                 height: `${centerSize * 0.22}px`,
-                display: 'flex',
-                flexDirection: 'column',
-                alignItems: 'center',
-                justifyContent: 'center',
-                border: '3px dashed #FF8C00',
-                borderRadius: '8px',
-                backgroundColor: 'rgba(255, 140, 0, 0.05)',
-                padding: '4px',
+                display: "flex",
+                flexDirection: "column",
+                alignItems: "center",
+                justifyContent: "center",
+                border: "3px dashed #FF8C00",
+                borderRadius: "8px",
+                backgroundColor: "rgba(255, 140, 0, 0.05)",
+                padding: "4px",
               }}
             >
               {/* Stack effect - multiple cards */}
-              {[0, 1, 2].map(offset => (
+              {[0, 1, 2].map((offset) => (
                 <div
                   key={offset}
                   style={{
-                    position: 'absolute',
+                    position: "absolute",
                     width: `${centerSize * 0.14}px`,
                     height: `${centerSize * 0.18}px`,
-                    backgroundColor: '#FF8C00',
-                    borderRadius: '6px',
-                    border: '2px solid rgba(255,255,255,0.3)',
-                    boxShadow: '0 4px 8px rgba(0,0,0,0.3)',
+                    backgroundColor: "#FF8C00",
+                    borderRadius: "6px",
+                    border: "2px solid rgba(255,255,255,0.3)",
+                    boxShadow: "0 4px 8px rgba(0,0,0,0.3)",
                     transform: `translate(${offset * 2}px, ${offset * 2}px) rotate(${offset * 1.5}deg)`,
-                    display: 'flex',
-                    flexDirection: 'column',
-                    alignItems: 'center',
-                    justifyContent: 'center',
+                    display: "flex",
+                    flexDirection: "column",
+                    alignItems: "center",
+                    justifyContent: "center",
                     zIndex: 3 - offset,
                   }}
                 >
@@ -649,8 +651,8 @@ export const Board = ({
                       <div
                         style={{
                           fontSize: `${Math.floor(centerSize * 0.06)}px`,
-                          color: '#fff',
-                          fontWeight: 'bold',
+                          color: "#fff",
+                          fontWeight: "bold",
                         }}
                       >
                         ?
@@ -658,9 +660,9 @@ export const Board = ({
                       <div
                         style={{
                           fontSize: `${Math.floor(centerSize * 0.018)}px`,
-                          fontWeight: 'bold',
-                          color: '#fff',
-                          marginTop: '2px',
+                          fontWeight: "bold",
+                          color: "#fff",
+                          marginTop: "2px",
                         }}
                       >
                         CHANCE

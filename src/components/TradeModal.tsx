@@ -1,124 +1,124 @@
-import React from "react";
-import { motion, AnimatePresence } from "framer-motion";
-import { useGameStore } from "../store/gameStore";
+import React from "react"
+import { motion, AnimatePresence } from "framer-motion"
+import { useGameStore } from "../store/gameStore"
 import type {
   TradeState,
   Player,
   Space,
   Property,
   TradeOffer,
-} from "../types/game";
+} from "../types/game"
 
 export const TradeModal: React.FC = () => {
-  const trade = useGameStore((s) => s.trade);
-  const players = useGameStore((s) => s.players);
-  const spaces = useGameStore((s) => s.spaces);
-  const clientId = useGameStore((s) => s.clientId);
-  const updateTradeOffer = useGameStore((s) => s.updateTradeOffer);
-  const proposeTrade = useGameStore((s) => s.proposeTrade);
-  const acceptTrade = useGameStore((s) => s.acceptTrade);
-  const rejectTrade = useGameStore((s) => s.rejectTrade);
-  const cancelTrade = useGameStore((s) => s.cancelTrade);
-  const getPlayerProperties = useGameStore((s) => s.getPlayerProperties);
+  const trade = useGameStore((s) => s.trade)
+  const players = useGameStore((s) => s.players)
+  const spaces = useGameStore((s) => s.spaces)
+  const clientId = useGameStore((s) => s.clientId)
+  const updateTradeOffer = useGameStore((s) => s.updateTradeOffer)
+  const proposeTrade = useGameStore((s) => s.proposeTrade)
+  const acceptTrade = useGameStore((s) => s.acceptTrade)
+  const rejectTrade = useGameStore((s) => s.rejectTrade)
+  const cancelTrade = useGameStore((s) => s.cancelTrade)
+  const getPlayerProperties = useGameStore((s) => s.getPlayerProperties)
 
   // Use ref to measure actual modal size and center properly
-  const modalRef = React.useRef<HTMLDivElement>(null);
-  const [position, setPosition] = React.useState({ x: 0, y: 0 });
+  const modalRef = React.useRef<HTMLDivElement>(null)
+  const [position, setPosition] = React.useState({ x: 0, y: 0 })
 
   React.useEffect(() => {
     const updatePosition = () => {
       if (modalRef.current) {
         requestAnimationFrame(() => {
           if (modalRef.current) {
-            const rect = modalRef.current.getBoundingClientRect();
-            const isMobile = window.innerWidth < 768;
+            const rect = modalRef.current.getBoundingClientRect()
+            const isMobile = window.innerWidth < 768
 
             if (isMobile) {
               // Center on mobile
-              const modalX = (window.innerWidth - rect.width) / 2;
-              const modalY = (window.innerHeight - rect.height) / 2;
-              setPosition({ x: Math.max(8, modalX), y: Math.max(8, modalY) });
+              const modalX = (window.innerWidth - rect.width) / 2
+              const modalY = (window.innerHeight - rect.height) / 2
+              setPosition({ x: Math.max(8, modalX), y: Math.max(8, modalY) })
             } else {
               // Position on the right side for desktop
-              const modalAreaWidth = 320;
-              const modalAreaTop = 12;
-              const rightMargin = 12;
-              const modalX = window.innerWidth - modalAreaWidth - rightMargin;
-              const modalY = modalAreaTop;
-              const maxY = window.innerHeight - rect.height - 20;
-              const adjustedY = Math.min(modalY, maxY);
-              setPosition({ x: modalX, y: adjustedY });
+              const modalAreaWidth = 320
+              const modalAreaTop = 12
+              const rightMargin = 12
+              const modalX = window.innerWidth - modalAreaWidth - rightMargin
+              const modalY = modalAreaTop
+              const maxY = window.innerHeight - rect.height - 20
+              const adjustedY = Math.min(modalY, maxY)
+              setPosition({ x: modalX, y: adjustedY })
             }
           }
-        });
+        })
       }
-    };
+    }
 
     // Update position after render and on resize - use multiple attempts to catch different render phases
-    const timer1 = setTimeout(updatePosition, 0);
-    const timer2 = setTimeout(updatePosition, 50);
-    const timer3 = setTimeout(updatePosition, 200);
-    window.addEventListener("resize", updatePosition);
+    const timer1 = setTimeout(updatePosition, 0)
+    const timer2 = setTimeout(updatePosition, 50)
+    const timer3 = setTimeout(updatePosition, 200)
+    window.addEventListener("resize", updatePosition)
     return () => {
-      clearTimeout(timer1);
-      clearTimeout(timer2);
-      clearTimeout(timer3);
-      window.removeEventListener("resize", updatePosition);
-    };
-  }, []);
+      clearTimeout(timer1)
+      clearTimeout(timer2)
+      clearTimeout(timer3)
+      window.removeEventListener("resize", updatePosition)
+    }
+  }, [])
 
   const myPlayerIndex = React.useMemo(() => {
-    return players.findIndex((p) => p.clientId === clientId);
-  }, [players, clientId]);
+    return players.findIndex((p) => p.clientId === clientId)
+  }, [players, clientId])
 
-  if (!trade) return null;
+  if (!trade) return null
 
-  const { offer, status } = trade;
+  const { offer, status } = trade
 
-  const fromPlayer = players.find((p) => p.id === offer.fromPlayer)!;
-  const toPlayer = players.find((p) => p.id === offer.toPlayer)!;
-  const isInitiator = fromPlayer.clientId === clientId;
-  const isReceiver = toPlayer.clientId === clientId;
-  const canMakeCounterOffer = isReceiver && status === "pending";
+  const fromPlayer = players.find((p) => p.id === offer.fromPlayer)!
+  const toPlayer = players.find((p) => p.id === offer.toPlayer)!
+  const isInitiator = fromPlayer.clientId === clientId
+  const isReceiver = toPlayer.clientId === clientId
+  const canMakeCounterOffer = isReceiver && status === "pending"
 
-  const fromPlayerOwnedProps = getPlayerProperties(fromPlayer.id);
-  const toPlayerOwnedProps = getPlayerProperties(toPlayer.id);
+  const fromPlayerOwnedProps = getPlayerProperties(fromPlayer.id)
+  const toPlayerOwnedProps = getPlayerProperties(toPlayer.id)
 
   const handleToggleProperty = (propId: number, side: "from" | "to") => {
-    if (status !== "draft") return;
+    if (status !== "draft") return
 
-    const newOffer = { ...offer };
+    const newOffer = { ...offer }
     if (side === "from") {
       newOffer.propertiesOffered = offer.propertiesOffered.includes(propId)
         ? offer.propertiesOffered.filter((id) => id !== propId)
-        : [...offer.propertiesOffered, propId];
+        : [...offer.propertiesOffered, propId]
     } else {
       newOffer.propertiesRequested = offer.propertiesRequested.includes(propId)
         ? offer.propertiesRequested.filter((id) => id !== propId)
-        : [...offer.propertiesRequested, propId];
+        : [...offer.propertiesRequested, propId]
     }
-    updateTradeOffer(newOffer);
-  };
+    updateTradeOffer(newOffer)
+  }
 
   const handleCashChange = (amount: number, side: "from" | "to") => {
-    if (status !== "draft") return;
-    const newOffer = { ...offer };
+    if (status !== "draft") return
+    const newOffer = { ...offer }
     if (side === "from")
-      newOffer.cashOffered = Math.max(0, Math.min(amount, fromPlayer.cash));
-    else newOffer.cashRequested = Math.max(0, Math.min(amount, toPlayer.cash));
-    updateTradeOffer(newOffer);
-  };
+      newOffer.cashOffered = Math.max(0, Math.min(amount, fromPlayer.cash))
+    else newOffer.cashRequested = Math.max(0, Math.min(amount, toPlayer.cash))
+    updateTradeOffer(newOffer)
+  }
 
   const getPropertyName = (id: number) => {
-    return spaces.find((s) => s.id === id)?.name ?? `Prop #${id}`;
-  };
+    return spaces.find((s) => s.id === id)?.name ?? `Prop #${id}`
+  }
 
   const handlePropose = () => {
     // Safety check for gifting
     const isGift =
       offer.cashRequested === 0 &&
       offer.propertiesRequested.length === 0 &&
-      offer.jailCardsRequested === 0;
+      offer.jailCardsRequested === 0
 
     if (isGift) {
       if (
@@ -126,11 +126,11 @@ export const TradeModal: React.FC = () => {
           "⚠️ You are offering a gift (receiving nothing in return).\n\nAre you sure you want to proceed?",
         )
       ) {
-        return;
+        return
       }
     }
-    proposeTrade(offer);
-  };
+    proposeTrade(offer)
+  }
 
   const handleStartCounterOffer = () => {
     // Initialize counter-offer draft with reversed roles
@@ -143,10 +143,10 @@ export const TradeModal: React.FC = () => {
       cashRequested: offer.cashOffered,
       propertiesRequested: [...offer.propertiesOffered],
       jailCardsRequested: offer.jailCardsOffered,
-    };
+    }
     // Update the trade offer directly, changing status to draft so they can edit it
-    updateTradeOffer(newCounterOffer);
-  };
+    updateTradeOffer(newCounterOffer)
+  }
 
   return (
     <AnimatePresence>
@@ -227,7 +227,7 @@ export const TradeModal: React.FC = () => {
                   {fromPlayer.name} Offers:
                 </div>
                 <div style={{ fontSize: "11px", opacity: 0.7 }}>
-                  Cash: £{(fromPlayer.cash || 0).toLocaleString()}
+                  Cash: ${(fromPlayer.cash || 0).toLocaleString()}
                 </div>
               </div>
 
@@ -335,7 +335,7 @@ export const TradeModal: React.FC = () => {
                   }}
                 >
                   {offer.cashOffered > 0 && (
-                    <p>£{(offer.cashOffered || 0).toLocaleString()}</p>
+                    <p>${(offer.cashOffered || 0).toLocaleString()}</p>
                   )}
                   {offer.propertiesOffered.map((id) => (
                     <p key={id}>• {getPropertyName(id)}</p>
@@ -384,7 +384,7 @@ export const TradeModal: React.FC = () => {
                   {toPlayer.name} Gives:
                 </div>
                 <div style={{ fontSize: "11px", opacity: 0.7 }}>
-                  Cash: £{(toPlayer.cash || 0).toLocaleString()}
+                  Cash: ${(toPlayer.cash || 0).toLocaleString()}
                 </div>
               </div>
 
@@ -494,7 +494,7 @@ export const TradeModal: React.FC = () => {
                 >
                   {offer.cashRequested > 0 && (
                     <p style={{ margin: "2px 0", fontSize: "12px" }}>
-                      £{(offer.cashRequested || 0).toLocaleString()}
+                      ${(offer.cashRequested || 0).toLocaleString()}
                     </p>
                   )}
                   {offer.propertiesRequested.map((id) => (
@@ -657,5 +657,5 @@ export const TradeModal: React.FC = () => {
         </div>
       </motion.div>
     </AnimatePresence>
-  );
-};
+  )
+}

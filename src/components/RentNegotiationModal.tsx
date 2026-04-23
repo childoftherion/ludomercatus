@@ -1,19 +1,19 @@
-import React, { useRef, useState, useEffect } from 'react'
-import { motion, AnimatePresence } from 'framer-motion'
-import { useGameStore } from '../store/gameStore'
-import { getCurrentPropertyPrice } from '../logic/rules/economics'
-import type { Property, Player } from '../types/game'
+import React, { useRef, useState, useEffect } from "react"
+import { motion, AnimatePresence } from "framer-motion"
+import { useGameStore } from "../store/gameStore"
+import { getCurrentPropertyPrice } from "../logic/rules/economics"
+import type { Property, Player } from "../types/game"
 
 export const RentNegotiationModal: React.FC = () => {
-  const pendingRentNegotiation = useGameStore(s => s.pendingRentNegotiation)
-  const activeEconomicEvents = useGameStore(s => s.activeEconomicEvents)
-  const players = useGameStore(s => s.players)
-  const spaces = useGameStore(s => s.spaces)
-  const clientId = useGameStore(s => s.clientId)
-  const settings = useGameStore(s => s.settings)
+  const pendingRentNegotiation = useGameStore((s) => s.pendingRentNegotiation)
+  const activeEconomicEvents = useGameStore((s) => s.activeEconomicEvents)
+  const players = useGameStore((s) => s.players)
+  const spaces = useGameStore((s) => s.spaces)
+  const clientId = useGameStore((s) => s.clientId)
+  const settings = useGameStore((s) => s.settings)
 
   const myPlayerIndex = React.useMemo(() => {
-    return players.findIndex(p => p.clientId === clientId)
+    return players.findIndex((p) => p.clientId === clientId)
   }, [players, clientId])
 
   const [partialPayment, setPartialPayment] = React.useState(0)
@@ -61,12 +61,12 @@ export const RentNegotiationModal: React.FC = () => {
     const timer1 = setTimeout(updatePosition, 0)
     const timer2 = setTimeout(updatePosition, 50)
     const timer3 = setTimeout(updatePosition, 200)
-    window.addEventListener('resize', updatePosition)
+    window.addEventListener("resize", updatePosition)
     return () => {
       clearTimeout(timer1)
       clearTimeout(timer2)
       clearTimeout(timer3)
-      window.removeEventListener('resize', updatePosition)
+      window.removeEventListener("resize", updatePosition)
     }
   }, [])
 
@@ -83,7 +83,7 @@ export const RentNegotiationModal: React.FC = () => {
   } = pendingRentNegotiation
   const debtor = players[debtorIndex]
   const creditor = players[creditorIndex]
-  const property = spaces.find(s => s.id === propertyId) as Property
+  const property = spaces.find((s) => s.id === propertyId) as Property
 
   if (!debtor || !creditor || !property) return null
 
@@ -95,10 +95,10 @@ export const RentNegotiationModal: React.FC = () => {
 
   const debtorProperties = spaces
     .filter(
-      s =>
-        s.type === 'property' || s.type === 'railroad' || s.type === 'utility',
+      (s) =>
+        s.type === "property" || s.type === "railroad" || s.type === "utility",
     )
-    .filter(s => (s as Property).owner === debtor.id) as Property[]
+    .filter((s) => (s as Property).owner === debtor.id) as Property[]
 
   const remainingDebt = Math.round(rentAmount - partialPayment)
 
@@ -140,43 +140,43 @@ export const RentNegotiationModal: React.FC = () => {
         exit={{ opacity: 0, scale: 0.9 }}
         transition={{ duration: 0.2 }}
         style={{
-          position: 'fixed',
+          position: "fixed",
           left: `${position.x}px`,
           top: `${position.y}px`,
-          width: window.innerWidth < 768 ? 'calc(100% - 16px)' : '320px',
-          maxWidth: '440px',
-          maxHeight: 'calc(100vh - 24px)',
-          overflowX: 'hidden',
-          overflowY: 'auto',
-          backgroundColor: 'rgba(15, 15, 20, 0.98)',
-          border: '2px solid #ef4444',
-          boxShadow: '0 0 40px rgba(239, 68, 68, 0.3)',
-          borderRadius: '16px',
+          width: window.innerWidth < 768 ? "calc(100% - 16px)" : "320px",
+          maxWidth: "440px",
+          maxHeight: "calc(100vh - 24px)",
+          overflowX: "hidden",
+          overflowY: "auto",
+          backgroundColor: "rgba(15, 15, 20, 0.98)",
+          border: "2px solid #ef4444",
+          boxShadow: "0 0 40px rgba(239, 68, 68, 0.3)",
+          borderRadius: "16px",
           zIndex: 500,
         }}
       >
-        <div style={{ padding: '20px' }}>
+        <div style={{ padding: "20px" }}>
           {/* Header */}
-          <div style={{ textAlign: 'center', marginBottom: '16px' }}>
+          <div style={{ textAlign: "center", marginBottom: "16px" }}>
             <div
               style={{
-                fontSize: '12px',
-                color: '#ef4444',
-                textTransform: 'uppercase',
-                letterSpacing: '1px',
-                marginBottom: '6px',
+                fontSize: "12px",
+                color: "#ef4444",
+                textTransform: "uppercase",
+                letterSpacing: "1px",
+                marginBottom: "6px",
               }}
             >
               💰 Rent Negotiation
             </div>
             <h2
               style={{
-                fontSize: '20px',
-                color: '#fff',
+                fontSize: "20px",
+                color: "#fff",
                 margin: 0,
               }}
             >
-              {status === 'creditor_decision'
+              {status === "creditor_decision"
                 ? `${creditor.name}'s Turn to Decide`
                 : `${debtor.name}'s Turn to Respond`}
             </h2>
@@ -185,75 +185,75 @@ export const RentNegotiationModal: React.FC = () => {
           {/* Debt Summary */}
           <div
             style={{
-              backgroundColor: 'rgba(239, 68, 68, 0.1)',
-              padding: '16px',
-              borderRadius: '8px',
-              marginBottom: '20px',
-              border: '1px solid rgba(239, 68, 68, 0.3)',
+              backgroundColor: "rgba(239, 68, 68, 0.1)",
+              padding: "16px",
+              borderRadius: "8px",
+              marginBottom: "20px",
+              border: "1px solid rgba(239, 68, 68, 0.3)",
             }}
           >
             <div
               style={{
-                display: 'flex',
-                justifyContent: 'space-between',
-                marginBottom: '8px',
+                display: "flex",
+                justifyContent: "space-between",
+                marginBottom: "8px",
               }}
             >
-              <span style={{ color: '#aaa' }}>Property:</span>
-              <span style={{ color: '#fff', fontWeight: 'bold' }}>
+              <span style={{ color: "#aaa" }}>Property:</span>
+              <span style={{ color: "#fff", fontWeight: "bold" }}>
                 {property.name}
               </span>
             </div>
             <div
               style={{
-                display: 'flex',
-                justifyContent: 'space-between',
-                marginBottom: '8px',
+                display: "flex",
+                justifyContent: "space-between",
+                marginBottom: "8px",
               }}
             >
-              <span style={{ color: '#aaa' }}>Rent Owed:</span>
-              <span style={{ color: '#ef4444', fontWeight: 'bold' }}>
-                £{rentAmount}
+              <span style={{ color: "#aaa" }}>Rent Owed:</span>
+              <span style={{ color: "#ef4444", fontWeight: "bold" }}>
+                ${rentAmount}
               </span>
             </div>
             <div
               style={{
-                display: 'flex',
-                justifyContent: 'space-between',
-                marginBottom: '8px',
+                display: "flex",
+                justifyContent: "space-between",
+                marginBottom: "8px",
               }}
             >
-              <span style={{ color: '#aaa' }}>{debtor.name}'s Cash:</span>
-              <span style={{ color: '#fbbf24', fontWeight: 'bold' }}>
-                £{debtorCanAfford}
+              <span style={{ color: "#aaa" }}>{debtor.name}'s Cash:</span>
+              <span style={{ color: "#fbbf24", fontWeight: "bold" }}>
+                ${debtorCanAfford}
               </span>
             </div>
-            <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-              <span style={{ color: '#aaa' }}>Shortfall:</span>
-              <span style={{ color: '#ef4444', fontWeight: 'bold' }}>
-                £{rentAmount - debtorCanAfford}
+            <div style={{ display: "flex", justifyContent: "space-between" }}>
+              <span style={{ color: "#aaa" }}>Shortfall:</span>
+              <span style={{ color: "#ef4444", fontWeight: "bold" }}>
+                ${rentAmount - debtorCanAfford}
               </span>
             </div>
           </div>
 
           {/* Creditor Section */}
-          {status === 'creditor_decision' && (
+          {status === "creditor_decision" && (
             <div
               style={{
-                backgroundColor: 'rgba(34, 197, 94, 0.1)',
-                padding: '16px',
-                borderRadius: '8px',
-                marginBottom: '20px',
-                border: '1px solid rgba(34, 197, 94, 0.3)',
+                backgroundColor: "rgba(34, 197, 94, 0.1)",
+                padding: "16px",
+                borderRadius: "8px",
+                marginBottom: "20px",
+                border: "1px solid rgba(34, 197, 94, 0.3)",
               }}
             >
               <h3
                 style={{
-                  color: '#22c55e',
-                  margin: '0 0 12px 0',
-                  fontSize: '14px',
-                  textTransform: 'uppercase',
-                  letterSpacing: '1px',
+                  color: "#22c55e",
+                  margin: "0 0 12px 0",
+                  fontSize: "14px",
+                  textTransform: "uppercase",
+                  letterSpacing: "1px",
                 }}
               >
                 {creditor.name}'s Decision
@@ -261,10 +261,10 @@ export const RentNegotiationModal: React.FC = () => {
 
               <div
                 style={{
-                  display: 'flex',
-                  gap: '10px',
-                  flexWrap: 'wrap',
-                  marginBottom: '16px',
+                  display: "flex",
+                  gap: "10px",
+                  flexWrap: "wrap",
+                  marginBottom: "16px",
                 }}
               >
                 <button
@@ -272,14 +272,14 @@ export const RentNegotiationModal: React.FC = () => {
                   disabled={!isCreditor}
                   style={{
                     flex: 1,
-                    padding: '10px 16px',
-                    backgroundColor: 'rgba(34, 197, 94, 0.2)',
-                    border: '1px solid #22c55e',
-                    borderRadius: '8px',
-                    color: '#22c55e',
-                    cursor: isCreditor ? 'pointer' : 'not-allowed',
-                    fontSize: '13px',
-                    transition: 'all 0.2s',
+                    padding: "10px 16px",
+                    backgroundColor: "rgba(34, 197, 94, 0.2)",
+                    border: "1px solid #22c55e",
+                    borderRadius: "8px",
+                    color: "#22c55e",
+                    cursor: isCreditor ? "pointer" : "not-allowed",
+                    fontSize: "13px",
+                    transition: "all 0.2s",
                     opacity: isCreditor ? 1 : 0.5,
                   }}
                 >
@@ -291,16 +291,16 @@ export const RentNegotiationModal: React.FC = () => {
                   disabled={!isCreditor}
                   style={{
                     flex: 1,
-                    padding: '10px 16px',
+                    padding: "10px 16px",
                     backgroundColor: showPropertyTransfer
-                      ? 'rgba(251, 191, 36, 0.3)'
-                      : 'rgba(251, 191, 36, 0.2)',
-                    border: '1px solid #fbbf24',
-                    borderRadius: '8px',
-                    color: '#fbbf24',
-                    cursor: isCreditor ? 'pointer' : 'not-allowed',
-                    fontSize: '13px',
-                    transition: 'all 0.2s',
+                      ? "rgba(251, 191, 36, 0.3)"
+                      : "rgba(251, 191, 36, 0.2)",
+                    border: "1px solid #fbbf24",
+                    borderRadius: "8px",
+                    color: "#fbbf24",
+                    cursor: isCreditor ? "pointer" : "not-allowed",
+                    fontSize: "13px",
+                    transition: "all 0.2s",
                     opacity: isCreditor ? 1 : 0.5,
                   }}
                 >
@@ -312,14 +312,14 @@ export const RentNegotiationModal: React.FC = () => {
                   disabled={!isCreditor}
                   style={{
                     flex: 1,
-                    padding: '10px 16px',
-                    backgroundColor: 'rgba(239, 68, 68, 0.2)',
-                    border: '1px solid #ef4444',
-                    borderRadius: '8px',
-                    color: '#ef4444',
-                    cursor: isCreditor ? 'pointer' : 'not-allowed',
-                    fontSize: '13px',
-                    transition: 'all 0.2s',
+                    padding: "10px 16px",
+                    backgroundColor: "rgba(239, 68, 68, 0.2)",
+                    border: "1px solid #ef4444",
+                    borderRadius: "8px",
+                    color: "#ef4444",
+                    cursor: isCreditor ? "pointer" : "not-allowed",
+                    fontSize: "13px",
+                    transition: "all 0.2s",
                     opacity: isCreditor ? 1 : 0.5,
                   }}
                 >
@@ -329,44 +329,47 @@ export const RentNegotiationModal: React.FC = () => {
 
               {/* Property Transfer Selection */}
               {showPropertyTransfer && (
-                <div style={{ marginBottom: '16px' }}>
+                <div style={{ marginBottom: "16px" }}>
                   {debtorProperties.length > 0 ? (
                     <>
                       <label
                         style={{
-                          color: '#aaa',
-                          fontSize: '12px',
-                          display: 'block',
-                          marginBottom: '8px',
+                          color: "#aaa",
+                          fontSize: "12px",
+                          display: "block",
+                          marginBottom: "8px",
                         }}
                       >
                         Select property to seize:
                       </label>
                       <select
-                        value={selectedPropertyId ?? ''}
-                        onChange={e =>
+                        value={selectedPropertyId ?? ""}
+                        onChange={(e) =>
                           setSelectedPropertyId(
                             e.target.value ? Number(e.target.value) : undefined,
                           )
                         }
                         style={{
-                          width: '100%',
-                          padding: '10px',
-                          backgroundColor: 'rgba(0, 0, 0, 0.5)',
-                          border: '1px solid #555',
-                          borderRadius: '6px',
-                          color: '#fff',
-                          fontSize: '14px',
-                          marginBottom: '10px',
+                          width: "100%",
+                          padding: "10px",
+                          backgroundColor: "rgba(0, 0, 0, 0.5)",
+                          border: "1px solid #555",
+                          borderRadius: "6px",
+                          color: "#fff",
+                          fontSize: "14px",
+                          marginBottom: "10px",
                         }}
                       >
                         <option value="">-- Select Property --</option>
-                        {debtorProperties.map(prop => (
+                        {debtorProperties.map((prop) => (
                           <option key={prop.id} value={prop.id}>
-                            {prop.name} (Value: £
+                            {prop.name} (Value: $
                             {prop.mortgaged
                               ? prop.mortgageValue
-                              : getCurrentPropertyPrice(useGameStore.getState(), prop)}
+                              : getCurrentPropertyPrice(
+                                  useGameStore.getState(),
+                                  prop,
+                                )}
                             )
                           </option>
                         ))}
@@ -375,20 +378,20 @@ export const RentNegotiationModal: React.FC = () => {
                         <button
                           onClick={handleDemandProperty}
                           style={{
-                            width: '100%',
-                            padding: '10px',
-                            backgroundColor: '#fbbf24',
-                            border: 'none',
-                            borderRadius: '6px',
-                            color: '#000',
-                            fontWeight: 'bold',
-                            cursor: 'pointer',
+                            width: "100%",
+                            padding: "10px",
+                            backgroundColor: "#fbbf24",
+                            border: "none",
+                            borderRadius: "6px",
+                            color: "#000",
+                            fontWeight: "bold",
+                            cursor: "pointer",
                           }}
                         >
-                          Seize{' '}
+                          Seize{" "}
                           {
                             debtorProperties.find(
-                              p => p.id === selectedPropertyId,
+                              (p) => p.id === selectedPropertyId,
                             )?.name
                           }
                         </button>
@@ -397,9 +400,9 @@ export const RentNegotiationModal: React.FC = () => {
                   ) : (
                     <div
                       style={{
-                        color: '#888',
-                        fontSize: '13px',
-                        fontStyle: 'italic',
+                        color: "#888",
+                        fontSize: "13px",
+                        fontStyle: "italic",
                       }}
                     >
                       {debtor.name} has no properties to seize.
@@ -411,31 +414,31 @@ export const RentNegotiationModal: React.FC = () => {
               {/* IOU Section for Creditor */}
               <div
                 style={{
-                  backgroundColor: 'rgba(59, 130, 246, 0.1)',
-                  padding: '16px',
-                  borderRadius: '8px',
-                  border: '1px solid rgba(59, 130, 246, 0.3)',
+                  backgroundColor: "rgba(59, 130, 246, 0.1)",
+                  padding: "16px",
+                  borderRadius: "8px",
+                  border: "1px solid rgba(59, 130, 246, 0.3)",
                 }}
               >
                 <h4
                   style={{
-                    color: '#3b82f6',
-                    margin: '0 0 12px 0',
-                    fontSize: '13px',
+                    color: "#3b82f6",
+                    margin: "0 0 12px 0",
+                    fontSize: "13px",
                   }}
                 >
                   Offer Payment Plan
                 </h4>
-                <div style={{ marginBottom: '12px' }}>
+                <div style={{ marginBottom: "12px" }}>
                   <label
                     style={{
-                      color: '#aaa',
-                      fontSize: '12px',
-                      display: 'block',
-                      marginBottom: '6px',
+                      color: "#aaa",
+                      fontSize: "12px",
+                      display: "block",
+                      marginBottom: "6px",
                     }}
                   >
-                    Down payment (£0 - £{debtorCanAfford}):
+                    Down payment ($0 - ${debtorCanAfford}):
                   </label>
                   <input
                     type="range"
@@ -443,37 +446,37 @@ export const RentNegotiationModal: React.FC = () => {
                     max={debtorCanAfford}
                     value={partialPayment}
                     disabled={!isCreditor}
-                    onChange={e => setPartialPayment(Number(e.target.value))}
-                    style={{ width: '100%', marginBottom: '4px' }}
+                    onChange={(e) => setPartialPayment(Number(e.target.value))}
+                    style={{ width: "100%", marginBottom: "4px" }}
                   />
                   <div
                     style={{
-                      display: 'flex',
-                      justifyContent: 'space-between',
-                      fontSize: '13px',
+                      display: "flex",
+                      justifyContent: "space-between",
+                      fontSize: "13px",
                     }}
                   >
-                    <span style={{ color: '#22c55e' }}>
-                      Cash: £{partialPayment}
+                    <span style={{ color: "#22c55e" }}>
+                      Cash: ${partialPayment}
                     </span>
-                    <span style={{ color: '#ef4444' }}>
-                      Debt: £{remainingDebt}
+                    <span style={{ color: "#ef4444" }}>
+                      Debt: ${remainingDebt}
                     </span>
                   </div>
                 </div>
                 <div
                   style={{
-                    backgroundColor: 'rgba(0, 0, 0, 0.3)',
-                    padding: '10px',
-                    borderRadius: '6px',
-                    marginBottom: '12px',
-                    fontSize: '12px',
-                    color: '#ccc',
+                    backgroundColor: "rgba(0, 0, 0, 0.3)",
+                    padding: "10px",
+                    borderRadius: "6px",
+                    marginBottom: "12px",
+                    fontSize: "12px",
+                    color: "#ccc",
                   }}
                 >
                   <div>Interest: {interestPercent}% per turn</div>
-                  <div style={{ color: '#fbbf24' }}>
-                    Due next turn: £
+                  <div style={{ color: "#fbbf24" }}>
+                    Due next turn: $
                     {Math.ceil(remainingDebt * (1 + iouInterestRate))}
                   </div>
                 </div>
@@ -481,14 +484,14 @@ export const RentNegotiationModal: React.FC = () => {
                   onClick={handleOfferPaymentPlan}
                   disabled={!isCreditor}
                   style={{
-                    width: '100%',
-                    padding: '12px',
-                    backgroundColor: '#3b82f6',
-                    border: 'none',
-                    borderRadius: '8px',
-                    color: '#fff',
-                    fontWeight: 'bold',
-                    cursor: isCreditor ? 'pointer' : 'not-allowed',
+                    width: "100%",
+                    padding: "12px",
+                    backgroundColor: "#3b82f6",
+                    border: "none",
+                    borderRadius: "8px",
+                    color: "#fff",
+                    fontWeight: "bold",
+                    cursor: isCreditor ? "pointer" : "not-allowed",
                   }}
                 >
                   Offer Plan
@@ -498,22 +501,22 @@ export const RentNegotiationModal: React.FC = () => {
           )}
 
           {/* Debtor Section (Accept/Reject) */}
-          {status === 'debtor_decision' && proposedIOU && (
+          {status === "debtor_decision" && proposedIOU && (
             <div
               style={{
-                backgroundColor: 'rgba(59, 130, 246, 0.1)',
-                padding: '16px',
-                borderRadius: '8px',
-                border: '1px solid rgba(59, 130, 246, 0.3)',
+                backgroundColor: "rgba(59, 130, 246, 0.1)",
+                padding: "16px",
+                borderRadius: "8px",
+                border: "1px solid rgba(59, 130, 246, 0.3)",
               }}
             >
               <h3
                 style={{
-                  color: '#3b82f6',
-                  margin: '0 0 12px 0',
-                  fontSize: '14px',
-                  textTransform: 'uppercase',
-                  letterSpacing: '1px',
+                  color: "#3b82f6",
+                  margin: "0 0 12px 0",
+                  fontSize: "14px",
+                  textTransform: "uppercase",
+                  letterSpacing: "1px",
                 }}
               >
                 {debtor.name}'s Response
@@ -521,53 +524,53 @@ export const RentNegotiationModal: React.FC = () => {
 
               <div
                 style={{
-                  backgroundColor: 'rgba(0, 0, 0, 0.3)',
-                  padding: '12px',
-                  borderRadius: '6px',
-                  marginBottom: '16px',
-                  fontSize: '13px',
-                  color: '#ccc',
-                  border: '1px solid rgba(59, 130, 246, 0.2)',
+                  backgroundColor: "rgba(0, 0, 0, 0.3)",
+                  padding: "12px",
+                  borderRadius: "6px",
+                  marginBottom: "16px",
+                  fontSize: "13px",
+                  color: "#ccc",
+                  border: "1px solid rgba(59, 130, 246, 0.2)",
                 }}
               >
                 <div
                   style={{
-                    fontWeight: 'bold',
-                    color: '#3b82f6',
-                    marginBottom: '8px',
+                    fontWeight: "bold",
+                    color: "#3b82f6",
+                    marginBottom: "8px",
                   }}
                 >
                   PROPOSED TERMS
                 </div>
                 <div
                   style={{
-                    display: 'flex',
-                    justifyContent: 'space-between',
-                    marginBottom: '4px',
+                    display: "flex",
+                    justifyContent: "space-between",
+                    marginBottom: "4px",
                   }}
                 >
                   <span>Down Payment:</span>
-                  <span style={{ color: '#22c55e' }}>
-                    £{proposedIOU.partialPayment}
+                  <span style={{ color: "#22c55e" }}>
+                    ${proposedIOU.partialPayment}
                   </span>
                 </div>
                 <div
                   style={{
-                    display: 'flex',
-                    justifyContent: 'space-between',
-                    marginBottom: '4px',
+                    display: "flex",
+                    justifyContent: "space-between",
+                    marginBottom: "4px",
                   }}
                 >
                   <span>IOU Principal:</span>
-                  <span style={{ color: '#ef4444' }}>
-                    £{rentAmount - proposedIOU.partialPayment}
+                  <span style={{ color: "#ef4444" }}>
+                    ${rentAmount - proposedIOU.partialPayment}
                   </span>
                 </div>
                 <div
                   style={{
-                    display: 'flex',
-                    justifyContent: 'space-between',
-                    marginBottom: '4px',
+                    display: "flex",
+                    justifyContent: "space-between",
+                    marginBottom: "4px",
                   }}
                 >
                   <span>Interest Rate:</span>
@@ -577,16 +580,16 @@ export const RentNegotiationModal: React.FC = () => {
                 </div>
                 <div
                   style={{
-                    display: 'flex',
-                    justifyContent: 'space-between',
-                    borderTop: '1px solid #333',
-                    marginTop: '8px',
-                    paddingTop: '8px',
+                    display: "flex",
+                    justifyContent: "space-between",
+                    borderTop: "1px solid #333",
+                    marginTop: "8px",
+                    paddingTop: "8px",
                   }}
                 >
                   <span>Total due next turn:</span>
-                  <span style={{ color: '#fbbf24' }}>
-                    £
+                  <span style={{ color: "#fbbf24" }}>
+                    $
                     {Math.ceil(
                       (rentAmount - proposedIOU.partialPayment) *
                         (1 + proposedIOU.interestRate),
@@ -595,19 +598,19 @@ export const RentNegotiationModal: React.FC = () => {
                 </div>
               </div>
 
-              <div style={{ display: 'flex', gap: '10px' }}>
+              <div style={{ display: "flex", gap: "10px" }}>
                 <button
                   onClick={handleAcceptPaymentPlan}
                   disabled={!isDebtor}
                   style={{
                     flex: 1,
-                    padding: '12px',
-                    backgroundColor: '#22c55e',
-                    border: 'none',
-                    borderRadius: '8px',
-                    color: '#fff',
-                    fontWeight: 'bold',
-                    cursor: isDebtor ? 'pointer' : 'not-allowed',
+                    padding: "12px",
+                    backgroundColor: "#22c55e",
+                    border: "none",
+                    borderRadius: "8px",
+                    color: "#fff",
+                    fontWeight: "bold",
+                    cursor: isDebtor ? "pointer" : "not-allowed",
                   }}
                 >
                   Accept
@@ -617,13 +620,13 @@ export const RentNegotiationModal: React.FC = () => {
                   disabled={!isDebtor}
                   style={{
                     flex: 1,
-                    padding: '12px',
-                    backgroundColor: '#ef4444',
-                    border: 'none',
-                    borderRadius: '8px',
-                    color: '#fff',
-                    fontWeight: 'bold',
-                    cursor: isDebtor ? 'pointer' : 'not-allowed',
+                    padding: "12px",
+                    backgroundColor: "#ef4444",
+                    border: "none",
+                    borderRadius: "8px",
+                    color: "#fff",
+                    fontWeight: "bold",
+                    cursor: isDebtor ? "pointer" : "not-allowed",
                   }}
                 >
                   Reject
@@ -633,19 +636,19 @@ export const RentNegotiationModal: React.FC = () => {
           )}
 
           {/* Waiting Message */}
-          {((status === 'creditor_decision' && !isCreditor) ||
-            (status === 'debtor_decision' && !isDebtor)) && (
+          {((status === "creditor_decision" && !isCreditor) ||
+            (status === "debtor_decision" && !isDebtor)) && (
             <div
               style={{
-                textAlign: 'center',
-                marginTop: '12px',
-                color: '#888',
-                fontSize: '12px',
-                fontStyle: 'italic',
+                textAlign: "center",
+                marginTop: "12px",
+                color: "#888",
+                fontSize: "12px",
+                fontStyle: "italic",
               }}
             >
-              Waiting for{' '}
-              {status === 'creditor_decision' ? creditor.name : debtor.name} to
+              Waiting for{" "}
+              {status === "creditor_decision" ? creditor.name : debtor.name} to
               decide...
             </div>
           )}

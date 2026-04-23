@@ -1,4 +1,3 @@
-// Authored by childoftherion
 import indexHtml from "./index.html"
 import { GameManager } from "./src/server/GameManager"
 
