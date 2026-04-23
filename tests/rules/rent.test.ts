@@ -1,5 +1,9 @@
 import { describe, it, expect } from "bun:test";
-import { calculateRent } from "../../src/logic/rules/rent";
+import {
+  calculateRent,
+  calculateUnownedUtilityLandingFee,
+  countUtilitySpacesOnBoard,
+} from "../../src/logic/rules/rent";
 import type { GameState, Property } from "../../src/types/game";
 
 // Helper to build a minimal GameState for calculateRent tests.
@@ -325,6 +329,162 @@ describe("rent rules (core Monopoly logic)", () => {
     // With only one utility, multiplier should be 4
     water.owner = undefined as any;
     expect(calculateRent(state, electric, diceTotal)).toBe(28);
+  });
+
+  it("uses 10x dice only when the owner holds every utility on the board", () => {
+    const ownerIndex = 0;
+    const makeUtility = (id: number, name: string): Property => ({
+      id,
+      name,
+      type: "utility",
+      position: id,
+      price: 150,
+      baseRent: 0,
+      rents: [],
+      buildingCost: undefined,
+      mortgageValue: 75,
+      owner: ownerIndex,
+      houses: 0,
+      hotel: false,
+      mortgaged: false,
+      colorGroup: null,
+      isInsured: false,
+      insurancePaidUntilRound: 0,
+      valueMultiplier: 1.0,
+    });
+
+    const u1 = makeUtility(10, "U1");
+    const u2 = makeUtility(11, "U2");
+    const u3 = { ...makeUtility(12, "U3"), owner: undefined } as Property;
+
+    const state = makeState({
+      players: [
+        {
+          id: ownerIndex,
+          name: "P0",
+          token: "car",
+          cash: 1500,
+          position: 0,
+          properties: [10, 11],
+          inJail: false,
+          jailTurns: 0,
+          jailFreeCards: 0,
+          bankrupt: false,
+          color: "#fff",
+          isAI: false,
+          aiDifficulty: null,
+          clientId: null,
+          lastTradeTurn: -10,
+          tradeHistory: null,
+          bankLoans: [],
+          totalDebt: 0,
+          iousReceivable: [],
+          iousPayable: [],
+          inChapter11: false,
+          chapter11TurnsRemaining: 0,
+          chapter11DebtTarget: 0,
+          isConnected: true,
+          previousClientId: null,
+        },
+      ],
+      spaces: [u1, u2, u3],
+    });
+
+    expect(countUtilitySpacesOnBoard(state)).toBe(3);
+    // Owns 2 of 3 → 4x
+    expect(calculateRent(state, u1, 5)).toBe(20);
+    // Own all 3 → 10x
+    state.players[0]!.properties = [10, 11, 12];
+    u3.owner = ownerIndex;
+    expect(calculateRent(state, u1, 5)).toBe(50);
+  });
+
+  it("does not produce NaN when utilityMultiplierOverride is undefined", () => {
+    const ownerIndex = 0;
+    const utility: Property = {
+      id: 20,
+      name: "Electric",
+      type: "utility",
+      position: 20,
+      price: 150,
+      baseRent: 0,
+      rents: [],
+      buildingCost: undefined,
+      mortgageValue: 75,
+      owner: ownerIndex,
+      houses: 0,
+      hotel: false,
+      mortgaged: false,
+      colorGroup: null,
+      isInsured: false,
+      insurancePaidUntilRound: 0,
+      valueMultiplier: 1.0,
+    };
+    const water: Property = { ...utility, id: 28, name: "Water", position: 28 };
+
+    const state = makeState({
+      players: [
+        {
+          id: ownerIndex,
+          name: "P0",
+          token: "car",
+          cash: 1500,
+          position: 0,
+          properties: [20, 28],
+          inJail: false,
+          jailTurns: 0,
+          jailFreeCards: 0,
+          bankrupt: false,
+          color: "#fff",
+          isAI: false,
+          aiDifficulty: null,
+          clientId: null,
+          lastTradeTurn: -10,
+          tradeHistory: null,
+          bankLoans: [],
+          totalDebt: 0,
+          iousReceivable: [],
+          iousPayable: [],
+          inChapter11: false,
+          chapter11TurnsRemaining: 0,
+          chapter11DebtTarget: 0,
+          isConnected: true,
+          previousClientId: null,
+        },
+      ],
+      spaces: [utility, water],
+      utilityMultiplierOverride: undefined as unknown as null,
+    });
+
+    const r = calculateRent(state, utility, 6);
+    expect(Number.isNaN(r)).toBe(false);
+    expect(r).toBe(60);
+  });
+
+  it("charges unowned utility landing fee at 4x dice (to Jackpot in GameRoom)", () => {
+    const utility: Property = {
+      id: 12,
+      name: "PGE",
+      type: "utility",
+      position: 12,
+      price: 150,
+      baseRent: 0,
+      rents: [],
+      buildingCost: undefined,
+      mortgageValue: 75,
+      owner: undefined,
+      houses: 0,
+      hotel: false,
+      mortgaged: false,
+      colorGroup: null,
+      isInsured: false,
+      insurancePaidUntilRound: 0,
+      valueMultiplier: 1.0,
+    };
+    const state = makeState({
+      spaces: [utility],
+    });
+    expect(calculateUnownedUtilityLandingFee(state, 6, utility)).toBe(24);
   });
 
   it("applies economic event modifiers to rent", () => {

@@ -61,7 +61,10 @@ import {
 import { DEFAULT_GAME_SETTINGS } from "../types/game"
 import { boardSpaces } from "../data/board"
 import { createChanceDeck, createCommunityChestDeck } from "../data/cards"
-import { calculateRent } from "../logic/rules/rent"
+import {
+  calculateRent,
+  calculateUnownedUtilityLandingFee,
+} from "../logic/rules/rent"
 import { hasMonopoly, getPlayerProperties } from "../logic/rules/monopoly"
 import {
   calculateGoSalary,
@@ -1037,9 +1040,41 @@ export class GameRoom implements GameActions {
       case "utility": {
         const property = space as Property
         if (property.owner === undefined) {
+          if (property.type === "utility") {
+            // Unowned utility: landing fee (4× dice, same modifiers as rent) goes to Jackpot.
+            const rawTotal = this.state.diceRoll?.total
+            const diceTotal: number =
+              rawTotal !== undefined && Number.isFinite(rawTotal) ? rawTotal : 7
+            const fee = calculateUnownedUtilityLandingFee(
+              this.state,
+              diceTotal,
+              property,
+            )
+            const lander = this.state.players[playerIndex]
+            if (fee > 0 && lander && lander.cash > 0) {
+              const paid = Math.min(fee, lander.cash)
+              this.setState({
+                players: this.state.players.map((p, i) =>
+                  i === playerIndex ? { ...p, cash: p.cash - paid } : p,
+                ),
+                jackpot: this.state.jackpot + paid,
+                utilityMultiplierOverride: null,
+              })
+              const shortfall = fee - paid
+              this.addLogEntry(
+                shortfall > 0
+                  ? `${lander.name} paid $${paid} of $${fee} utility fee to Jackpot (unowned ${property.name})`
+                  : `${lander.name} paid $${paid} utility fee to Jackpot (unowned ${property.name})`,
+                "rent",
+                playerIndex,
+              )
+            }
+          }
           this.setState({ phase: "awaiting_buy_decision" })
         } else if (property.owner !== playerIndex) {
-          const diceTotal = this.state.diceRoll?.total ?? 7
+          const rawTotal = this.state.diceRoll?.total
+          const diceTotal: number =
+            rawTotal !== undefined && Number.isFinite(rawTotal) ? rawTotal : 7
           this.payRent(playerIndex, property.id, diceTotal)
         }
         break
@@ -1407,6 +1442,11 @@ export class GameRoom implements GameActions {
     if (!payer || !property || property.owner === undefined) return
 
     const rent = calculateRent(this.state, property, diceTotal)
+
+    if (!Number.isFinite(rent) || rent < 0) {
+      this.setState({ utilityMultiplierOverride: null })
+      return
+    }
 
     if (rent <= 0) {
       // Clear utility multiplier override even if no rent is paid
@@ -2355,7 +2395,14 @@ export class GameRoom implements GameActions {
   public endTurn() {
     const roll = this.state.diceRoll
     const currentPlayer = this.state.players[this.state.currentPlayerIndex]
-    const isDoubles = roll?.isDoubles && currentPlayer && !currentPlayer.inJail
+    // Bankrupt players must never retain a "doubles" continuation — e.g. after
+    // rent negotiation bankruptcy, the last roll may still be doubles; advancing
+    // must skip to the next active player.
+    const isDoubles =
+      roll?.isDoubles &&
+      currentPlayer &&
+      !currentPlayer.inJail &&
+      !currentPlayer.bankrupt
 
     if (isDoubles && currentPlayer && !currentPlayer.bankrupt) {
       const newConsecutiveDoubles = this.state.consecutiveDoubles

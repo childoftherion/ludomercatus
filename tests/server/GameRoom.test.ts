@@ -3,12 +3,16 @@ import { GameRoom } from "../../src/server/GameRoom";
 import type { Property } from "../../src/types/game";
 
 const setupGame = (room: GameRoom, playerCount: number = 2) => {
-  const names = Array.from({ length: playerCount }, (_, i) => `Player ${i + 1}`);
+  const names = Array.from(
+    { length: playerCount },
+    (_, i) => `Player ${i + 1}`,
+  );
   const tokens = Array.from({ length: playerCount }, (_, i) => `Token${i + 1}`);
   room.initGame(names, tokens);
 };
 
-const getSpace = (room: GameRoom, idx: number) => room.state.spaces[idx] as Property;
+const getSpace = (room: GameRoom, idx: number) =>
+  room.state.spaces[idx] as Property;
 const getPlayer = (room: GameRoom, idx: number) => room.state.players[idx]!;
 
 describe("GameRoom", () => {
@@ -80,6 +84,17 @@ describe("GameRoom", () => {
       room.endTurn();
 
       expect(room.state.currentPlayerIndex).toBe(0);
+    });
+
+    it("advances to next player after bankruptcy when the last roll was doubles", () => {
+      room.state.diceRoll = { die1: 3, die2: 3, total: 6, isDoubles: true };
+      room.state.consecutiveDoubles = 1;
+      room.state.phase = "awaiting_rent_negotiation";
+
+      room.declareBankruptcy(0, 1);
+
+      expect(getPlayer(room, 0).bankrupt).toBe(true);
+      expect(room.state.currentPlayerIndex).toBe(1);
     });
   });
 
@@ -170,7 +185,9 @@ describe("GameRoom", () => {
 
       room.buyProperty(3);
 
-      expect(getPlayer(room, 0).cash).toBe(initialCash - getSpace(room, 3).price);
+      expect(getPlayer(room, 0).cash).toBe(
+        initialCash - getSpace(room, 3).price,
+      );
     });
   });
 
@@ -180,11 +197,11 @@ describe("GameRoom", () => {
       // Give player 0 both brown properties (monopoly)
       room.state = {
         ...room.state,
-        spaces: room.state.spaces.map(s =>
-          (s.id === 1 || s.id === 3) ? { ...s, owner: 0 } as Property : s
+        spaces: room.state.spaces.map((s) =>
+          s.id === 1 || s.id === 3 ? ({ ...s, owner: 0 } as Property) : s,
         ),
         players: room.state.players.map((p, i) =>
-          i === 0 ? { ...p, cash: 10000, properties: [1, 3] } : p
+          i === 0 ? { ...p, cash: 10000, properties: [1, 3] } : p,
         ),
       };
     });
@@ -229,11 +246,11 @@ describe("GameRoom", () => {
       // Give player 0 a property
       room.state = {
         ...room.state,
-        spaces: room.state.spaces.map(s =>
-          s.id === 1 ? { ...s, owner: 0 } as Property : s
+        spaces: room.state.spaces.map((s) =>
+          s.id === 1 ? ({ ...s, owner: 0 } as Property) : s,
         ),
         players: room.state.players.map((p, i) =>
-          i === 0 ? { ...p, cash: 5000, properties: [1] } : p
+          i === 0 ? { ...p, cash: 5000, properties: [1] } : p,
         ),
       };
     });

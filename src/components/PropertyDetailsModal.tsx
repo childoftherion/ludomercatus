@@ -17,10 +17,15 @@ export const PropertyDetailsModal: React.FC<PropertyDetailsModalProps> = ({
 }) => {
   const houseSupply = useGameStore((s) => s.availableHouses)
   const hotelSupply = useGameStore((s) => s.availableHotels)
+  const spaces = useGameStore((s) => s.spaces)
   const enableHousingScarcity = useGameStore(
     (s) => s.settings.enableHousingScarcity,
   )
   const activeEconomicEvents = useGameStore((s) => s.activeEconomicEvents)
+  const utilitySpacesOnBoard = React.useMemo(
+    () => spaces.filter((s) => s.type === "utility").length,
+    [spaces],
+  )
 
   if (!property) return null
 
@@ -277,14 +282,26 @@ export const PropertyDetailsModal: React.FC<PropertyDetailsModalProps> = ({
                   }}
                 >
                   <div>
-                    1 utility owned:{" "}
+                    Fewer than all utilities owned:{" "}
                     {(4 * (property.valueMultiplier ?? 1)).toFixed(1)}× dice
                     roll
                   </div>
                   <div>
-                    2 utilities owned:{" "}
+                    All {utilitySpacesOnBoard || 2} utilities owned:{" "}
                     {(10 * (property.valueMultiplier ?? 1)).toFixed(1)}× dice
                     roll
+                  </div>
+                  <div
+                    style={{
+                      fontSize: "11px",
+                      color: "#666",
+                      marginTop: "4px",
+                    }}
+                  >
+                    Unowned utilities: landing fee (
+                    {(4 * (property.valueMultiplier ?? 1)).toFixed(1)}× dice,
+                    before events) is paid to the Jackpot, then you may purchase
+                    the deed.
                   </div>
                   {property.valueMultiplier !== 1.0 && (
                     <div
