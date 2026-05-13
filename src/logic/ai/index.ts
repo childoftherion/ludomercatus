@@ -418,13 +418,18 @@ export const executeAITurn = (state: GameState, actions: GameActions) => {
     ) {
       // AI almost always accepts a payment plan as it's better than immediate bankruptcy
       // Only reject if the interest rate is absurdly high (e.g. > 50% - not currently possible via UI but for future proofing)
-      if (proposedIOU.interestRate <= 0.5 && actions.acceptPaymentPlan) {
+      const offeredRate = Number(proposedIOU.interestRate)
+      const rate = Number.isFinite(offeredRate) ? offeredRate : 0
+      if (rate <= 0.5 && actions.acceptPaymentPlan) {
         actions.acceptPaymentPlan()
       } else if (actions.rejectPaymentPlan) {
         actions.rejectPaymentPlan()
       }
       return
     }
+
+    // Creditor/debtor is human or no AI branch applied — do not fall through to the phase switch
+    return
   }
 
   // --- Phase 2: Smart Loan Management ---

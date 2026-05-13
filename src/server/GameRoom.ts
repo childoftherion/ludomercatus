@@ -554,12 +554,46 @@ export class GameRoom implements GameActions {
       if (!negotiation || this.state.phase !== "awaiting_rent_negotiation")
         return deny("Not allowed");
       if (action === "createRentIOU") {
-        if (actorIndex !== negotiation.debtorIndex) return deny("Not allowed");
-      } else {
-        if (actorIndex !== negotiation.creditorIndex)
-          return deny("Not allowed");
+        if (actorIndex === negotiation.debtorIndex) return allow(payloadArray);
+        if (isHostClient && this.state.players[negotiation.debtorIndex]?.isAI)
+          return allow(payloadArray);
+        return deny("Not allowed");
       }
-      return allow(payloadArray);
+      if (actorIndex === negotiation.creditorIndex) return allow(payloadArray);
+      if (isHostClient && this.state.players[negotiation.creditorIndex]?.isAI)
+        return allow(payloadArray);
+      return deny("Not allowed");
+    }
+
+    if (
+      action === "offerPaymentPlan" ||
+      action === "acceptPaymentPlan" ||
+      action === "rejectPaymentPlan"
+    ) {
+      const negotiation = this.state.pendingRentNegotiation;
+      if (!negotiation || this.state.phase !== "awaiting_rent_negotiation")
+        return deny("Not allowed");
+
+      if (action === "offerPaymentPlan") {
+        if (negotiation.status !== "creditor_decision")
+          return deny("Not allowed");
+        if (actorIndex === negotiation.creditorIndex) return allow(payloadArray);
+        if (
+          isHostClient &&
+          this.state.players[negotiation.creditorIndex]?.isAI
+        )
+          return allow(payloadArray);
+        return deny("Only the creditor can offer a payment plan");
+      }
+
+      if (action === "acceptPaymentPlan" || action === "rejectPaymentPlan") {
+        if (negotiation.status !== "debtor_decision")
+          return deny("Not allowed");
+        if (actorIndex === negotiation.debtorIndex) return allow(payloadArray);
+        if (isHostClient && this.state.players[negotiation.debtorIndex]?.isAI)
+          return allow(payloadArray);
+        return deny("Only the debtor can respond to the payment plan");
+      }
     }
 
     if (action === "payIOU") {
@@ -569,6 +603,16 @@ export class GameRoom implements GameActions {
       if (this.state.phase === "auction")
         return deny("Cannot pay IOUs during an auction");
       return allow(payloadArray);
+    }
+
+    if (action === "payDebtService") {
+      const debt = this.state.pendingDebtService;
+      if (!debt || this.state.phase !== "awaiting_debt_service")
+        return deny("Not allowed");
+      if (actorIndex === debt.playerIndex) return allow(payloadArray);
+      if (isHostClient && this.state.players[debt.playerIndex]?.isAI)
+        return allow(payloadArray);
+      return deny("Not allowed");
     }
 
     if (action === "enterChapter11" || action === "declineRestructuring") {
@@ -4723,10 +4767,16 @@ export class GameRoom implements GameActions {
   }
 
   public executeAITurn() {
-    const player = this.state.players[this.state.currentPlayerIndex];
-    console.log(
-      `[GameRoom] executeAITurn called for ${player?.name} (index ${this.state.currentPlayerIndex}, phase ${this.state.phase})`,
-    );
+    const phase = this.state.phase;
+    let actorLabel = `${this.state.players[this.state.currentPlayerIndex]?.name} (index ${this.state.currentPlayerIndex})`;
+    if (phase === "awaiting_rent_negotiation" && this.state.pendingRentNegotiation) {
+      const n = this.state.pendingRentNegotiation;
+      const idx =
+        n.status === "creditor_decision" ? n.creditorIndex : n.debtorIndex;
+      const negotiator = this.state.players[idx];
+      actorLabel = `${negotiator?.name} (negotiator index ${idx}, currentPlayer ${this.state.currentPlayerIndex})`;
+    }
+    console.log(`[GameRoom] executeAITurn called for ${actorLabel}, phase ${phase}`);
     executeAITurn(this.state, this);
   }
 

@@ -37,6 +37,7 @@ export const GamePanel: React.FC<GamePanelProps> = ({
   const isMobile = useIsMobile()
   const phase = useGameStore((s) => s.phase)
   const diceRoll = useGameStore((s) => s.diceRoll)
+  const lastDiceRoll = useGameStore((s) => s.lastDiceRoll)
   const currentPlayerIndex = useGameStore((s) => s.currentPlayerIndex)
   const players = useGameStore((s) => s.players)
   const spaces = useGameStore((s) => s.spaces)
@@ -70,6 +71,7 @@ export const GamePanel: React.FC<GamePanelProps> = ({
   )
   const enterChapter11 = useGameStore((s) => s.enterChapter11)
   const declineRestructuring = useGameStore((s) => s.declineRestructuring)
+  const payDebtService = useGameStore((s) => s.payDebtService)
 
   const isMyTurn = currentPlayerIndex === myPlayerIndex
 
@@ -617,6 +619,56 @@ export const GamePanel: React.FC<GamePanelProps> = ({
                       ? "💡 10% is cheaper for you!"
                       : "💡 Flat tax is cheaper for you!"}
                   </p>
+                </div>
+              )}
+
+            {/* Passing GO: pay IOU interest before the space resolves */}
+            {phase === "awaiting_debt_service" &&
+              pendingDebtService &&
+              pendingDebtService.playerIndex === myPlayerIndex && (
+                <div
+                  style={{
+                    backgroundColor: "#333",
+                    padding: cardPadding,
+                    borderRadius: "8px",
+                    border: "2px solid #FFD700",
+                  }}
+                >
+                  <h3 style={{ marginBottom: "8px", color: "#FFD700" }}>
+                    IOU interest due
+                  </h3>
+                  <p
+                    style={{
+                      fontSize: "14px",
+                      marginBottom: "16px",
+                      color: "#ccc",
+                      lineHeight: 1.4,
+                    }}
+                  >
+                    You collected salary passing GO, but you owe{" "}
+                    <strong>${pendingDebtService.totalInterestDue}</strong> in
+                    IOU interest to creditors. Pay now to continue your turn.
+                  </p>
+                  {!currentPlayer.isAI && (
+                    <motion.button
+                      onClick={() => payDebtService()}
+                      whileHover={{ scale: 1.02 }}
+                      whileTap={{ scale: 0.98 }}
+                      style={{
+                        padding: "12px 24px",
+                        fontSize: buttonFontSize,
+                        backgroundColor: "#4CAF50",
+                        color: "#fff",
+                        border: "none",
+                        borderRadius: "8px",
+                        cursor: "pointer",
+                        width: "100%",
+                        fontWeight: "bold",
+                      }}
+                    >
+                      Pay ${pendingDebtService.totalInterestDue} interest
+                    </motion.button>
+                  )}
                 </div>
               )}
 
@@ -1191,48 +1243,53 @@ export const GamePanel: React.FC<GamePanelProps> = ({
                     )}
                 </div>
 
-                {diceRoll &&
-                  !currentPlayer.inJail &&
-                  !currentPlayer.isAI &&
-                  isMyTurn && (
-                    <>
-                      <p
-                        style={{
-                          fontSize: "12px",
-                          color: "#888",
-                          marginBottom: "8px",
-                        }}
-                      >
-                        Your move is complete. You can now end your turn or
-                        manage your properties.
-                      </p>
-                      <motion.button
-                        onClick={handleEndTurn}
-                        whileHover={{ scale: 1.05 }}
-                        whileTap={{ scale: 0.95 }}
-                        style={{
-                          marginTop: "8px",
-                          padding: "10px 24px",
-                          fontSize: "14px",
-                          backgroundColor: diceRoll.isDoubles
-                            ? "#4CAF50"
-                            : "#2196F3",
-                          color: "#fff",
-                          border: "none",
-                          borderRadius: "6px",
-                          cursor: "pointer",
-                          fontWeight: "bold",
-                          width: "100%",
-                          flexShrink: 0,
-                        }}
-                      >
-                        {diceRoll.isDoubles
-                          ? "Roll Again (Doubles!)"
-                          : "End Turn"}
-                      </motion.button>
-                      <ShortcutHints />
-                    </>
-                  )}
+                {(() => {
+                  const rollForTurn = diceRoll ?? lastDiceRoll
+                  return (
+                    rollForTurn &&
+                    !currentPlayer.inJail &&
+                    !currentPlayer.isAI &&
+                    isMyTurn && (
+                      <>
+                        <p
+                          style={{
+                            fontSize: "12px",
+                            color: "#888",
+                            marginBottom: "8px",
+                          }}
+                        >
+                          Your move is complete. You can now end your turn or
+                          manage your properties.
+                        </p>
+                        <motion.button
+                          onClick={handleEndTurn}
+                          whileHover={{ scale: 1.05 }}
+                          whileTap={{ scale: 0.95 }}
+                          style={{
+                            marginTop: "8px",
+                            padding: "10px 24px",
+                            fontSize: "14px",
+                            backgroundColor: rollForTurn.isDoubles
+                              ? "#4CAF50"
+                              : "#2196F3",
+                            color: "#fff",
+                            border: "none",
+                            borderRadius: "6px",
+                            cursor: "pointer",
+                            fontWeight: "bold",
+                            width: "100%",
+                            flexShrink: 0,
+                          }}
+                        >
+                          {rollForTurn.isDoubles
+                            ? "Roll Again (Doubles!)"
+                            : "End Turn"}
+                        </motion.button>
+                        <ShortcutHints />
+                      </>
+                    )
+                  )
+                })()}
               </div>
             )}
           </motion.div>
