@@ -1,8 +1,8 @@
-import indexHtml from "./index.html"
-import { GameManager } from "./src/server/GameManager"
+import indexHtml from "./index.html";
+import { GameManager } from "./src/server/GameManager";
 
-const gameManager = GameManager.getInstance()
-const defaultRoom = gameManager.createRoom("default")
+const gameManager = GameManager.getInstance();
+const defaultRoom = gameManager.createRoom("default");
 
 const server = Bun.serve<{ roomId: string; clientId: string | null }>({
   port: 3000,
@@ -10,18 +10,18 @@ const server = Bun.serve<{ roomId: string; clientId: string | null }>({
     "/": indexHtml,
   },
   fetch(req: Request, server: any) {
-    const url = new URL(req.url)
+    const url = new URL(req.url);
     if (url.pathname === "/favicon.ico") {
-      return new Response(null, { status: 204 })
+      return new Response(null, { status: 204 });
     }
     if (url.pathname === "/ws") {
-      const clientId = url.searchParams.get("clientId")
+      const clientId = url.searchParams.get("clientId");
       if (server.upgrade(req, { data: { roomId: "default", clientId } })) {
-        return
+        return;
       }
-      return new Response("WebSocket upgrade failed", { status: 400 })
+      return new Response("WebSocket upgrade failed", { status: 400 });
     }
-    return new Response("Not found", { status: 404 })
+    return new Response("Not found", { status: 404 });
   },
   websocket: {
     open(ws: any) {
@@ -35,29 +35,78 @@ const server = Bun.serve<{ roomId: string; clientId: string | null }>({
           typeof message === "string"
             ? message
             : new TextDecoder().decode(message),
-        )
+        );
 
         if (data.type === "PING") {
-          ws.send(JSON.stringify({ type: "PONG" }))
-          return
+          ws.send(JSON.stringify({ type: "PONG" }));
+          return;
         }
 
         // Room Management
         if (data.type === "CREATE_ROOM") {
-          const roomId = Math.random().toString(36).substring(7)
-          const mode = data.mode || "single"
-          const room = gameManager.createRoom(roomId, mode)
+          const roomId = Math.random().toString(36).substring(7);
+          const mode = data.mode || "single";
+          const settings = data.settings || {};
+
+          // For single-player, include player data in the create request
+          const playerData = data.playerData; // { names, tokens, isAIFlags, aiDifficulties, clientIds }
+
+          const room = gameManager.createRoom(roomId, mode, settings);
 
           // Setup broadcast for new room
           room.subscribe((state) => {
             server.publish(
               roomId,
               JSON.stringify({ type: "STATE_UPDATE", state }),
-            )
-          })
+            );
+          });
 
-          ws.send(JSON.stringify({ type: "ROOM_CREATED", roomId }))
-          return
+          // For single-player mode, automatically initialize the game
+          if (mode === "single" && playerData) {
+            const { names, tokens, isAIFlags, aiDifficulties, clientIds } =
+              playerData;
+            room.initGame(
+              names,
+              tokens,
+              isAIFlags,
+              aiDifficulties,
+              clientIds,
+              settings,
+            );
+          }
+
+          ws.send(JSON.stringify({ type: "ROOM_CREATED", roomId }));
+          return;
+        }
+
+        if (data.type === "CREATE_SINGLE_PLAYER_GAME") {
+          const roomId = Math.random().toString(36).substring(7);
+          const { playerData, settings } = data;
+          const { names, tokens, isAIFlags, aiDifficulties, clientIds } =
+            playerData;
+
+          const room = gameManager.createRoom(roomId, "single", settings);
+
+          // Setup broadcast for new room
+          room.subscribe((state) => {
+            server.publish(
+              roomId,
+              JSON.stringify({ type: "STATE_UPDATE", state }),
+            );
+          });
+
+          // Initialize the game immediately for single-player
+          room.initGame(
+            names,
+            tokens,
+            isAIFlags,
+            aiDifficulties,
+            clientIds,
+            settings,
+          );
+
+          ws.send(JSON.stringify({ type: "ROOM_CREATED", roomId }));
+          return;
         }
 
         if (data.type === "LIST_ROOMS") {
@@ -66,33 +115,35 @@ const server = Bun.serve<{ roomId: string; clientId: string | null }>({
               type: "ROOM_LIST",
               rooms: gameManager.getRoomList(),
             }),
-          )
-          return
+          );
+          return;
         }
 
         if (data.type === "JOIN_ROOM") {
-          const { roomId } = data
-          const room = gameManager.getRoom(roomId)
+          const { roomId } = data;
+          const room = gameManager.getRoom(roomId);
           if (room) {
-            ws.unsubscribe(ws.data.roomId)
-            ws.data.roomId = roomId
-            ws.subscribe(roomId)
+            ws.unsubscribe(ws.data.roomId);
+            ws.data.roomId = roomId;
+            ws.subscribe(roomId);
 
             // Notify room of reconnection if clientId matches a player
             if (typeof (room as any).handlePlayerReconnect === "function") {
-              ;(room as any).handlePlayerReconnect(ws.data.clientId)
+              (room as any).handlePlayerReconnect(ws.data.clientId);
             }
 
-            ws.send(JSON.stringify({ type: "STATE_UPDATE", state: room.state }))
+            ws.send(
+              JSON.stringify({ type: "STATE_UPDATE", state: room.state }),
+            );
           }
-          return
+          return;
         }
 
         // Game Action
         if (data.type === "ACTION") {
-          gameManager.touchRoom(ws.data.roomId)
-          const { action, payload } = data
-          const room = gameManager.getRoom(ws.data.roomId)
+          gameManager.touchRoom(ws.data.roomId);
+          const { action, payload } = data;
+          const room = gameManager.getRoom(ws.data.roomId);
 
           if (room && typeof (room as any)[action] === "function") {
             const authorization =
@@ -102,7 +153,7 @@ const server = Bun.serve<{ roomId: string; clientId: string | null }>({
                     action,
                     payload,
                   )
-                : { allowed: true, payload }
+                : { allowed: true, payload };
 
             if (!authorization.allowed) {
               ws.send(
@@ -110,33 +161,33 @@ const server = Bun.serve<{ roomId: string; clientId: string | null }>({
                   type: "ERROR",
                   message: authorization.error ?? "Action not allowed",
                 }),
-              )
-              return
+              );
+              return;
             }
 
-            console.log(`[${ws.data.roomId}] Action: ${action}`)
-            ;(room as any)[action](...(authorization.payload ?? payload))
+            console.log(`[${ws.data.roomId}] Action: ${action}`);
+            (room as any)[action](...(authorization.payload ?? payload));
             // State update is handled by subscription
           }
         }
       } catch (e) {
-        console.error("Failed to process message", e)
+        console.error("Failed to process message", e);
       }
     },
     close(ws: any) {
-      ws.unsubscribe(ws.data.roomId)
-      const room = gameManager.getRoom(ws.data.roomId)
+      ws.unsubscribe(ws.data.roomId);
+      const room = gameManager.getRoom(ws.data.roomId);
       if (room && typeof (room as any).handlePlayerDisconnect === "function") {
-        ;(room as any).handlePlayerDisconnect(ws.data.clientId)
+        (room as any).handlePlayerDisconnect(ws.data.clientId);
       }
     },
   },
   development: true,
-})
+});
 
 // Setup broadcast for default room
 defaultRoom.subscribe((state) => {
-  server.publish("default", JSON.stringify({ type: "STATE_UPDATE", state }))
-})
+  server.publish("default", JSON.stringify({ type: "STATE_UPDATE", state }));
+});
 
-console.log("Server running on http://localhost:3000")
+console.log("Server running on http://localhost:3000");

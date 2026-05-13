@@ -5,6 +5,7 @@ import type {
   ColorGroup,
   AIDifficulty,
 } from "../../types/game"
+import { effectiveBuildingTier } from "../../utils/validation"
 import { hasMonopoly } from "../rules/monopoly"
 import { calculateNetWorth, getCurrentPropertyPrice } from "../rules/economics"
 
@@ -25,8 +26,8 @@ export interface GameActions {
   mortgageProperty: (id: number) => void
   sellHouse: (id: number) => void
   sellHotel: (id: number) => void
-  buildHouse: (id: number) => void
-  buildHotel: (id: number) => void
+  buildHouse: (id: number) => boolean
+  buildHotel: (id: number) => boolean
   // Phase 2: Bank Loans
   takeLoan?: (playerIndex: number, amount: number) => void
   repayLoan?: (playerIndex: number, loanId: number, amount: number) => void
@@ -692,14 +693,17 @@ export const executeAITurn = (state: GameState, actions: GameActions) => {
     )
 
     if (buildableProps.length > 0) {
-      // Sort to prioritize cheaper properties first or based on some strategy
-      // To ensure even building, we'll sort by current house count
-      buildableProps.sort((a, b) => a.houses - b.houses)
+      // Sort by Monopoly building tier (hotel = 5) so we never starve a color group
+      buildableProps.sort(
+        (a, b) => effectiveBuildingTier(a) - effectiveBuildingTier(b),
+      )
 
       let actionsTaken = 0
-      // Track virtual house counts to respect even building in a single turn
+      // Track virtual tiers to respect even building in a single turn (must match server rules)
       const virtualHouses = new Map<number, number>()
-      buildableProps.forEach((p) => virtualHouses.set(p.id, p.houses))
+      buildableProps.forEach((p) =>
+        virtualHouses.set(p.id, effectiveBuildingTier(p)),
+      )
 
       // Attempt to build as many as possible in this tick
       let canStillBuild = true
@@ -707,18 +711,18 @@ export const executeAITurn = (state: GameState, actions: GameActions) => {
         // Limit to 10 actions per tick for safety
         canStillBuild = false
 
-        // Re-sort buildableProps based on virtual houses to maintain even building
+        // Re-sort buildableProps based on virtual tiers to maintain even building
         buildableProps.sort(
           (a, b) =>
             (virtualHouses.get(a.id) ?? 0) - (virtualHouses.get(b.id) ?? 0),
         )
 
         for (const prop of buildableProps) {
-          const currentHouses = virtualHouses.get(prop.id) ?? 0
-          if (currentHouses >= 5) continue
+          const currentTier = virtualHouses.get(prop.id) ?? 0
+          if (currentTier >= 5) continue
 
           const scarcityEnabled = state.settings?.enableHousingScarcity
-          if (currentHouses === 4) {
+          if (currentTier === 4) {
             if (scarcityEnabled && state.availableHotels <= 0) continue
           } else {
             if (scarcityEnabled && state.availableHouses <= 0) continue
@@ -726,14 +730,14 @@ export const executeAITurn = (state: GameState, actions: GameActions) => {
 
           const cost = prop.buildingCost ?? 0
           if (spent + cost <= budget) {
-            if (currentHouses === 4) {
-              actions.buildHotel(prop.id)
-            } else {
-              actions.buildHouse(prop.id)
-            }
+            const ok =
+              currentTier === 4
+                ? actions.buildHotel(prop.id)
+                : actions.buildHouse(prop.id)
+            if (!ok) continue
 
             spent += cost
-            virtualHouses.set(prop.id, currentHouses + 1)
+            virtualHouses.set(prop.id, currentTier === 4 ? 5 : currentTier + 1)
             actionsTaken++
             canStillBuild = true
             break

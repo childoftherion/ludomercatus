@@ -1,11 +1,11 @@
-import React from "react"
-import { motion, AnimatePresence } from "framer-motion"
-import { useGameStore } from "../store/gameStore"
-import { useLocalStore } from "../store/localStore"
-import type { GameSettings, AIDifficulty } from "../types/game"
-import { DEFAULT_GAME_SETTINGS } from "../types/game"
+import React from "react";
+import { motion, AnimatePresence } from "framer-motion";
+import { useGameStore } from "../store/gameStore";
+import { useLocalStore } from "../store/localStore";
+import type { GameSettings, AIDifficulty, RulesetId } from "../types/game";
+import { DEFAULT_GAME_SETTINGS } from "../types/game";
 
-const TOKENS = ["🚗", "🚙", "🚕", "🏎", "🚁", "✈️", "⛵", "🎭"]
+const TOKENS = ["🚗", "🚙", "🚕", "🏎", "🚁", "✈️", "⛵", "🎭"];
 const AI_NAMES = [
   "Bot Alpha",
   "Bot Beta",
@@ -14,226 +14,207 @@ const AI_NAMES = [
   "Bot Epsilon",
   "Bot Zeta",
   "Bot Eta",
-]
+];
 
-type GameMode = "select" | "single" | "multiplayer"
+type GameMode = "select" | "single" | "multiplayer";
 
 const PlayerSetup = () => {
-  const [gameMode, setGameMode] = React.useState<GameMode>("select")
+  const [gameMode, setGameMode] = React.useState<GameMode>("select");
 
   // Game settings
   const [gameSettings, setGameSettings] = React.useState<GameSettings>({
     ...DEFAULT_GAME_SETTINGS,
-  })
-  const [showAdvancedSettings, setShowAdvancedSettings] = React.useState(false)
+  });
+  const [showAdvancedSettings, setShowAdvancedSettings] = React.useState(false);
 
   // Refs for container sizing (must be at top level for React Hooks rules)
-  const singlePlayerContainerRef = React.useRef<HTMLDivElement>(null)
-  const selectContainerRef = React.useRef<HTMLDivElement>(null)
-  const multiplayerContainerRef = React.useRef<HTMLDivElement>(null)
+  const singlePlayerContainerRef = React.useRef<HTMLDivElement>(null);
+  const selectContainerRef = React.useRef<HTMLDivElement>(null);
+  const multiplayerContainerRef = React.useRef<HTMLDivElement>(null);
 
   // #region metadata
   // Authored by childoftherion
   // #endregion
 
   // Single player state
-  const [playerName, setPlayerName] = React.useState("")
-  const [playerToken, setPlayerToken] = React.useState("")
-  const [aiCount, setAiCount] = React.useState(1)
-  const [aiTokens, setAiTokens] = React.useState<string[]>([""])
+  const [playerName, setPlayerName] = React.useState("");
+  const [playerToken, setPlayerToken] = React.useState("");
+  const [aiCount, setAiCount] = React.useState(1);
+  const [aiTokens, setAiTokens] = React.useState<string[]>([""]);
   const [aiDifficulties, setAiDifficulties] = React.useState<AIDifficulty[]>([
     "medium",
-  ])
+  ]);
 
   // Multiplayer state
-  const [humanCount, setHumanCount] = React.useState(2)
+  const [humanCount, setHumanCount] = React.useState(2);
   const [humanNames, setHumanNames] = React.useState<string[]>([
     "Player 1",
     "Player 2",
-  ])
-  const [humanTokens, setHumanTokens] = React.useState<string[]>(["", ""])
+  ]);
+  const [humanTokens, setHumanTokens] = React.useState<string[]>(["", ""]);
 
   // AI state for multiplayer
-  const [mpAiCount, setMpAiCount] = React.useState(0)
-  const [mpAiTokens, setMpAiTokens] = React.useState<string[]>([])
+  const [mpAiCount, setMpAiCount] = React.useState(0);
+  const [mpAiTokens, setMpAiTokens] = React.useState<string[]>([]);
   const [mpAiDifficulties, setMpAiDifficulties] = React.useState<
     AIDifficulty[]
-  >([])
+  >([]);
 
   // Single Player Handlers
   const handleAiCountChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
-    const count = parseInt(e.target.value)
-    setAiCount(count)
-    setAiTokens(Array.from({ length: count }, () => ""))
-    setAiDifficulties(Array.from({ length: count }, () => "medium"))
-  }
+    const count = parseInt(e.target.value);
+    setAiCount(count);
+    setAiTokens(Array.from({ length: count }, () => ""));
+    setAiDifficulties(Array.from({ length: count }, () => "medium"));
+  };
 
   const handleAiTokenSelect = (index: number, token: string) => {
     setAiTokens((prev) => {
-      const updated = [...prev]
-      updated[index] = token
-      return updated
-    })
-  }
+      const updated = [...prev];
+      updated[index] = token;
+      return updated;
+    });
+  };
 
   // Multiplayer Handlers
   const handleHumanCountChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
-    const count = parseInt(e.target.value)
-    setHumanCount(count)
+    const count = parseInt(e.target.value);
+    setHumanCount(count);
     setHumanNames((prev) => {
-      const next = [...prev]
-      while (next.length < count) next.push(`Player ${next.length + 1}`)
-      return next.slice(0, count)
-    })
+      const next = [...prev];
+      while (next.length < count) next.push(`Player ${next.length + 1}`);
+      return next.slice(0, count);
+    });
     setHumanTokens((prev) => {
-      const next = [...prev]
-      while (next.length < count) next.push("")
-      return next.slice(0, count)
-    })
-  }
+      const next = [...prev];
+      while (next.length < count) next.push("");
+      return next.slice(0, count);
+    });
+  };
 
   const handleMpAiCountChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
-    const count = parseInt(e.target.value)
-    setMpAiCount(count)
-    setMpAiTokens(Array.from({ length: count }, () => ""))
-    setMpAiDifficulties(Array.from({ length: count }, () => "medium"))
-  }
+    const count = parseInt(e.target.value);
+    setMpAiCount(count);
+    setMpAiTokens(Array.from({ length: count }, () => ""));
+    setMpAiDifficulties(Array.from({ length: count }, () => "medium"));
+  };
 
   const handleHumanNameChange = (index: number, name: string) => {
     setHumanNames((prev) => {
-      const next = [...prev]
-      next[index] = name
-      return next
-    })
-  }
+      const next = [...prev];
+      next[index] = name;
+      return next;
+    });
+  };
 
   const handleHumanTokenSelect = (index: number, token: string) => {
     setHumanTokens((prev) => {
-      const next = [...prev]
-      next[index] = token
-      return next
-    })
-  }
+      const next = [...prev];
+      next[index] = token;
+      return next;
+    });
+  };
 
   const handleMpAiTokenSelect = (index: number, token: string) => {
     setMpAiTokens((prev) => {
-      const next = [...prev]
-      next[index] = token
-      return next
-    })
-  }
+      const next = [...prev];
+      next[index] = token;
+      return next;
+    });
+  };
 
   const handleAiDifficultyChange = (
     index: number,
     difficulty: AIDifficulty,
   ) => {
     setAiDifficulties((prev) => {
-      const next = [...prev]
-      next[index] = difficulty
-      return next
-    })
-  }
+      const next = [...prev];
+      next[index] = difficulty;
+      return next;
+    });
+  };
 
   const handleMpAiDifficultyChange = (
     index: number,
     difficulty: AIDifficulty,
   ) => {
     setMpAiDifficulties((prev) => {
-      const next = [...prev]
-      next[index] = difficulty
-      return next
-    })
-  }
+      const next = [...prev];
+      next[index] = difficulty;
+      return next;
+    });
+  };
 
   const getAvailableTokens = (excludeIndex?: number) => {
-    const usedTokens = new Set<string>()
-    if (playerToken) usedTokens.add(playerToken)
+    const usedTokens = new Set<string>();
+    if (playerToken) usedTokens.add(playerToken);
     aiTokens.forEach((t, i) => {
-      if (t && i !== excludeIndex) usedTokens.add(t)
-    })
-    return TOKENS.filter((t) => !usedTokens.has(t))
-  }
+      if (t && i !== excludeIndex) usedTokens.add(t);
+    });
+    return TOKENS.filter((t) => !usedTokens.has(t));
+  };
 
   const getMultiplayerAvailableTokens = (
     type: "human" | "ai",
     index: number,
   ) => {
-    const used = new Set<string>()
+    const used = new Set<string>();
     humanTokens.forEach((t, i) => {
-      if (type === "human" && i === index) return
-      if (t) used.add(t)
-    })
+      if (type === "human" && i === index) return;
+      if (t) used.add(t);
+    });
     mpAiTokens.forEach((t, i) => {
-      if (type === "ai" && i === index) return
-      if (t) used.add(t)
-    })
-    return TOKENS.filter((t) => !used.has(t))
-  }
+      if (type === "ai" && i === index) return;
+      if (t) used.add(t);
+    });
+    return TOKENS.filter((t) => !used.has(t));
+  };
 
   const startSinglePlayerGame = () => {
-    if (!playerToken) return
-    if (aiTokens.some((t) => !t)) return
+    if (!playerToken) return;
+    if (aiTokens.some((t) => !t)) return;
 
     const names = [
       playerName || "You",
       ...aiTokens.map((_, i) => AI_NAMES[i] ?? `Bot ${i + 1}`),
-    ]
-    const tokens = [playerToken, ...aiTokens]
-    const isAIFlags = [false, ...aiTokens.map(() => true)]
-    const difficulties: AIDifficulty[] = [undefined as any, ...aiDifficulties] // undefined for human player
-
-    // Apply game settings first
-    useGameStore.getState().updateSettings(gameSettings)
+    ];
+    const tokens = [playerToken, ...aiTokens];
+    const isAIFlags = [false, ...aiTokens.map(() => true)];
+    const difficulties: AIDifficulty[] = [undefined as any, ...aiDifficulties]; // undefined for human player
 
     // Pass user's clientId for the first player (human)
     // Use the local store ID which is persisted/rehydrated
     const clientIds = [
       useLocalStore.getState().clientId,
       ...aiTokens.map(() => undefined),
-    ]
+    ];
+
+    // Create a new single-player game room (server auto-initializes)
     useGameStore
       .getState()
-      .initGame(names, tokens, isAIFlags, difficulties, clientIds)
+      .createSinglePlayerGame(
+        names,
+        tokens,
+        isAIFlags,
+        difficulties,
+        clientIds,
+        gameSettings,
+      );
 
     console.log("[PlayerSetup] Single-player game started", {
       playerName: names[0],
       totalPlayers: names.length,
-    })
-  }
+    });
+  };
 
   const startMultiplayerGame = () => {
-    if (humanTokens.some((t) => !t)) return
-    if (mpAiTokens.some((t) => !t)) return
+    if (humanTokens.some((t) => !t)) return;
+    if (mpAiTokens.some((t) => !t)) return;
 
-    const names = [
-      ...humanNames,
-      ...mpAiTokens.map((_, i) => AI_NAMES[i] ?? `Bot ${i + 1}`),
-    ]
-    const tokens = [...humanTokens, ...mpAiTokens]
-    const isAIFlags = [
-      ...humanTokens.map(() => false),
-      ...mpAiTokens.map(() => true),
-    ]
-    const difficulties: AIDifficulty[] = [
-      ...humanTokens.map(() => undefined as any),
-      ...mpAiDifficulties,
-    ] // undefined for human players
-
-    // Apply game settings first
-    useGameStore.getState().updateSettings(gameSettings)
-
-    // Provide clientId for the first human player (the host)
-    const hostClientId = useLocalStore.getState().clientId
-    const clientIds = [
-      hostClientId,
-      ...humanTokens.slice(1).map(() => undefined),
-      ...mpAiTokens.map(() => undefined),
-    ]
-
-    useGameStore
-      .getState()
-      .initGame(names, tokens, isAIFlags, difficulties, clientIds)
-  }
+    // Create a new room with the selected ruleset
+    // initGame will be called automatically by the server when startGame is clicked
+    useGameStore.getState().createRoom("multi", gameSettings);
+  };
 
   // Game Settings Panel Component
   const GameSettingsPanel = () => (
@@ -280,6 +261,70 @@ const PlayerSetup = () => {
             exit={{ opacity: 0, height: 0 }}
             style={{ overflow: "hidden" }}
           >
+            {/* Ruleset Selection */}
+            <div style={{ marginBottom: "16px" }}>
+              <h4
+                style={{
+                  fontSize: "12px",
+                  color: "#666",
+                  marginBottom: "8px",
+                  textTransform: "uppercase",
+                }}
+              >
+                🎲 Ruleset
+              </h4>
+
+              <div style={{ marginBottom: "8px" }}>
+                <label
+                  style={{
+                    display: "block",
+                    marginBottom: "4px",
+                    fontWeight: "bold",
+                    fontSize: "14px",
+                    textAlign: "left",
+                  }}
+                >
+                  Choose ruleset:
+                </label>
+                <select
+                  value={gameSettings.rulesetId}
+                  onChange={(e) =>
+                    setGameSettings((s) => ({
+                      ...s,
+                      rulesetId: e.target.value as RulesetId,
+                    }))
+                  }
+                  style={{
+                    padding: "10px 16px",
+                    fontSize: "14px",
+                    borderRadius: "8px",
+                    border: "2px solid #ddd",
+                    width: "100%",
+                    boxSizing: "border-box",
+                  }}
+                >
+                  <option value="classic">Classic Monopoly</option>
+                  <option value="1906_landlords">1906: Landlord's Rules</option>
+                  <option value="house_rules">House Rules</option>
+                </select>
+              </div>
+
+              <p
+                style={{
+                  fontSize: "11px",
+                  color: "#888",
+                  marginTop: "8px",
+                  marginBottom: 0,
+                }}
+              >
+                {gameSettings.rulesetId === "classic" && "🎯 Traditional rules"}
+                {gameSettings.rulesetId === "1906_landlords" &&
+                  "🏛️ Historic 1906 Landlord's Game: $100 wages, max 3 houses, no hotels, property dealing, backward movement"}
+                {gameSettings.rulesetId === "house_rules" &&
+                  "🎨 Fully customizable ruleset (defaults to classic)"}
+              </p>
+            </div>
+
             {/* Privacy Settings */}
             <div style={{ marginBottom: "16px" }}>
               <h4
@@ -599,7 +644,7 @@ const PlayerSetup = () => {
         )}
       </AnimatePresence>
     </div>
-  )
+  );
 
   // Game mode selection screen
   if (gameMode === "select") {
@@ -701,7 +746,7 @@ const PlayerSetup = () => {
           </div>
         </motion.div>
       </div>
-    )
+    );
   }
 
   // Single player setup
@@ -827,7 +872,7 @@ const PlayerSetup = () => {
                 }}
               >
                 {TOKENS.map((token) => {
-                  const isUsedByAI = aiTokens.includes(token)
+                  const isUsedByAI = aiTokens.includes(token);
                   return (
                     <motion.button
                       key={token}
@@ -854,7 +899,7 @@ const PlayerSetup = () => {
                     >
                       {token}
                     </motion.button>
-                  )
+                  );
                 })}
               </div>
             </div>
@@ -951,11 +996,11 @@ const PlayerSetup = () => {
                         }}
                       >
                         {TOKENS.map((token) => {
-                          const isUsedByPlayer = playerToken === token
+                          const isUsedByPlayer = playerToken === token;
                           const isUsedByOtherAI = aiTokens.some(
                             (t, i) => t === token && i !== index,
-                          )
-                          const isDisabled = isUsedByPlayer || isUsedByOtherAI
+                          );
+                          const isDisabled = isUsedByPlayer || isUsedByOtherAI;
                           return (
                             <motion.button
                               key={token}
@@ -984,7 +1029,7 @@ const PlayerSetup = () => {
                             >
                               {token}
                             </motion.button>
-                          )
+                          );
                         })}
                       </div>
                     </div>
@@ -1064,7 +1109,7 @@ const PlayerSetup = () => {
           </motion.button>
         </motion.div>
       </div>
-    )
+    );
   }
 
   // Multiplayer setup
@@ -1438,10 +1483,10 @@ const PlayerSetup = () => {
           </motion.button>
         </motion.div>
       </div>
-    )
+    );
   }
 
-  return null
-}
+  return null;
+};
 
-export default PlayerSetup
+export default PlayerSetup;

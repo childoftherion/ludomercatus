@@ -10,6 +10,10 @@ export type SpaceType =
   | "go_to_jail"
   | "free_parking"
   | "corner"
+  | "speculation" // 1906: Speculation space – wager on doubles for $100
+  | "mother_earth" // 1906: Starting point (equivalent to GO)
+  | "public_treasury" // 1906: Where taxes are paid
+  | "miscellaneous" // 1906: Central bank/pool space
 
 export type ColorGroup =
   | "brown"
@@ -20,6 +24,11 @@ export type ColorGroup =
   | "yellow"
   | "green"
   | "dark_blue"
+  // 1906 board section color groups
+  | "pale_green"
+  | "teal"
+  | "lavender"
+  | "gold"
   | null
 
 export interface Space {
@@ -238,6 +247,62 @@ export interface GameLogEntry {
     | "system"
 }
 
+// Ruleset identifiers – determines which board, cards, and rule variants are used
+export type RulesetId = "classic" | "1906_landlords" | "house_rules"
+
+// Comprehensive ruleset configuration – controls board layout, card decks,
+// and rule variants that differ between game modes.
+export interface RulesetConfig {
+  id: RulesetId
+  name: string
+  description: string
+
+  // Board & cards
+  boardSpaces: Space[]
+  chanceDeck: Card[]
+  communityChestDeck: Card[]
+
+  // Starting conditions
+  startingCash: number // Per-player starting cash
+  goSalary: number // Amount collected when passing GO / Mother Earth
+
+  // Building rules
+  maxHousesPerProperty: number // 5 in classic (hotel = 5th), 3 in 1906
+  enableHotels: boolean // 1906 has no hotels
+  houseRent: number // Fixed rent per house (1906 = $10, classic = variable by tier)
+  totalHouses: number // 32 in classic, unlimited in 1906
+  totalHotels: number // 12 in classic, 0 in 1906
+
+  // Movement rules
+  enableBackwardMovement: boolean // 1906: can move backward between Chances
+  doublesRailroadPass: boolean // 1906: doubles = jump 9 spaces between corners on railroad
+  doublesSpeculationWin: number // 1906: amount won on doubles at speculation (0 = disabled)
+
+  // Property dealing
+  dealPropertiesAtStart: boolean // 1906: 24 cards dealt at game start
+  propertiesDealtCount: number // How many cards to deal at start (0 = none)
+  enableAuctions: boolean // Classic: unwanted properties go to auction; 1906: returned to pack
+
+  // Tax rules
+  taxAmount: number // Fixed tax per tax space (1906 = $10, classic = variable)
+  taxDoublingThresholds: { houses: number; taxAmount: number }[] // 1906 advanced: tax doubles at 10/25 houses
+
+  // Rent rules
+  sectionRentDoubling: boolean // 1906: all lots in a railroad section improved → rent doubles
+  rentTable: number[][] // 1906: [tier][houses] rent table; empty = use classic formula
+
+  // End game
+  endAfterWagesCount: number // 1906: game ends after N passes of GO (0 = last player standing)
+  cardsAndHousesValue: number // 1906: each card/house counts this at game end (0 = not used)
+
+  // Jail
+  jailFine: number // $50 in both rulesets
+  jailMaxTurns: number // 3 in both rulesets
+
+  // Borrowing
+  enablePlayerBorrowing: boolean // 1906: players can borrow from each other with mortgages
+}
+
 // Game settings that can be configured at game start
 export interface GameSettings {
   // Privacy settings (realistic economic simulation)
@@ -278,6 +343,9 @@ export interface GameSettings {
   enableProgressiveTax: boolean // Income tax choice (10% vs flat)
   jailPenaltyRate: number // Percentage of net worth levied per turn in jail
 
+  // Ruleset selection
+  rulesetId: RulesetId // Which ruleset variant to use
+
   // Accessibility
   reducedMotion: boolean // Minimize framer-motion animations
 }
@@ -303,6 +371,7 @@ export const DEFAULT_GAME_SETTINGS: GameSettings = {
   enableInflation: true,
   enableProgressiveTax: true,
   jailPenaltyRate: 0.01, // 1% of net worth per turn
+  rulesetId: "classic",
   reducedMotion: false,
 }
 

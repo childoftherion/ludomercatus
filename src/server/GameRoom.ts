@@ -11,25 +11,28 @@ import type {
   EconomicEvent,
   Auction,
   Card,
-} from "../types/game"
+} from "../types/game";
 import {
   rollDice as rollDiceFn,
   calculateNewPosition,
   checkThreeDoubles,
   calculateJailOutcome,
-} from "./actions/core"
+  calculateDoublesRailroadPass,
+  calculateBackwardPosition,
+  findPreviousChancePosition,
+} from "./actions/core";
 import {
   calculateStartingBid,
   calculateMinimumBid,
   findNextBidder,
   shouldEndAuction,
   validateBid,
-} from "./actions/auction"
+} from "./actions/auction";
 import {
   validateTradeOffer as validateTradeOfferFn,
   generateTradeHistoryKey,
   areRolesSwapped,
-} from "./actions/trade"
+} from "./actions/trade";
 import {
   isEconomicEventActive as isEconomicEventActiveFn,
   findExistingEventIndex,
@@ -37,7 +40,7 @@ import {
   addNewEvent,
   updateEventDurations,
   createActiveEvent,
-} from "./actions/economy"
+} from "./actions/economy";
 import {
   calculateTotalOwed,
   calculatePaymentAllocation,
@@ -47,7 +50,7 @@ import {
   calculateChapter11DebtTarget,
   shouldChapter11Succeed,
   shouldChapter11Fail,
-} from "./actions/debt"
+} from "./actions/debt";
 import {
   canClaimAiSeat,
   canClaimHumanSeat,
@@ -57,15 +60,21 @@ import {
   createAiPlayer,
   createReconnectedPlayer,
   isSeatTakenByAnother,
-} from "./actions/multiplayer"
-import { DEFAULT_GAME_SETTINGS } from "../types/game"
-import { boardSpaces } from "../data/board"
-import { createChanceDeck, createCommunityChestDeck } from "../data/cards"
+} from "./actions/multiplayer";
+import { DEFAULT_GAME_SETTINGS } from "../types/game";
+import { boardSpaces } from "../data/board";
+import { boardSpaces1906 } from "../data/board1906";
+import { createChanceDeck, createCommunityChestDeck } from "../data/cards";
+import {
+  createChanceDeck1906,
+  createCommunityChestDeck1906,
+} from "../data/cards1906";
+import { getRulesetConfig } from "../data/rulesets";
 import {
   calculateRent,
   calculateUnownedUtilityLandingFee,
-} from "../logic/rules/rent"
-import { hasMonopoly, getPlayerProperties } from "../logic/rules/monopoly"
+} from "../logic/rules/rent";
+import { hasMonopoly, getPlayerProperties } from "../logic/rules/monopoly";
 import {
   calculateGoSalary,
   calculateTenPercentTax,
@@ -74,12 +83,12 @@ import {
   getOptimalTaxChoice,
   calculateGiniCoefficient,
   calculateMoneyInCirculation,
-} from "../logic/rules/economics"
+} from "../logic/rules/economics";
 import {
   executeAITurn,
   executeAITradeResponse,
   type GameActions,
-} from "../logic/ai"
+} from "../logic/ai";
 import {
   validatePlayerTurn,
   validateCash,
@@ -87,7 +96,7 @@ import {
   validateBuilding,
   validateTradeOffer,
   validateMortgage,
-} from "../utils/validation"
+} from "../utils/validation";
 
 const PLAYER_COLORS = [
   "#FF6B6B",
@@ -98,26 +107,26 @@ const PLAYER_COLORS = [
   "#DDA0DD",
   "#98D8C8",
   "#F7DC6F",
-]
+];
 
 const isProperty = (space: Space): space is Property => {
   return (
     space.type === "property" ||
     space.type === "railroad" ||
     space.type === "utility"
-  )
-}
+  );
+};
 
 const shuffleDeck = <T extends { id: number }>(deck: readonly T[]): T[] => {
-  const shuffled = [...deck]
+  const shuffled = [...deck];
   for (let i = shuffled.length - 1; i > 0; i--) {
-    const j = Math.floor(Math.random() * (i + 1))
-    const temp = shuffled[i]
-    shuffled[i] = shuffled[j]!
-    shuffled[j] = temp!
+    const j = Math.floor(Math.random() * (i + 1));
+    const temp = shuffled[i];
+    shuffled[i] = shuffled[j]!;
+    shuffled[j] = temp!;
   }
-  return shuffled
-}
+  return shuffled;
+};
 
 const createPlayer = (
   id: number,
@@ -155,23 +164,25 @@ const createPlayer = (
   chapter11TurnsRemaining: 0,
   chapter11DebtTarget: 0,
   isConnected: true,
-})
+});
 
 export class GameRoom implements GameActions {
-  public state: GameState
-  private logIdCounter = 0
-  private listeners = new Set<(state: GameState) => void>()
+  public state: GameState;
+  private logIdCounter = 0;
+  private listeners = new Set<(state: GameState) => void>();
 
   constructor(
     initialPhase: "setup" | "lobby" = "setup",
     settings: Partial<GameSettings> = {},
   ) {
+    const rulesetConfig = getRulesetConfig(settings.rulesetId ?? "classic");
+
     this.state = {
       players: [],
       currentPlayerIndex: 0,
-      spaces: boardSpaces as Space[],
-      chanceDeck: shuffleDeck(createChanceDeck()),
-      communityChestDeck: shuffleDeck(createCommunityChestDeck()),
+      spaces: rulesetConfig.boardSpaces as Space[],
+      chanceDeck: shuffleDeck(rulesetConfig.chanceDeck),
+      communityChestDeck: shuffleDeck(rulesetConfig.communityChestDeck),
       diceRoll: null,
       consecutiveDoubles: 0,
       phase: initialPhase,
@@ -189,11 +200,11 @@ export class GameRoom implements GameActions {
       settings: { ...DEFAULT_GAME_SETTINGS, ...settings },
       // Phase 1: Economic Realism
       roundsCompleted: 0,
-      currentGoSalary: 200,
+      currentGoSalary: rulesetConfig.goSalary,
       awaitingTaxDecision: null,
       // Phase 2: Housing Scarcity
-      availableHouses: 32,
-      availableHotels: 12,
+      availableHouses: rulesetConfig.totalHouses,
+      availableHotels: rulesetConfig.totalHotels,
       // Phase 2: Economic Events
       activeEconomicEvents: [],
       // Card-triggered utility multiplier override
@@ -212,67 +223,67 @@ export class GameRoom implements GameActions {
       marketHistory: [],
       // Multiplayer stability
       turnStartTime: Date.now(),
-    }
+    };
 
     // Bind all public methods to `this`
-    this.addPlayer = this.addPlayer.bind(this)
-    this.updatePlayer = this.updatePlayer.bind(this)
-    this.startGame = this.startGame.bind(this)
-    this.initGame = this.initGame.bind(this)
-    this.updateSettings = this.updateSettings.bind(this)
-    this.rollDice = this.rollDice.bind(this)
-    this.movePlayer = this.movePlayer.bind(this)
-    this.buyProperty = this.buyProperty.bind(this)
-    this.declineProperty = this.declineProperty.bind(this)
-    this.payRent = this.payRent.bind(this)
-    this.endTurn = this.endTurn.bind(this)
-    this.goToJail = this.goToJail.bind(this)
-    this.getOutOfJail = this.getOutOfJail.bind(this)
-    this.buildHouse = this.buildHouse.bind(this)
-    this.buildHotel = this.buildHotel.bind(this)
-    this.sellHouse = this.sellHouse.bind(this)
-    this.sellHotel = this.sellHotel.bind(this)
-    this.mortgageProperty = this.mortgageProperty.bind(this)
-    this.unmortgageProperty = this.unmortgageProperty.bind(this)
-    this.drawCard = this.drawCard.bind(this)
-    this.checkBankruptcy = this.checkBankruptcy.bind(this)
-    this.declareBankruptcy = this.declareBankruptcy.bind(this)
-    this.startAuction = this.startAuction.bind(this)
-    this.placeBid = this.placeBid.bind(this)
-    this.passAuction = this.passAuction.bind(this)
-    this.endAuction = this.endAuction.bind(this)
-    this.startTrade = this.startTrade.bind(this)
-    this.updateTradeOffer = this.updateTradeOffer.bind(this)
-    this.proposeTrade = this.proposeTrade.bind(this)
-    this.acceptTrade = this.acceptTrade.bind(this)
-    this.rejectTrade = this.rejectTrade.bind(this)
-    this.cancelTrade = this.cancelTrade.bind(this)
-    this.counterOffer = this.counterOffer.bind(this)
-    this.payDebtService = this.payDebtService.bind(this)
-    this.handleForeclosureDecision = this.handleForeclosureDecision.bind(this)
-    this.executeAITurn = this.executeAITurn.bind(this)
-    this.executeAITradeResponse = this.executeAITradeResponse.bind(this)
-    this.chooseTaxOption = this.chooseTaxOption.bind(this)
-    this.handlePlayerDisconnect = this.handlePlayerDisconnect.bind(this)
-    this.handlePlayerReconnect = this.handlePlayerReconnect.bind(this)
+    this.addPlayer = this.addPlayer.bind(this);
+    this.updatePlayer = this.updatePlayer.bind(this);
+    this.startGame = this.startGame.bind(this);
+    this.initGame = this.initGame.bind(this);
+    this.updateSettings = this.updateSettings.bind(this);
+    this.rollDice = this.rollDice.bind(this);
+    this.movePlayer = this.movePlayer.bind(this);
+    this.buyProperty = this.buyProperty.bind(this);
+    this.declineProperty = this.declineProperty.bind(this);
+    this.payRent = this.payRent.bind(this);
+    this.endTurn = this.endTurn.bind(this);
+    this.goToJail = this.goToJail.bind(this);
+    this.getOutOfJail = this.getOutOfJail.bind(this);
+    this.buildHouse = this.buildHouse.bind(this);
+    this.buildHotel = this.buildHotel.bind(this);
+    this.sellHouse = this.sellHouse.bind(this);
+    this.sellHotel = this.sellHotel.bind(this);
+    this.mortgageProperty = this.mortgageProperty.bind(this);
+    this.unmortgageProperty = this.unmortgageProperty.bind(this);
+    this.drawCard = this.drawCard.bind(this);
+    this.checkBankruptcy = this.checkBankruptcy.bind(this);
+    this.declareBankruptcy = this.declareBankruptcy.bind(this);
+    this.startAuction = this.startAuction.bind(this);
+    this.placeBid = this.placeBid.bind(this);
+    this.passAuction = this.passAuction.bind(this);
+    this.endAuction = this.endAuction.bind(this);
+    this.startTrade = this.startTrade.bind(this);
+    this.updateTradeOffer = this.updateTradeOffer.bind(this);
+    this.proposeTrade = this.proposeTrade.bind(this);
+    this.acceptTrade = this.acceptTrade.bind(this);
+    this.rejectTrade = this.rejectTrade.bind(this);
+    this.cancelTrade = this.cancelTrade.bind(this);
+    this.counterOffer = this.counterOffer.bind(this);
+    this.payDebtService = this.payDebtService.bind(this);
+    this.handleForeclosureDecision = this.handleForeclosureDecision.bind(this);
+    this.executeAITurn = this.executeAITurn.bind(this);
+    this.executeAITradeResponse = this.executeAITradeResponse.bind(this);
+    this.chooseTaxOption = this.chooseTaxOption.bind(this);
+    this.handlePlayerDisconnect = this.handlePlayerDisconnect.bind(this);
+    this.handlePlayerReconnect = this.handlePlayerReconnect.bind(this);
   }
 
   public subscribe(listener: (state: GameState) => void) {
-    this.listeners.add(listener)
-    return () => this.listeners.delete(listener)
+    this.listeners.add(listener);
+    return () => this.listeners.delete(listener);
   }
 
   private notify() {
-    this.listeners.forEach((listener) => listener(this.state))
+    this.listeners.forEach((listener) => listener(this.state));
   }
 
   // --- State Updates ---
   // Helper to replicate Zustand's partial update behavior
   private setState(partial: Partial<GameState>) {
-    const prevPhase = this.state.phase
-    const prevPlayer = this.state.currentPlayerIndex
+    const prevPhase = this.state.phase;
+    const prevPlayer = this.state.currentPlayerIndex;
 
-    this.state = { ...this.state, ...partial }
+    this.state = { ...this.state, ...partial };
 
     // If turn or phase changed, reset timer
     if (
@@ -281,10 +292,10 @@ export class GameRoom implements GameActions {
         partial.currentPlayerIndex !== prevPlayer ||
         partial.currentPlayerIndex !== undefined)
     ) {
-      this.state.turnStartTime = Date.now()
+      this.state.turnStartTime = Date.now();
     }
 
-    this.notify()
+    this.notify();
   }
 
   public authorizeAction(
@@ -292,32 +303,32 @@ export class GameRoom implements GameActions {
     action: string,
     payload: unknown,
   ): { allowed: boolean; payload: unknown[]; error?: string } {
-    const payloadArray: unknown[] = Array.isArray(payload) ? payload : []
-    const resolvedClientId = typeof clientId === "string" ? clientId : null
+    const payloadArray: unknown[] = Array.isArray(payload) ? payload : [];
+    const resolvedClientId = typeof clientId === "string" ? clientId : null;
 
     const allow = (nextPayload: unknown[] = payloadArray) => ({
       allowed: true,
       payload: nextPayload,
-    })
+    });
     const deny = (error: string) => ({
       allowed: false,
       payload: payloadArray,
       error,
-    })
+    });
 
-    if (action === "initGame") return allow(payloadArray)
+    if (action === "initGame") return allow(payloadArray);
 
     if (action === "addPlayer") {
-      if (!resolvedClientId) return deny("Missing clientId")
-      const [name, token, _clientId, isMobile] = payloadArray
-      return allow([name, token, resolvedClientId, isMobile])
+      if (!resolvedClientId) return deny("Missing clientId");
+      const [name, token, _clientId, isMobile] = payloadArray;
+      return allow([name, token, resolvedClientId, isMobile]);
     }
 
     if (action === "assignPlayer") {
-      if (!resolvedClientId) return deny("Missing clientId")
-      const [index, isMobile] = payloadArray
-      const player = this.state.players[index as number]
-      if (!player) return deny("Invalid player slot")
+      if (!resolvedClientId) return deny("Missing clientId");
+      const [index, isMobile] = payloadArray;
+      const player = this.state.players[index as number];
+      if (!player) return deny("Invalid player slot");
 
       // A player can't claim a seat occupied by another connected human.
       if (
@@ -326,7 +337,7 @@ export class GameRoom implements GameActions {
         player.isConnected &&
         !player.isAI
       ) {
-        return deny("Seat is already occupied by another human player")
+        return deny("Seat is already occupied by another human player");
       }
 
       // A player can't claim an AI seat that has been taken over by another human.
@@ -337,61 +348,61 @@ export class GameRoom implements GameActions {
       ) {
         const occupyingPlayer = this.state.players.find(
           (p) => p.clientId === player.clientId,
-        )
+        );
         if (occupyingPlayer && occupyingPlayer.isConnected) {
-          return deny("Seat is already occupied by an active player")
+          return deny("Seat is already occupied by an active player");
         }
       }
 
-      return allow([index, resolvedClientId, isMobile])
+      return allow([index, resolvedClientId, isMobile]);
     }
 
     const actorIndex = resolvedClientId
       ? this.state.players.findIndex((p) => p.clientId === resolvedClientId)
-      : -1
+      : -1;
 
     if (action === "updatePlayer") {
-      if (actorIndex === -1) return deny("Unknown player")
-      const [index] = payloadArray
+      if (actorIndex === -1) return deny("Unknown player");
+      const [index] = payloadArray;
       if (typeof index !== "number" || index !== actorIndex)
-        return deny("Not allowed")
-      return allow(payloadArray)
+        return deny("Not allowed");
+      return allow(payloadArray);
     }
 
     if (action === "startGame") {
-      if (actorIndex === -1) return deny("Unknown player")
-      return allow(payloadArray)
+      if (actorIndex === -1) return deny("Unknown player");
+      return allow(payloadArray);
     }
 
     if (action === "updateSettings") {
-      if (actorIndex !== 0) return deny("Only host can update settings")
-      return allow(payloadArray)
+      if (actorIndex !== 0) return deny("Only host can update settings");
+      return allow(payloadArray);
     }
 
-    const isCurrentTurn = actorIndex === this.state.currentPlayerIndex
+    const isCurrentTurn = actorIndex === this.state.currentPlayerIndex;
 
     const isHostClient = (() => {
-      const firstHumanIndex = this.state.players.findIndex((p) => !p.isAI)
-      return firstHumanIndex !== -1 && actorIndex === firstHumanIndex
-    })()
+      const firstHumanIndex = this.state.players.findIndex((p) => !p.isAI);
+      return firstHumanIndex !== -1 && actorIndex === firstHumanIndex;
+    })();
 
     if (action === "executeAITurn" || action === "executeAITradeResponse") {
-      if (!isHostClient) return deny("Only host can run AI")
+      if (!isHostClient) return deny("Only host can run AI");
 
       // If it's an AI turn and they have already rolled but haven't moved,
       // block the executeAITurn action to prevent re-rolling
       if (action === "executeAITurn") {
-        const player = this.state.players[this.state.currentPlayerIndex]
+        const player = this.state.players[this.state.currentPlayerIndex];
         if (
           player?.isAI &&
           this.state.phase === "rolling" &&
           this.state.diceRoll
         ) {
-          return deny("AI already rolled, waiting for move")
+          return deny("AI already rolled, waiting for move");
         }
       }
 
-      return allow(payloadArray)
+      return allow(payloadArray);
     }
 
     if (
@@ -401,86 +412,86 @@ export class GameRoom implements GameActions {
       action === "declineProperty" ||
       action === "endTurn"
     ) {
-      if (!isCurrentTurn) return deny("Not your turn")
+      if (!isCurrentTurn) return deny("Not your turn");
     }
 
     if (action === "rollDice") {
-      const player = this.state.players[this.state.currentPlayerIndex]
-      if (!player || player.isAI) return deny("Not allowed")
-      if (this.state.phase !== "rolling") return deny("Not allowed")
-      if (player.inJail) return deny("Not allowed")
-      if (this.state.diceRoll) return deny("Not allowed")
-      return allow(payloadArray)
+      const player = this.state.players[this.state.currentPlayerIndex];
+      if (!player || player.isAI) return deny("Not allowed");
+      if (this.state.phase !== "rolling") return deny("Not allowed");
+      if (player.inJail) return deny("Not allowed");
+      if (this.state.diceRoll) return deny("Not allowed");
+      return allow(payloadArray);
     }
 
     if (action === "movePlayer") {
-      const [playerIndex, steps] = payloadArray
+      const [playerIndex, steps] = payloadArray;
       if (typeof playerIndex !== "number" || typeof steps !== "number")
-        return deny("Invalid payload")
-      if (playerIndex !== actorIndex) return deny("Not allowed")
+        return deny("Invalid payload");
+      if (playerIndex !== actorIndex) return deny("Not allowed");
 
       // Allow moving in "moving" phase OR "rolling" phase (for legacy/jail scenarios)
       if (this.state.phase !== "moving" && this.state.phase !== "rolling")
-        return deny("Not allowed")
+        return deny("Not allowed");
 
-      const rollTotal = this.state.diceRoll?.total
-      if (typeof rollTotal !== "number") return deny("Not allowed")
-      if (steps !== rollTotal) return deny("Not allowed")
-      return allow(payloadArray)
+      const rollTotal = this.state.diceRoll?.total;
+      if (typeof rollTotal !== "number") return deny("Not allowed");
+      if (steps !== rollTotal) return deny("Not allowed");
+      return allow(payloadArray);
     }
 
     if (action === "buyProperty" || action === "declineProperty") {
       if (this.state.phase !== "awaiting_buy_decision")
-        return deny("Not allowed")
-      return allow(payloadArray)
+        return deny("Not allowed");
+      return allow(payloadArray);
     }
 
     if (action === "endTurn") {
-      if (this.state.phase !== "resolving_space") return deny("Not allowed")
-      return allow(payloadArray)
+      if (this.state.phase !== "resolving_space") return deny("Not allowed");
+      return allow(payloadArray);
     }
 
     if (action === "getOutOfJail") {
-      const [playerIndex, method] = payloadArray
-      if (typeof playerIndex !== "number") return deny("Invalid payload")
-      if (playerIndex !== actorIndex) return deny("Not allowed")
-      if (!isCurrentTurn) return deny("Not your turn")
+      const [playerIndex, method] = payloadArray;
+      if (typeof playerIndex !== "number") return deny("Invalid payload");
+      if (playerIndex !== actorIndex) return deny("Not allowed");
+      if (!isCurrentTurn) return deny("Not your turn");
       if (method !== "roll" && method !== "pay" && method !== "card")
-        return deny("Invalid payload")
-      const player = this.state.players[playerIndex]
-      if (!player?.inJail) return deny("Not allowed")
+        return deny("Invalid payload");
+      const player = this.state.players[playerIndex];
+      if (!player?.inJail) return deny("Not allowed");
       if (
         this.state.phase !== "jail_decision" &&
         this.state.phase !== "rolling"
       )
-        return deny("Not allowed")
-      return allow(payloadArray)
+        return deny("Not allowed");
+      return allow(payloadArray);
     }
 
     if (action === "chooseTaxOption") {
-      const [playerIndex, choice] = payloadArray
-      if (typeof playerIndex !== "number") return deny("Invalid payload")
-      if (playerIndex !== actorIndex) return deny("Not allowed")
-      if (!isCurrentTurn) return deny("Not your turn")
+      const [playerIndex, choice] = payloadArray;
+      if (typeof playerIndex !== "number") return deny("Invalid payload");
+      if (playerIndex !== actorIndex) return deny("Not allowed");
+      if (!isCurrentTurn) return deny("Not your turn");
       if (choice !== "flat" && choice !== "percentage")
-        return deny("Invalid payload")
+        return deny("Invalid payload");
       if (
         this.state.phase !== "awaiting_tax_decision" ||
         this.state.awaitingTaxDecision?.playerIndex !== playerIndex
       )
-        return deny("Not allowed")
-      return allow(payloadArray)
+        return deny("Not allowed");
+      return allow(payloadArray);
     }
 
     if (action === "placeBid" || action === "passAuction") {
-      const [playerIndex] = payloadArray
-      if (typeof playerIndex !== "number") return deny("Invalid payload")
-      if (playerIndex !== actorIndex) return deny("Not allowed")
+      const [playerIndex] = payloadArray;
+      if (typeof playerIndex !== "number") return deny("Invalid payload");
+      if (playerIndex !== actorIndex) return deny("Not allowed");
       if (this.state.phase !== "auction" || !this.state.auction)
-        return deny("Not allowed")
+        return deny("Not allowed");
       if (this.state.auction.activePlayerIndex !== playerIndex)
-        return deny("Not allowed")
-      return allow(payloadArray)
+        return deny("Not allowed");
+      return allow(payloadArray);
     }
 
     if (
@@ -492,46 +503,46 @@ export class GameRoom implements GameActions {
       action === "cancelTrade" ||
       action === "counterOffer"
     ) {
-      const trade = this.state.trade
+      const trade = this.state.trade;
       if (action === "startTrade") {
-        const [fromPlayer] = payloadArray
-        if (typeof fromPlayer !== "number") return deny("Invalid payload")
-        if (fromPlayer !== actorIndex) return deny("Not allowed")
-        if (!isCurrentTurn) return deny("Not your turn")
+        const [fromPlayer] = payloadArray;
+        if (typeof fromPlayer !== "number") return deny("Invalid payload");
+        if (fromPlayer !== actorIndex) return deny("Not allowed");
+        if (!isCurrentTurn) return deny("Not your turn");
         if (this.state.phase === "auction")
-          return deny("Cannot trade during an auction")
-        return allow(payloadArray)
+          return deny("Cannot trade during an auction");
+        return allow(payloadArray);
       }
 
-      if (!trade) return deny("Not allowed")
-      const { offer, status } = trade
-      const isFrom = actorIndex === offer.fromPlayer
-      const isTo = actorIndex === offer.toPlayer
+      if (!trade) return deny("Not allowed");
+      const { offer, status } = trade;
+      const isFrom = actorIndex === offer.fromPlayer;
+      const isTo = actorIndex === offer.toPlayer;
 
-      if (!isFrom && !isTo) return deny("Not allowed")
+      if (!isFrom && !isTo) return deny("Not allowed");
 
       if (action === "proposeTrade") {
-        if (!isFrom) return deny("Not allowed")
+        if (!isFrom) return deny("Not allowed");
       }
 
       if (action === "updateTradeOffer") {
-        if (!isFrom && !isTo) return deny("Not allowed")
+        if (!isFrom && !isTo) return deny("Not allowed");
       }
 
       if (action === "counterOffer") {
-        if (!isTo) return deny("Not allowed")
+        if (!isTo) return deny("Not allowed");
       }
 
       if (action === "cancelTrade") {
-        if (!isFrom) return deny("Not allowed")
+        if (!isFrom) return deny("Not allowed");
       }
 
       if (action === "acceptTrade" || action === "rejectTrade") {
-        if (status !== "pending") return deny("Not allowed")
-        if (!isTo) return deny("Not allowed")
+        if (status !== "pending") return deny("Not allowed");
+        if (!isTo) return deny("Not allowed");
       }
 
-      return allow(payloadArray)
+      return allow(payloadArray);
     }
 
     if (
@@ -539,32 +550,33 @@ export class GameRoom implements GameActions {
       action === "createRentIOU" ||
       action === "demandImmediatePaymentOrProperty"
     ) {
-      const negotiation = this.state.pendingRentNegotiation
+      const negotiation = this.state.pendingRentNegotiation;
       if (!negotiation || this.state.phase !== "awaiting_rent_negotiation")
-        return deny("Not allowed")
+        return deny("Not allowed");
       if (action === "createRentIOU") {
-        if (actorIndex !== negotiation.debtorIndex) return deny("Not allowed")
+        if (actorIndex !== negotiation.debtorIndex) return deny("Not allowed");
       } else {
-        if (actorIndex !== negotiation.creditorIndex) return deny("Not allowed")
+        if (actorIndex !== negotiation.creditorIndex)
+          return deny("Not allowed");
       }
-      return allow(payloadArray)
+      return allow(payloadArray);
     }
 
     if (action === "payIOU") {
-      const [debtorIndex] = payloadArray
-      if (typeof debtorIndex !== "number") return deny("Invalid payload")
-      if (debtorIndex !== actorIndex) return deny("Not allowed")
+      const [debtorIndex] = payloadArray;
+      if (typeof debtorIndex !== "number") return deny("Invalid payload");
+      if (debtorIndex !== actorIndex) return deny("Not allowed");
       if (this.state.phase === "auction")
-        return deny("Cannot pay IOUs during an auction")
-      return allow(payloadArray)
+        return deny("Cannot pay IOUs during an auction");
+      return allow(payloadArray);
     }
 
     if (action === "enterChapter11" || action === "declineRestructuring") {
-      const pending = (this.state as any).pendingBankruptcy
+      const pending = (this.state as any).pendingBankruptcy;
       if (!pending || this.state.phase !== "awaiting_bankruptcy_decision")
-        return deny("Not allowed")
-      if (actorIndex !== pending.playerIndex) return deny("Not allowed")
-      return allow(payloadArray)
+        return deny("Not allowed");
+      if (actorIndex !== pending.playerIndex) return deny("Not allowed");
+      return allow(payloadArray);
     }
 
     if (
@@ -580,23 +592,23 @@ export class GameRoom implements GameActions {
       action === "appreciateColorGroup" ||
       action === "depreciateColorGroup"
     ) {
-      if (!isCurrentTurn) return deny("Not your turn")
+      if (!isCurrentTurn) return deny("Not your turn");
       if (this.state.phase === "setup" || this.state.phase === "lobby")
-        return deny("Not allowed")
+        return deny("Not allowed");
       if (this.state.phase === "auction" || this.state.phase === "trading")
-        return deny("Not allowed")
-      return allow(payloadArray)
+        return deny("Not allowed");
+      return allow(payloadArray);
     }
 
     if (action === "drawCard") {
-      const [playerIndex] = payloadArray
-      if (typeof playerIndex !== "number") return deny("Invalid payload")
-      if (playerIndex !== actorIndex) return deny("Not allowed")
-      if (!isCurrentTurn) return deny("Not your turn")
-      return allow(payloadArray)
+      const [playerIndex] = payloadArray;
+      if (typeof playerIndex !== "number") return deny("Invalid payload");
+      if (playerIndex !== actorIndex) return deny("Not allowed");
+      if (!isCurrentTurn) return deny("Not your turn");
+      return allow(payloadArray);
     }
 
-    return allow(payloadArray)
+    return allow(payloadArray);
   }
 
   // --- Lobby Actions ---
@@ -607,33 +619,33 @@ export class GameRoom implements GameActions {
     clientId: string,
     isMobile?: boolean,
   ) {
-    if (this.state.phase !== "lobby") return
+    if (this.state.phase !== "lobby") return;
 
     const existingIndex = this.state.players.findIndex(
       (p) => p.clientId === clientId,
-    )
+    );
     if (existingIndex !== -1) {
-      this.updatePlayer(existingIndex, name, token)
+      this.updatePlayer(existingIndex, name, token);
       // Update mobile status if provided
       if (isMobile !== undefined) {
-        const players = [...this.state.players]
+        const players = [...this.state.players];
         if (players[existingIndex]) {
-          players[existingIndex].isMobile = isMobile
-          this.setState({ players })
+          players[existingIndex].isMobile = isMobile;
+          this.setState({ players });
         }
       }
-      return
+      return;
     }
 
-    const index = this.state.players.length
-    if (index >= 8) return
+    const index = this.state.players.length;
+    if (index >= 8) return;
 
     // Ensure unique name
-    let uniqueName = name
-    let counter = 2
+    let uniqueName = name;
+    let counter = 2;
     while (this.state.players.some((p) => p.name === uniqueName)) {
-      uniqueName = `${name} (${counter})`
-      counter++
+      uniqueName = `${name} (${counter})`;
+      counter++;
     }
 
     const newPlayer = createPlayer(
@@ -642,39 +654,39 @@ export class GameRoom implements GameActions {
       token,
       PLAYER_COLORS[index] ?? "#999999",
       false,
-    )
-    newPlayer.clientId = clientId
-    newPlayer.isMobile = !!isMobile
+    );
+    newPlayer.clientId = clientId;
+    newPlayer.isMobile = !!isMobile;
 
     this.setState({
       players: [...this.state.players, newPlayer],
-    })
+    });
     this.addLogEntry(
       `${uniqueName} joined the lobby!${isMobile ? " (Mobile)" : ""}`,
       "system",
-    )
+    );
   }
 
   public handlePlayerDisconnect(clientId: string) {
     const playerIndex = this.state.players.findIndex(
       (p) => p.clientId === clientId,
-    )
-    if (playerIndex === -1) return
+    );
+    if (playerIndex === -1) return;
 
-    const player = this.state.players[playerIndex]
-    if (!player) return
+    const player = this.state.players[playerIndex];
+    if (!player) return;
 
-    const updatedPlayers = [...this.state.players]
-    updatedPlayers[playerIndex] = createDisconnectedPlayer(player)
+    const updatedPlayers = [...this.state.players];
+    updatedPlayers[playerIndex] = createDisconnectedPlayer(player);
 
-    this.setState({ players: updatedPlayers })
-    this.addLogEntry(`${player.name} disconnected.`, "system")
+    this.setState({ players: updatedPlayers });
+    this.addLogEntry(`${player.name} disconnected.`, "system");
 
     // If it's their turn and they are not AI, start a timeout to skip their turn
     if (this.state.currentPlayerIndex === playerIndex && !player.isAI) {
       setTimeout(() => {
         // Check if still disconnected and still their turn
-        const currentPlayer = this.state.players[this.state.currentPlayerIndex]
+        const currentPlayer = this.state.players[this.state.currentPlayerIndex];
         if (
           currentPlayer &&
           !currentPlayer.isConnected &&
@@ -683,69 +695,69 @@ export class GameRoom implements GameActions {
           this.addLogEntry(
             `${currentPlayer.name} timed out. Converting to AI.`,
             "system",
-          )
+          );
 
           // Convert to AI instead of just skipping
-          const updatedPlayers = [...this.state.players]
-          updatedPlayers[playerIndex] = createAiPlayer(currentPlayer, "medium")
+          const updatedPlayers = [...this.state.players];
+          updatedPlayers[playerIndex] = createAiPlayer(currentPlayer, "medium");
 
-          this.setState({ players: updatedPlayers })
+          this.setState({ players: updatedPlayers });
 
           // If it's still "rolling" and they haven't rolled, the client-side AI trigger
           // (which runs on the first human player) will now pick this up and execute the turn.
         }
-      }, 30000) // 30 seconds timeout
+      }, 30000); // 30 seconds timeout
     }
   }
 
   public handlePlayerReconnect(clientId: string) {
-    const playerIndex = findPlayerIndexByClientId(this.state.players, clientId)
-    if (playerIndex === -1) return
+    const playerIndex = findPlayerIndexByClientId(this.state.players, clientId);
+    if (playerIndex === -1) return;
 
-    const player = this.state.players[playerIndex]
-    if (!player) return
+    const player = this.state.players[playerIndex];
+    if (!player) return;
 
     // If another player has taken the seat in the meantime, we can't reconnect them to it.
     if (isSeatTakenByAnother(player, clientId)) {
       this.addLogEntry(
         `${player.name} tried to reconnect, but seat was taken.`,
         "system",
-      )
-      return
+      );
+      return;
     }
 
-    const updatedPlayers = [...this.state.players]
-    updatedPlayers[playerIndex] = createReconnectedPlayer(player, clientId)
+    const updatedPlayers = [...this.state.players];
+    updatedPlayers[playerIndex] = createReconnectedPlayer(player, clientId);
 
-    this.setState({ players: updatedPlayers })
-    this.addLogEntry(`${player.name} reconnected!`, "system")
+    this.setState({ players: updatedPlayers });
+    this.addLogEntry(`${player.name} reconnected!`, "system");
   }
 
   public updatePlayer(index: number, name: string, token: string) {
-    if (this.state.phase !== "lobby") return
-    const player = this.state.players[index]
-    if (!player) return
+    if (this.state.phase !== "lobby") return;
+    const player = this.state.players[index];
+    if (!player) return;
 
-    const updatedPlayers = [...this.state.players]
-    updatedPlayers[index] = { ...player, name, token }
-    this.setState({ players: updatedPlayers })
+    const updatedPlayers = [...this.state.players];
+    updatedPlayers[index] = { ...player, name, token };
+    this.setState({ players: updatedPlayers });
   }
 
   public assignPlayer(index: number, clientId: string, isMobile?: boolean) {
-    const player = this.state.players[index]
-    if (!player) return
+    const player = this.state.players[index];
+    if (!player) return;
 
     if (!canClaimPlayer(player, clientId)) {
       console.warn(`[GameRoom] Cannot claim active player ${index}`, {
         isConnected: player.isConnected,
         previousClientId: player.clientId,
         requesterClientId: clientId,
-      })
-      return
+      });
+      return;
     }
 
     // Assign clientId to the player
-    const updatedPlayers = [...this.state.players]
+    const updatedPlayers = [...this.state.players];
     updatedPlayers[index] = {
       ...player,
       clientId,
@@ -754,24 +766,112 @@ export class GameRoom implements GameActions {
       isConnected: true,
       previousClientId: null, // Clear on claim
       isMobile: isMobile !== undefined ? isMobile : player.isMobile,
-    }
+    };
 
-    this.setState({ players: updatedPlayers })
-    const wasAI = player.isAI
-    const source = wasAI ? "AI slot" : "human seat"
+    this.setState({ players: updatedPlayers });
+    const wasAI = player.isAI;
+    const source = wasAI ? "AI slot" : "human seat";
     this.addLogEntry(
       `${player.name} claimed from ${source} by a human!`,
       "system",
-    )
+    );
     console.log(
       `[GameRoom] Player ${index} (${player.name}) claimed by ${clientId}`,
-    )
+    );
   }
 
   public startGame() {
-    if (this.state.players.length < 2) return
-    this.setState({ phase: "rolling" })
-    this.addLogEntry("Game Started!", "system")
+    if (this.state.players.length < 2) return;
+
+    const rulesetConfig = getRulesetConfig(
+      this.state.settings.rulesetId ?? "classic",
+    );
+
+    // Ensure all players have proper starting state
+    const players: Player[] = this.state.players.map((player, index) => {
+      const newPlayer: Player = {
+        ...player,
+        position: 0,
+        cash: rulesetConfig.startingCash,
+        properties: [] as number[],
+        inJail: false,
+        jailTurns: 0,
+        bankrupt: false,
+        isConnected: player.clientId ? true : false,
+      };
+      return newPlayer;
+    });
+
+    // For 1906 ruleset: deal 24 property cards at start if enabled
+    if (
+      rulesetConfig.dealPropertiesAtStart &&
+      rulesetConfig.propertiesDealtCount > 0
+    ) {
+      const shuffledIndices = Array.from(
+        { length: rulesetConfig.boardSpaces.length },
+        (_, i) => i,
+      ).sort(() => Math.random() - 0.5);
+
+      const propertySpaces = rulesetConfig.boardSpaces.filter(
+        (space): space is Property => space.type === "property",
+      );
+
+      let dealIndex = 0;
+      for (let playerIndex = 0; playerIndex < players.length; playerIndex++) {
+        const player = players[playerIndex]!;
+
+        for (let i = 0; i < rulesetConfig.propertiesDealtCount; i++) {
+          if (dealIndex >= propertySpaces.length) break;
+
+          const idx = shuffledIndices[dealIndex % propertySpaces.length]!;
+          const propertySpace = propertySpaces[idx];
+          if (propertySpace) {
+            player.properties = [...player.properties, propertySpace.id];
+          }
+          dealIndex++;
+        }
+      }
+    }
+
+    this.setState({
+      players,
+      currentPlayerIndex: 0,
+      spaces: rulesetConfig.boardSpaces,
+      chanceDeck: shuffleDeck(rulesetConfig.chanceDeck),
+      communityChestDeck: shuffleDeck(rulesetConfig.communityChestDeck),
+      phase: "rolling",
+      diceRoll: null,
+      consecutiveDoubles: 0,
+      passedGo: false,
+      auction: null,
+      trade: null,
+      lastCardDrawn: null,
+      gameLog: [],
+      turn: 1,
+      winner: null,
+      lastDiceRoll: null,
+      // Game settings
+      settings: this.state.settings,
+      // Phase 1: Economic Realism
+      roundsCompleted: 0,
+      currentGoSalary: rulesetConfig.goSalary,
+      awaitingTaxDecision: null,
+      // Phase 2: Housing Scarcity
+      availableHouses: rulesetConfig.totalHouses,
+      availableHotels: rulesetConfig.totalHotels,
+      // Phase 2: Economic Events
+      activeEconomicEvents: [],
+      // Card-triggered utility multiplier override
+      utilityMultiplierOverride: null,
+      // Phase 3: Rent Negotiation
+      pendingRentNegotiation: null,
+      // Phase 3: Bankruptcy Restructuring
+      pendingBankruptcy: null,
+      // Jackpot system
+      jackpot: 0,
+    });
+
+    this.addLogEntry(`Game started with ${players.length} players!`, "system");
   }
 
   // --- GameActions Implementation ---
@@ -782,7 +882,17 @@ export class GameRoom implements GameActions {
     isAIFlags: boolean[] = [],
     aiDifficulties: AIDifficulty[] = [],
     clientIds: (string | undefined)[] = [],
+    settings?: Partial<GameSettings>,
   ) {
+    // Apply provided settings before loading ruleset config
+    if (settings) {
+      this.setState({ settings: { ...this.state.settings, ...settings } });
+    }
+
+    const rulesetConfig = getRulesetConfig(
+      this.state.settings.rulesetId ?? "classic",
+    );
+
     const players = playerNames.map((name, index) => {
       const player = createPlayer(
         index,
@@ -791,19 +901,54 @@ export class GameRoom implements GameActions {
         PLAYER_COLORS[index] ?? "#999999",
         isAIFlags[index] ?? false,
         aiDifficulties[index],
-      )
+      );
       if (clientIds[index]) {
-        player.clientId = clientIds[index]
+        player.clientId = clientIds[index];
       }
-      return player
-    })
+      return player;
+    });
+
+    // For 1906 ruleset: deal 24 property cards at start if enabled
+    if (
+      rulesetConfig.dealPropertiesAtStart &&
+      rulesetConfig.propertiesDealtCount > 0
+    ) {
+      const shuffledIndices = Array.from(
+        { length: rulesetConfig.boardSpaces.length },
+        (_, i) => i,
+      ).sort(() => Math.random() - 0.5);
+
+      // Deal properties to players (skip non-property spaces)
+      const propertySpaces = rulesetConfig.boardSpaces.filter(
+        (space): space is Property => space.type === "property",
+      );
+
+      let dealIndex = 0;
+      for (let playerIndex = 0; playerIndex < players.length; playerIndex++) {
+        const player = players[playerIndex]!;
+
+        // Deal specified number of properties to each player
+        for (let i = 0; i < rulesetConfig.propertiesDealtCount; i++) {
+          if (dealIndex >= propertySpaces.length) break;
+
+          const propertySpace =
+            propertySpaces[shuffledIndices[dealIndex % propertySpaces.length]];
+          if (propertySpace) {
+            player.properties.push(propertySpace.id);
+            // 1906: Properties are dealt for free (no cash deduction)
+            // The original code incorrectly subtracted startingCash here
+          }
+          dealIndex++;
+        }
+      }
+    }
 
     this.setState({
       players,
       currentPlayerIndex: 0,
-      spaces: JSON.parse(JSON.stringify(boardSpaces)) as Space[],
-      chanceDeck: shuffleDeck(createChanceDeck()),
-      communityChestDeck: shuffleDeck(createCommunityChestDeck()),
+      spaces: rulesetConfig.boardSpaces,
+      chanceDeck: shuffleDeck(rulesetConfig.chanceDeck),
+      communityChestDeck: shuffleDeck(rulesetConfig.communityChestDeck),
       phase: "rolling",
       diceRoll: null,
       consecutiveDoubles: 0,
@@ -820,11 +965,11 @@ export class GameRoom implements GameActions {
       settings: this.state.settings,
       // Phase 1: Economic Realism
       roundsCompleted: 0,
-      currentGoSalary: 200,
+      currentGoSalary: rulesetConfig.goSalary,
       awaitingTaxDecision: null,
       // Phase 2: Housing Scarcity
-      availableHouses: 32,
-      availableHotels: 12,
+      availableHouses: rulesetConfig.totalHouses,
+      availableHotels: rulesetConfig.totalHotels,
       // Phase 2: Economic Events
       activeEconomicEvents: [],
       // Card-triggered utility multiplier override
@@ -835,26 +980,26 @@ export class GameRoom implements GameActions {
       pendingBankruptcy: null,
       // Jackpot system
       jackpot: 0,
-    })
+    });
 
-    this.addLogEntry(`Game started with ${players.length} players!`, "system")
+    this.addLogEntry(`Game started with ${players.length} players!`, "system");
   }
 
   // Update game settings
   public updateSettings(settings: Partial<GameSettings>) {
     this.setState({
       settings: { ...this.state.settings, ...settings },
-    })
+    });
   }
 
   public rollDice() {
-    const roll = rollDiceFn()
+    const roll = rollDiceFn();
 
     // Phase 1: Verify Jail Rules - 3 consecutive doubles = Jail
     const { shouldGoToJail, newConsecutiveDoubles } = checkThreeDoubles(
       this.state.consecutiveDoubles,
       roll.isDoubles,
-    )
+    );
 
     if (shouldGoToJail) {
       this.setState({
@@ -862,14 +1007,14 @@ export class GameRoom implements GameActions {
         lastDiceRoll: roll,
         consecutiveDoubles: 0,
         phase: "moving",
-      })
+      });
       this.addLogEntry(
         `${this.state.players[this.state.currentPlayerIndex]?.name} rolled 3 consecutive doubles! GO TO JAIL!`,
         "jail",
         this.state.currentPlayerIndex,
-      )
-      this.goToJail(this.state.currentPlayerIndex)
-      return roll
+      );
+      this.goToJail(this.state.currentPlayerIndex);
+      return roll;
     }
 
     this.setState({
@@ -877,36 +1022,62 @@ export class GameRoom implements GameActions {
       lastDiceRoll: roll,
       consecutiveDoubles: newConsecutiveDoubles,
       phase: "moving",
-    })
+    });
 
-    const player = this.state.players[this.state.currentPlayerIndex]
+    const player = this.state.players[this.state.currentPlayerIndex];
     if (player) {
-      const doublesText = roll.isDoubles ? " (Doubles!)" : ""
+      const doublesText = roll.isDoubles ? " (Doubles!)" : "";
       const consecutiveText =
         roll.isDoubles && this.state.consecutiveDoubles > 0
           ? ` (${this.state.consecutiveDoubles + 1}/3 consecutive)`
-          : ""
+          : "";
       this.addLogEntry(
         `${player.name} rolled ${roll.die1} + ${roll.die2} = ${roll.total}${doublesText}${consecutiveText}`,
         "roll",
         this.state.currentPlayerIndex,
-      )
+      );
     }
 
-    return roll
+    return roll;
   }
 
   public movePlayer(playerIndex: number, steps: number) {
-    const player = this.state.players[playerIndex]
-    if (!player || player.inJail || player.bankrupt) return
+    const player = this.state.players[playerIndex];
+    if (!player || player.inJail || player.bankrupt) return;
+
+    const boardSize = this.state.spaces.length; // 40 or 48
+    const rulesetConfig = getRulesetConfig(
+      this.state.settings.rulesetId ?? "classic",
+    );
+
+    // 1906: Doubles railroad pass - move to next railroad when rolling doubles
+    let actualSteps = steps;
+    if (
+      rulesetConfig.doublesRailroadPass &&
+      this.state.diceRoll?.isDoubles &&
+      boardSize === 48
+    ) {
+      const nextRailroad = calculateDoublesRailroadPass(
+        player.position,
+        boardSize,
+      );
+      actualSteps = nextRailroad - player.position;
+      if (actualSteps < 0) {
+        actualSteps += boardSize; // wrap around
+      }
+      if (actualSteps <= 0) {
+        actualSteps = steps; // fallback to normal movement
+      }
+    }
 
     const { newPosition, passedGo } = calculateNewPosition(
       player.position,
-      steps,
-    )
+      actualSteps,
+      boardSize,
+    );
 
     // Use dynamic GO salary (inflation mechanic)
-    const goSalary = this.state.currentGoSalary
+    const goSalary = this.state.currentGoSalary;
 
     // Apply GO salary immediately
     const updatedPlayersWithSalary = this.state.players.map((p, i) =>
@@ -917,27 +1088,27 @@ export class GameRoom implements GameActions {
             cash: p.cash + (passedGo ? goSalary : 0),
           }
         : p,
-    )
+    );
 
     this.setState({
       players: updatedPlayersWithSalary,
       passedGo,
       phase: "resolving_space",
-    })
+    });
 
-    const updatedPlayer = updatedPlayersWithSalary[playerIndex]
+    const updatedPlayer = updatedPlayersWithSalary[playerIndex];
     if (passedGo && updatedPlayer && updatedPlayer.iousPayable.length > 0) {
       // Check for both current interestDue AND expired IOUs
       const interestDue = updatedPlayer.iousPayable.reduce(
         (sum, iou) => sum + (iou.interestDue || 0),
         0,
-      )
+      );
       const expiredIOUs = updatedPlayer.iousPayable.filter(
         (iou) => (iou.roundsRemaining || 0) <= 0,
-      )
+      );
       const totalDueAmount =
         interestDue +
-        expiredIOUs.reduce((sum, iou) => sum + iou.currentAmount, 0)
+        expiredIOUs.reduce((sum, iou) => sum + iou.currentAmount, 0);
 
       if (totalDueAmount > 0) {
         // If player has enough cash AFTER passing GO, they must pay interest immediately
@@ -953,32 +1124,32 @@ export class GameRoom implements GameActions {
                 interestDue: iou.interestDue || 0,
               })),
             },
-          })
+          });
 
           this.addLogEntry(
             `💰 ${updatedPlayer.name} passed GO and must settle $${interestDue} in interest.`,
             "system",
             playerIndex,
-          )
+          );
           // We don't return here yet, we'll call payDebtService or similar if needed,
           // but for now let's use the phase to trigger the UI/AI.
-          return
+          return;
         } else {
           // Player cannot afford interest OR has expired IOUs
           // Identify the "Lead Creditor" - the one owed the most (principal + interest) across all their IOUs from this debtor
-          const creditorTotals: Record<number, number> = {}
+          const creditorTotals: Record<number, number> = {};
           updatedPlayer.iousPayable.forEach((iou) => {
-            const amount = iou.currentAmount + (iou.interestDue || 0)
+            const amount = iou.currentAmount + (iou.interestDue || 0);
             creditorTotals[iou.creditorId] =
-              (creditorTotals[iou.creditorId] || 0) + amount
-          })
+              (creditorTotals[iou.creditorId] || 0) + amount;
+          });
 
-          let leadCreditorId = -1
-          let maxOwed = -1
+          let leadCreditorId = -1;
+          let maxOwed = -1;
           for (const [cId, total] of Object.entries(creditorTotals)) {
             if (total > maxOwed) {
-              maxOwed = total
-              leadCreditorId = parseInt(cId)
+              maxOwed = total;
+              leadCreditorId = parseInt(cId);
             }
           }
 
@@ -988,7 +1159,7 @@ export class GameRoom implements GameActions {
               expiredIOUs.find((iou) => iou.creditorId === leadCreditorId) ||
               updatedPlayer.iousPayable.find(
                 (iou) => iou.creditorId === leadCreditorId,
-              )
+              );
 
             if (representativeIou) {
               this.setState({
@@ -999,91 +1170,97 @@ export class GameRoom implements GameActions {
                   iouId: representativeIou.id,
                   amountOwed: maxOwed,
                 },
-              })
+              });
 
-              const leadCreditor = this.state.players[leadCreditorId]
+              const leadCreditor = this.state.players[leadCreditorId];
               this.addLogEntry(
                 `🛑 ${updatedPlayer.name} cannot meet obligations! Lead creditor ${leadCreditor?.name} (owed $${maxOwed}) will decide how to proceed.`,
                 "system",
                 playerIndex,
-              )
-              return
+              );
+              return;
             }
           }
         }
       }
     }
 
-    const space = this.state.spaces[newPosition]
-    const goBonus = passedGo ? ` (collected $${goSalary} passing GO)` : ""
+    const space = this.state.spaces[newPosition];
+    const goBonus = passedGo ? ` (collected $${goSalary} passing GO)` : "";
     if (space) {
       this.addLogEntry(
         `${player.name} moved to ${space.name}${goBonus}`,
         "move",
         playerIndex,
-      )
+      );
     }
 
-    this.resolveSpace(playerIndex)
+    this.resolveSpace(playerIndex);
   }
 
   public resolveSpace(playerIndex: number) {
-    const player = this.state.players[playerIndex]
-    if (!player) return
+    const player = this.state.players[playerIndex];
+    if (!player) return;
 
-    const space = this.state.spaces[player.position]
-    if (!space) return
+    const space = this.state.spaces[player.position];
+    if (!space) return;
+
+    const rulesetConfig = getRulesetConfig(
+      this.state.settings.rulesetId ?? "classic",
+    );
 
     switch (space.type) {
       case "property":
       case "railroad":
       case "utility": {
-        const property = space as Property
+        const property = space as Property;
         if (property.owner === undefined) {
           if (property.type === "utility") {
             // Unowned utility: landing fee (4× dice, same modifiers as rent) goes to Jackpot.
-            const rawTotal = this.state.diceRoll?.total
+            const rawTotal = this.state.diceRoll?.total;
             const diceTotal: number =
-              rawTotal !== undefined && Number.isFinite(rawTotal) ? rawTotal : 7
+              rawTotal !== undefined && Number.isFinite(rawTotal)
+                ? rawTotal
+                : 7;
             const fee = calculateUnownedUtilityLandingFee(
               this.state,
               diceTotal,
               property,
-            )
-            const lander = this.state.players[playerIndex]
+            );
+            const lander = this.state.players[playerIndex];
             if (fee > 0 && lander && lander.cash > 0) {
-              const paid = Math.min(fee, lander.cash)
+              const paid = Math.min(fee, lander.cash);
               this.setState({
                 players: this.state.players.map((p, i) =>
                   i === playerIndex ? { ...p, cash: p.cash - paid } : p,
                 ),
                 jackpot: this.state.jackpot + paid,
                 utilityMultiplierOverride: null,
-              })
-              const shortfall = fee - paid
+              });
+              const shortfall = fee - paid;
               this.addLogEntry(
                 shortfall > 0
                   ? `${lander.name} paid $${paid} of $${fee} utility fee to Jackpot (unowned ${property.name})`
                   : `${lander.name} paid $${paid} utility fee to Jackpot (unowned ${property.name})`,
                 "rent",
                 playerIndex,
-              )
+              );
             }
           }
-          this.setState({ phase: "awaiting_buy_decision" })
+          this.setState({ phase: "awaiting_buy_decision" });
         } else if (property.owner !== playerIndex) {
-          const rawTotal = this.state.diceRoll?.total
+          const rawTotal = this.state.diceRoll?.total;
           const diceTotal: number =
-            rawTotal !== undefined && Number.isFinite(rawTotal) ? rawTotal : 7
-          this.payRent(playerIndex, property.id, diceTotal)
+            rawTotal !== undefined && Number.isFinite(rawTotal) ? rawTotal : 7;
+          this.payRent(playerIndex, property.id, diceTotal);
         }
-        break
+        break;
       }
 
       case "chance":
       case "community_chest":
-        this.drawCard(playerIndex, space.type)
-        break
+        this.drawCard(playerIndex, space.type);
+        break;
 
       case "tax": {
         // Check for Tax Holiday economic event
@@ -1095,8 +1272,8 @@ export class GameRoom implements GameActions {
             `🎉 ${player.name} enjoys Tax Holiday - no Income Tax!`,
             "tax",
             playerIndex,
-          )
-          break
+          );
+          break;
         }
 
         if (space.name.includes("Income")) {
@@ -1104,18 +1281,18 @@ export class GameRoom implements GameActions {
           const percentageAmount = calculateTenPercentTax(
             this.state,
             playerIndex,
-          )
-          const flatAmount = 200
+          );
+          const flatAmount = 200;
 
           // For AI players, automatically choose the optimal option
           if (player.isAI) {
-            const optimal = getOptimalTaxChoice(this.state, playerIndex)
-            this.payTax(playerIndex, optimal.amount)
+            const optimal = getOptimalTaxChoice(this.state, playerIndex);
+            this.payTax(playerIndex, optimal.amount);
             this.addLogEntry(
               `${player.name} chose to pay ${optimal.choice === "percentage" ? "10%" : "flat $200"} ($${optimal.amount})`,
               "tax",
               playerIndex,
-            )
+            );
           } else {
             // Human player gets a choice
             this.setState({
@@ -1125,70 +1302,145 @@ export class GameRoom implements GameActions {
                 flatAmount,
                 percentageAmount,
               },
-            })
+            });
           }
         } else {
           // Luxury Tax is always flat $100
-          this.payTax(playerIndex, 100)
+          this.payTax(playerIndex, 100);
         }
-        break
+        break;
       }
 
       case "go_to_jail":
         if (this.state.passedGo) {
-          const goSalary = this.state.currentGoSalary
+          const goSalary = this.state.currentGoSalary;
           this.setState({
             players: this.state.players.map((p, i) =>
               i === playerIndex ? { ...p, cash: p.cash - goSalary } : p,
             ),
             passedGo: false,
-          })
+          });
           this.addLogEntry(
             `${player?.name} does not collect $${goSalary} (sent to Jail)`,
             "jail",
             playerIndex,
-          )
+          );
         }
-        this.goToJail(playerIndex)
-        break
+        this.goToJail(playerIndex);
+        break;
 
       case "free_parking":
         // Trigger economic event if enabled
         if (this.state.settings.enableEconomicEvents) {
-          this.triggerEconomicEvent(playerIndex)
+          this.triggerEconomicEvent(playerIndex);
         }
         // Check for jackpot win (15% chance if jackpot > 0)
         if (this.state.jackpot > 0 && Math.random() < 0.15) {
-          const jackpotAmount = this.state.jackpot
+          const jackpotAmount = this.state.jackpot;
           this.setState({
             players: this.state.players.map((p, i) =>
               i === playerIndex ? { ...p, cash: p.cash + jackpotAmount } : p,
             ),
             jackpot: 0,
-          })
+          });
           this.addLogEntry(
             `🎉 ${player.name} won the Free Parking jackpot of $${jackpotAmount}!`,
             "system",
             playerIndex,
-          )
+          );
         }
         // Free Parking is otherwise a safe space - nothing happens
-        break
+        break;
+
+      // ============ 1906-SPECIFIC SPACE HANDLERS ============
+      case "mother_earth":
+        // Mother Earth is the 1906 equivalent of GO - collect wages
+        if (!this.state.passedGo) {
+          const goSalary = this.state.currentGoSalary;
+          this.setState({
+            players: this.state.players.map((p, i) =>
+              i === playerIndex ? { ...p, cash: p.cash + goSalary } : p,
+            ),
+          });
+          this.addLogEntry(
+            `${player.name} landed on Mother Earth and collected $${goSalary} in wages!`,
+            "mother_earth",
+            playerIndex,
+          );
+        }
+        // Trigger economic event if enabled
+        if (this.state.settings.enableEconomicEvents) {
+          this.triggerEconomicEvent(playerIndex);
+        }
+        break;
+
+      case "public_treasury":
+        // Public Treasury is the 1906 equivalent of Free Parking
+        // Trigger economic event if enabled
+        if (this.state.settings.enableEconomicEvents) {
+          this.triggerEconomicEvent(playerIndex);
+        }
+        break;
+
+      case "speculation":
+        // Speculation space: roll dice, win amount based on doublesSpeculationWin
+        const speculationWin = rulesetConfig.doublesSpeculationWin || 100;
+        const specRoll = rollDiceFn();
+        this.addLogEntry(
+          `${player.name} landed on Speculation and rolled ${specRoll.die1} + ${specRoll.die2} = ${specRoll.total}`,
+          "speculation",
+          playerIndex,
+        );
+
+        if (specRoll.isDoubles) {
+          // Doubles: win bigger prize
+          const winAmount = speculationWin * 2;
+          this.setState({
+            players: this.state.players.map((p, i) =>
+              i === playerIndex ? { ...p, cash: p.cash + winAmount } : p,
+            ),
+          });
+          this.addLogEntry(
+            `${player.name} rolled doubles on Speculation and won $${winAmount}!`,
+            "speculation",
+            playerIndex,
+          );
+        } else {
+          // Non-doubles: win smaller amount
+          this.setState({
+            players: this.state.players.map((p, i) =>
+              i === playerIndex ? { ...p, cash: p.cash + speculationWin } : p,
+            ),
+          });
+          this.addLogEntry(
+            `${player.name} won $${speculationWin} from Speculation!`,
+            "speculation",
+            playerIndex,
+          );
+        }
+        break;
+
+      case "miscellaneous":
+        // Miscellaneous (center space in 1906) - safe space, trigger economic event
+        if (this.state.settings.enableEconomicEvents) {
+          this.triggerEconomicEvent(playerIndex);
+        }
+        break;
     }
   }
 
   // ============ ECONOMIC EVENTS SYSTEM (Phase 2) ============
 
   private getRandomEconomicEvent(): {
-    type: EconomicEventType
-    description: string
-    duration: number
+    type: EconomicEventType;
+    description: string;
+    duration: number;
   } {
     const events: Array<{
-      type: EconomicEventType
-      description: string
-      duration: number
-      weight: number
+      type: EconomicEventType;
+      description: string;
+      duration: number;
+      weight: number;
     }> = [
       {
         type: "recession",
@@ -1245,38 +1497,38 @@ export class GameRoom implements GameActions {
         duration: 0,
         weight: 25,
       },
-    ]
+    ];
 
     // Weighted random selection
-    const totalWeight = events.reduce((sum, e) => sum + e.weight, 0)
-    let random = Math.random() * totalWeight
+    const totalWeight = events.reduce((sum, e) => sum + e.weight, 0);
+    let random = Math.random() * totalWeight;
 
     for (const event of events) {
-      random -= event.weight
+      random -= event.weight;
       if (random <= 0) {
         return {
           type: event.type,
           description: event.description,
           duration: event.duration,
-        }
+        };
       }
     }
 
-    return events[0]! // Fallback
+    return events[0]!; // Fallback
   }
 
   public triggerEconomicEvent(playerIndex: number) {
-    const player = this.state.players[playerIndex]
-    if (!player) return
+    const player = this.state.players[playerIndex];
+    if (!player) return;
 
-    const event = this.getRandomEconomicEvent()
+    const event = this.getRandomEconomicEvent();
 
     // Log the event
     this.addLogEntry(
       `${player.name} triggered an economic event: ${event.description}`,
       "system",
       playerIndex,
-    )
+    );
 
     // Handle immediate effects
     if (event.type === "economic_stimulus") {
@@ -1285,16 +1537,16 @@ export class GameRoom implements GameActions {
         players: this.state.players.map((p) =>
           p.bankrupt ? p : { ...p, cash: p.cash + 100 },
         ),
-      })
-      this.addLogEntry("All players received $100 stimulus!", "system")
-      return
+      });
+      this.addLogEntry("All players received $100 stimulus!", "system");
+      return;
     }
 
     // Check if this event type is already active
     const existingEventIndex = findExistingEventIndex(
       this.state.activeEconomicEvents,
       event.type,
-    )
+    );
 
     if (existingEventIndex >= 0) {
       // Extend existing event
@@ -1302,108 +1554,108 @@ export class GameRoom implements GameActions {
         this.state.activeEconomicEvents,
         existingEventIndex,
         event.duration,
-      )
-      this.setState({ activeEconomicEvents: updatedEvents })
+      );
+      this.setState({ activeEconomicEvents: updatedEvents });
       this.addLogEntry(
         `${event.description} extended by ${event.duration} turns!`,
         "system",
-      )
+      );
     } else {
       // Add new event
-      const newEvent = createActiveEvent(event)
+      const newEvent = createActiveEvent(event);
       this.setState({
         activeEconomicEvents: addNewEvent(
           this.state.activeEconomicEvents,
           newEvent,
         ),
-      })
+      });
     }
   }
 
   // Decrement economic event durations at end of each round
   public updateEconomicEvents() {
-    if (this.state.activeEconomicEvents.length === 0) return
+    if (this.state.activeEconomicEvents.length === 0) return;
 
     const { updatedEvents, expiredEvents } = updateEventDurations(
       this.state.activeEconomicEvents,
-    )
+    );
 
     // Log expired events
     expiredEvents.forEach((event) => {
-      this.addLogEntry(`${event.description} has ended.`, "system")
-    })
+      this.addLogEntry(`${event.description} has ended.`, "system");
+    });
 
-    this.setState({ activeEconomicEvents: updatedEvents })
+    this.setState({ activeEconomicEvents: updatedEvents });
   }
 
   // Check if an economic event is active
   public isEconomicEventActive(type: EconomicEventType): boolean {
-    return isEconomicEventActiveFn(this.state.activeEconomicEvents, type)
+    return isEconomicEventActiveFn(this.state.activeEconomicEvents, type);
   }
 
   // New method for handling tax decision
   public chooseTaxOption(playerIndex: number, choice: "flat" | "percentage") {
-    const taxDecision = this.state.awaitingTaxDecision
-    if (!taxDecision || taxDecision.playerIndex !== playerIndex) return
+    const taxDecision = this.state.awaitingTaxDecision;
+    if (!taxDecision || taxDecision.playerIndex !== playerIndex) return;
 
-    const player = this.state.players[playerIndex]
-    if (!player) return
+    const player = this.state.players[playerIndex];
+    if (!player) return;
 
     const amount =
-      choice === "flat" ? taxDecision.flatAmount : taxDecision.percentageAmount
+      choice === "flat" ? taxDecision.flatAmount : taxDecision.percentageAmount;
 
-    this.setState({ awaitingTaxDecision: null, phase: "resolving_space" })
-    this.setState({ awaitingTaxDecision: undefined, phase: "resolving_space" })
-    this.payTax(playerIndex, amount)
+    this.setState({ awaitingTaxDecision: null, phase: "resolving_space" });
+    this.setState({ awaitingTaxDecision: undefined, phase: "resolving_space" });
+    this.payTax(playerIndex, amount);
 
     this.addLogEntry(
       `${player.name} chose to pay ${choice === "percentage" ? "10%" : "flat $200"} ($${amount})`,
       "tax",
       playerIndex,
-    )
+    );
   }
 
   public buyProperty(propertyId: number) {
-    const playerIndex = this.state.currentPlayerIndex
+    const playerIndex = this.state.currentPlayerIndex;
 
     // Validate turn order
     const turnValidation = validatePlayerTurn(this.state, playerIndex, [
       "awaiting_buy_decision",
-    ])
+    ]);
     if (!turnValidation.valid) {
       this.addLogEntry(
         turnValidation.error || "Invalid action",
         "system",
         playerIndex,
-      )
-      return
+      );
+      return;
     }
 
-    const player = this.state.players[playerIndex]
+    const player = this.state.players[playerIndex];
     const property = this.state.spaces.find(
       (s) => s.id === propertyId,
-    ) as Property
+    ) as Property;
 
     if (!player || !property) {
-      this.addLogEntry("Property or player not found", "system", playerIndex)
-      return
+      this.addLogEntry("Property or player not found", "system", playerIndex);
+      return;
     }
 
     if (property.owner !== undefined) {
-      this.addLogEntry("This property is already owned", "system", playerIndex)
-      return
+      this.addLogEntry("This property is already owned", "system", playerIndex);
+      return;
     }
 
     // Validate cash
-    const price = getCurrentPropertyPrice(this.state, property)
-    const cashValidation = validateCash(player, price, "buy property")
+    const price = getCurrentPropertyPrice(this.state, property);
+    const cashValidation = validateCash(player, price, "buy property");
     if (!cashValidation.valid) {
       this.addLogEntry(
         cashValidation.error || "Insufficient funds",
         "system",
         playerIndex,
-      )
-      return
+      );
+      return;
     }
 
     this.setState({
@@ -1420,68 +1672,68 @@ export class GameRoom implements GameActions {
           : p,
       ),
       phase: "resolving_space",
-    })
+    });
 
     this.addLogEntry(
       `${player.name} bought ${property.name} for $${price}`,
       "buy",
       playerIndex,
-    )
+    );
   }
 
   public declineProperty(propertyId: number) {
-    this.startAuction(propertyId)
+    this.startAuction(propertyId);
   }
 
   public payRent(playerIndex: number, propertyId: number, diceTotal: number) {
-    const payer = this.state.players[playerIndex]
+    const payer = this.state.players[playerIndex];
     const property = this.state.spaces.find(
       (s) => s.id === propertyId,
-    ) as Property
+    ) as Property;
 
-    if (!payer || !property || property.owner === undefined) return
+    if (!payer || !property || property.owner === undefined) return;
 
-    const rent = calculateRent(this.state, property, diceTotal)
+    const rent = calculateRent(this.state, property, diceTotal);
 
     if (!Number.isFinite(rent) || rent < 0) {
-      this.setState({ utilityMultiplierOverride: null })
-      return
+      this.setState({ utilityMultiplierOverride: null });
+      return;
     }
 
     if (rent <= 0) {
       // Clear utility multiplier override even if no rent is paid
-      this.setState({ utilityMultiplierOverride: null })
-      return
+      this.setState({ utilityMultiplierOverride: null });
+      return;
     }
 
     if (payer.cash >= rent) {
-      const jackpotShare = property.mortgaged ? Math.floor(rent * 0.2) : 0
-      const ownerShare = rent - jackpotShare
+      const jackpotShare = property.mortgaged ? Math.floor(rent * 0.2) : 0;
+      const ownerShare = rent - jackpotShare;
 
       this.setState({
         players: this.state.players.map((p, i) => {
-          if (i === playerIndex) return { ...p, cash: p.cash - rent }
-          if (i === property.owner) return { ...p, cash: p.cash + ownerShare }
-          return p
+          if (i === playerIndex) return { ...p, cash: p.cash - rent };
+          if (i === property.owner) return { ...p, cash: p.cash + ownerShare };
+          return p;
         }),
         jackpot: this.state.jackpot + jackpotShare,
         // Clear utility multiplier override after rent is paid
         utilityMultiplierOverride: null,
-      })
+      });
 
-      const owner = this.state.players[property.owner]
+      const owner = this.state.players[property.owner];
       if (jackpotShare > 0) {
         this.addLogEntry(
           `${payer.name} paid $${rent} rent for mortgaged ${property.name} ($${ownerShare} to ${owner?.name}, $${jackpotShare} to Jackpot)`,
           "rent",
           playerIndex,
-        )
+        );
       } else {
         this.addLogEntry(
           `${payer.name} paid $${rent} rent to ${owner?.name}`,
           "rent",
           playerIndex,
-        )
+        );
       }
     } else if (this.state.settings.enableRentNegotiation) {
       // Phase 3: Initiate rent negotiation instead of immediate bankruptcy
@@ -1490,12 +1742,12 @@ export class GameRoom implements GameActions {
         property.owner,
         propertyId,
         rent,
-      )
+      );
     } else if (this.state.settings.enableBankruptcyRestructuring) {
       // Phase 3: Offer Chapter 11 restructuring
-      this.offerRestructuring(playerIndex, property.owner, rent)
+      this.offerRestructuring(playerIndex, property.owner, rent);
     } else {
-      this.declareBankruptcy(playerIndex, property.owner)
+      this.declareBankruptcy(playerIndex, property.owner);
     }
   }
 
@@ -1506,8 +1758,8 @@ export class GameRoom implements GameActions {
     propertyId: number,
     rentAmount: number,
   ) {
-    const debtor = this.state.players[debtorIndex]
-    if (!debtor) return
+    const debtor = this.state.players[debtorIndex];
+    if (!debtor) return;
 
     this.setState({
       phase: "awaiting_rent_negotiation",
@@ -1520,45 +1772,45 @@ export class GameRoom implements GameActions {
         status: "creditor_decision",
       },
       utilityMultiplierOverride: null,
-    })
+    });
 
-    const creditor = this.state.players[creditorIndex]
+    const creditor = this.state.players[creditorIndex];
     this.addLogEntry(
       `${debtor.name} cannot afford $${rentAmount} rent. Negotiation started with ${creditor?.name}`,
       "rent",
       debtorIndex,
-    )
+    );
   }
 
   // Creditor forgives the rent entirely
   public forgiveRent() {
-    const negotiation = this.state.pendingRentNegotiation
-    if (!negotiation) return
+    const negotiation = this.state.pendingRentNegotiation;
+    if (!negotiation) return;
 
-    const creditor = this.state.players[negotiation.creditorIndex]
-    const debtor = this.state.players[negotiation.debtorIndex]
+    const creditor = this.state.players[negotiation.creditorIndex];
+    const debtor = this.state.players[negotiation.debtorIndex];
 
     this.setState({
       phase: "resolving_space",
       pendingRentNegotiation: null,
       utilityMultiplierOverride: null,
-    })
+    });
 
     this.addLogEntry(
       `${creditor?.name} forgave $${negotiation.rentAmount} rent owed by ${debtor?.name}`,
       "rent",
       negotiation.creditorIndex,
-    )
+    );
   }
 
   // Creditor proposes an IOU (payment plan)
   public offerPaymentPlan(partialPayment: number, interestRate: number) {
-    const negotiation = this.state.pendingRentNegotiation
-    if (!negotiation || negotiation.status !== "creditor_decision") return
+    const negotiation = this.state.pendingRentNegotiation;
+    if (!negotiation || negotiation.status !== "creditor_decision") return;
 
-    const creditor = this.state.players[negotiation.creditorIndex]
-    const debtor = this.state.players[negotiation.debtorIndex]
-    if (!creditor || !debtor) return
+    const creditor = this.state.players[negotiation.creditorIndex];
+    const debtor = this.state.players[negotiation.debtorIndex];
+    if (!creditor || !debtor) return;
 
     this.setState({
       pendingRentNegotiation: {
@@ -1569,46 +1821,46 @@ export class GameRoom implements GameActions {
           interestRate,
         },
       },
-    })
+    });
 
     this.addLogEntry(
       `${creditor.name} offered a payment plan to ${debtor.name}: $${partialPayment} now, rest as IOU at ${interestRate * 100}% interest`,
       "rent",
       negotiation.creditorIndex,
-    )
+    );
   }
 
   // Debtor accepts the proposed payment plan
   public acceptPaymentPlan() {
-    const negotiation = this.state.pendingRentNegotiation
+    const negotiation = this.state.pendingRentNegotiation;
     if (
       !negotiation ||
       negotiation.status !== "debtor_decision" ||
       !negotiation.proposedIOU
     )
-      return
+      return;
 
-    const { debtorIndex, creditorIndex, rentAmount, proposedIOU } = negotiation
-    const { partialPayment, interestRate } = proposedIOU
-    const debtor = this.state.players[debtorIndex]
-    const creditor = this.state.players[creditorIndex]
+    const { debtorIndex, creditorIndex, rentAmount, proposedIOU } = negotiation;
+    const { partialPayment, interestRate } = proposedIOU;
+    const debtor = this.state.players[debtorIndex];
+    const creditor = this.state.players[creditorIndex];
 
-    if (!debtor || !creditor) return
+    if (!debtor || !creditor) return;
 
     // Ensure partial payment doesn't exceed what debtor has
-    const actualPayment = Math.floor(Math.min(partialPayment, debtor.cash))
-    const remainingDebt = Math.round(rentAmount - actualPayment)
+    const actualPayment = Math.floor(Math.min(partialPayment, debtor.cash));
+    const remainingDebt = Math.round(rentAmount - actualPayment);
 
     const property = this.state.spaces.find(
       (s) => s.id === negotiation.propertyId,
-    ) as Property
-    const isMortgaged = property?.mortgaged || false
+    ) as Property;
+    const isMortgaged = property?.mortgaged || false;
     const jackpotCutRate = isMortgaged
       ? this.state.settings.iouJackpotCutRate
-      : 0
+      : 0;
 
-    const jackpotShare = Math.floor(actualPayment * jackpotCutRate)
-    const creditorShare = actualPayment - jackpotShare
+    const jackpotShare = Math.floor(actualPayment * jackpotCutRate);
+    const creditorShare = actualPayment - jackpotShare;
 
     // Create IOU for remaining amount
     const newIOU: IOU = {
@@ -1624,7 +1876,7 @@ export class GameRoom implements GameActions {
       interestDue: 0,
       durationRounds: this.state.settings.iouDurationRounds,
       roundsRemaining: this.state.settings.iouDurationRounds,
-    }
+    };
 
     this.setState({
       players: this.state.players.map((p, i) => {
@@ -1633,37 +1885,37 @@ export class GameRoom implements GameActions {
             ...p,
             cash: p.cash - actualPayment,
             iousPayable: [...p.iousPayable, newIOU],
-          }
+          };
         }
         if (i === creditorIndex) {
           return {
             ...p,
             cash: p.cash + creditorShare,
             iousReceivable: [...p.iousReceivable, newIOU],
-          }
+          };
         }
-        return p
+        return p;
       }),
       jackpot: this.state.jackpot + jackpotShare,
       phase: "resolving_space",
       pendingRentNegotiation: null,
       utilityMultiplierOverride: null,
-    })
+    });
 
     this.addLogEntry(
       `${debtor.name} accepted the payment plan from ${creditor.name}`,
       "rent",
       debtorIndex,
-    )
+    );
   }
 
   // Debtor rejects the proposed payment plan
   public rejectPaymentPlan() {
-    const negotiation = this.state.pendingRentNegotiation
-    if (!negotiation || negotiation.status !== "debtor_decision") return
+    const negotiation = this.state.pendingRentNegotiation;
+    if (!negotiation || negotiation.status !== "debtor_decision") return;
 
-    const creditor = this.state.players[negotiation.creditorIndex]
-    const debtor = this.state.players[negotiation.debtorIndex]
+    const creditor = this.state.players[negotiation.creditorIndex];
+    const debtor = this.state.players[negotiation.debtorIndex];
 
     this.setState({
       pendingRentNegotiation: {
@@ -1671,40 +1923,40 @@ export class GameRoom implements GameActions {
         status: "creditor_decision",
         proposedIOU: undefined,
       },
-    })
+    });
 
     this.addLogEntry(
       `${debtor?.name} rejected the payment plan. ${creditor?.name} must choose another option.`,
       "rent",
       negotiation.debtorIndex,
-    )
+    );
   }
 
   // Debtor pays what they can now, rest becomes an IOU
   public createRentIOU(partialPayment: number) {
-    const negotiation = this.state.pendingRentNegotiation
-    if (!negotiation) return
+    const negotiation = this.state.pendingRentNegotiation;
+    if (!negotiation) return;
 
-    const { debtorIndex, creditorIndex, rentAmount } = negotiation
-    const debtor = this.state.players[debtorIndex]
-    const creditor = this.state.players[creditorIndex]
+    const { debtorIndex, creditorIndex, rentAmount } = negotiation;
+    const debtor = this.state.players[debtorIndex];
+    const creditor = this.state.players[creditorIndex];
 
-    if (!debtor || !creditor) return
+    if (!debtor || !creditor) return;
 
     // Ensure partial payment doesn't exceed what debtor has
-    const actualPayment = Math.floor(Math.min(partialPayment, debtor.cash))
-    const remainingDebt = Math.round(rentAmount - actualPayment)
+    const actualPayment = Math.floor(Math.min(partialPayment, debtor.cash));
+    const remainingDebt = Math.round(rentAmount - actualPayment);
 
     const property = this.state.spaces.find(
       (s) => s.id === negotiation.propertyId,
-    ) as Property
-    const isMortgaged = property?.mortgaged || false
+    ) as Property;
+    const isMortgaged = property?.mortgaged || false;
     const jackpotCutRate = isMortgaged
       ? this.state.settings.iouJackpotCutRate
-      : 0
+      : 0;
 
-    const jackpotShare = Math.floor(actualPayment * jackpotCutRate)
-    const creditorShare = actualPayment - jackpotShare
+    const jackpotShare = Math.floor(actualPayment * jackpotCutRate);
+    const creditorShare = actualPayment - jackpotShare;
 
     // Create IOU for remaining amount
     const newIOU: IOU = {
@@ -1720,7 +1972,7 @@ export class GameRoom implements GameActions {
       interestDue: 0,
       durationRounds: this.state.settings.iouDurationRounds,
       roundsRemaining: this.state.settings.iouDurationRounds,
-    }
+    };
 
     this.setState({
       players: this.state.players.map((p, i) => {
@@ -1729,53 +1981,53 @@ export class GameRoom implements GameActions {
             ...p,
             cash: p.cash - actualPayment,
             iousPayable: [...p.iousPayable, newIOU],
-          }
+          };
         }
         if (i === creditorIndex) {
           return {
             ...p,
             cash: p.cash + creditorShare,
             iousReceivable: [...p.iousReceivable, newIOU],
-          }
+          };
         }
-        return p
+        return p;
       }),
       jackpot: this.state.jackpot + jackpotShare,
       phase: "resolving_space",
       pendingRentNegotiation: null,
       utilityMultiplierOverride: null,
-    })
+    });
 
     this.addLogEntry(
       `${debtor.name} paid $${actualPayment} now, owes $${remainingDebt} IOU to ${creditor.name}`,
       "rent",
       debtorIndex,
-    )
+    );
   }
 
   // Pay off an IOU (full or partial)
   public payIOU(debtorIndex: number, iouId: number, amount?: number) {
-    const debtor = this.state.players[debtorIndex]
-    if (!debtor) return
+    const debtor = this.state.players[debtorIndex];
+    if (!debtor) return;
 
-    const iou = debtor.iousPayable.find((i) => i.id === iouId)
-    if (!iou) return
+    const iou = debtor.iousPayable.find((i) => i.id === iouId);
+    if (!iou) return;
 
-    const creditor = this.state.players[iou.creditorId]
-    if (!creditor) return
+    const creditor = this.state.players[iou.creditorId];
+    if (!creditor) return;
 
-    const totalOwed = calculateTotalOwed(iou)
+    const totalOwed = calculateTotalOwed(iou);
 
     // Ensure payment is a whole number and at least $1
     const rawPaymentAmount = amount
       ? Math.min(amount, totalOwed, debtor.cash)
-      : Math.min(totalOwed, debtor.cash)
-    const paymentAmount = Math.max(1, Math.floor(rawPaymentAmount))
+      : Math.min(totalOwed, debtor.cash);
+    const paymentAmount = Math.max(1, Math.floor(rawPaymentAmount));
 
-    if (!validatePaymentAmount(paymentAmount, debtor.cash, totalOwed)) return
+    if (!validatePaymentAmount(paymentAmount, debtor.cash, totalOwed)) return;
 
     const { paymentTowardsInterest, paymentTowardsPrincipal } =
-      calculatePaymentAllocation(paymentAmount, iou.interestDue || 0)
+      calculatePaymentAllocation(paymentAmount, iou.interestDue || 0);
 
     const { remainingInterest, remainingPrincipal, iouPaidOff } =
       calculateRemainingAmounts(
@@ -1783,13 +2035,13 @@ export class GameRoom implements GameActions {
         iou.interestDue || 0,
         paymentTowardsInterest,
         paymentTowardsPrincipal,
-      )
+      );
 
-    const jackpotCutRate = iou.jackpotCutRate || 0
+    const jackpotCutRate = iou.jackpotCutRate || 0;
     const { jackpotShare, creditorShare } = calculateJackpotShare(
       paymentTowardsPrincipal,
       jackpotCutRate,
-    )
+    );
 
     this.setState({
       players: this.state.players.map((p, i) => {
@@ -1808,7 +2060,7 @@ export class GameRoom implements GameActions {
                       }
                     : io,
                 ),
-          }
+          };
         }
         if (i === iou.creditorId) {
           return {
@@ -1825,60 +2077,60 @@ export class GameRoom implements GameActions {
                       }
                     : io,
                 ),
-          }
+          };
         }
-        return p
+        return p;
       }),
       jackpot: this.state.jackpot + jackpotShare,
-    })
+    });
 
     if (iouPaidOff) {
       this.addLogEntry(
         `${debtor.name} paid off IOU of $${paymentAmount} to ${creditor.name}${jackpotShare > 0 ? ` ($${jackpotShare} added to Jackpot)` : ""}`,
         "rent",
         debtorIndex,
-      )
+      );
     } else {
-      const remainingTotal = remainingPrincipal + remainingInterest
+      const remainingTotal = remainingPrincipal + remainingInterest;
       this.addLogEntry(
         `${debtor.name} paid $${paymentAmount} on IOU, $${remainingTotal} remaining to ${creditor.name}${jackpotShare > 0 ? ` ($${jackpotShare} added to Jackpot)` : ""}`,
         "rent",
         debtorIndex,
-      )
+      );
     }
   }
 
   // Handle debt service payment when passing GO
   public payDebtService() {
-    const debtService = this.state.pendingDebtService
-    if (!debtService) return
+    const debtService = this.state.pendingDebtService;
+    if (!debtService) return;
 
-    const playerIndex = debtService.playerIndex
-    const player = this.state.players[playerIndex]
-    if (!player) return
+    const playerIndex = debtService.playerIndex;
+    const player = this.state.players[playerIndex];
+    if (!player) return;
 
     // Can the player afford the interest?
     if (player.cash < debtService.totalInterestDue) {
       // Re-run lead creditor logic if they somehow can't afford it now
-      const creditorTotals: Record<number, number> = {}
+      const creditorTotals: Record<number, number> = {};
       player.iousPayable.forEach((iou) => {
-        const amount = iou.currentAmount + (iou.interestDue || 0)
+        const amount = iou.currentAmount + (iou.interestDue || 0);
         creditorTotals[iou.creditorId] =
-          (creditorTotals[iou.creditorId] || 0) + amount
-      })
+          (creditorTotals[iou.creditorId] || 0) + amount;
+      });
 
-      let leadCreditorId = -1
-      let maxOwed = -1
+      let leadCreditorId = -1;
+      let maxOwed = -1;
       for (const [cId, total] of Object.entries(creditorTotals)) {
         if (total > maxOwed) {
-          maxOwed = total
-          leadCreditorId = parseInt(cId)
+          maxOwed = total;
+          leadCreditorId = parseInt(cId);
         }
       }
 
       const representativeIou = player.iousPayable.find(
         (iou) => iou.creditorId === leadCreditorId,
-      )
+      );
       if (leadCreditorId !== -1 && representativeIou) {
         this.setState({
           phase: "awaiting_foreclosure_decision",
@@ -1889,13 +2141,13 @@ export class GameRoom implements GameActions {
             amountOwed: maxOwed,
           },
           pendingDebtService: null,
-        })
+        });
         this.addLogEntry(
           `⚠️ ${player.name} cannot afford debt service! Lead creditor ${this.state.players[leadCreditorId]?.name} must decide how to proceed.`,
           "system",
           playerIndex,
-        )
-        return
+        );
+        return;
       }
     }
 
@@ -1906,7 +2158,7 @@ export class GameRoom implements GameActions {
           ...p,
           cash: p.cash - debtService.totalInterestDue,
           iousPayable: p.iousPayable.map((iou) => ({ ...iou, interestDue: 0 })),
-        }
+        };
       }
 
       // Creditors receive their share
@@ -1914,10 +2166,10 @@ export class GameRoom implements GameActions {
         .filter((di) => {
           const debtorIou = this.state.players[playerIndex]?.iousPayable.find(
             (pIou) => pIou.id === di.id,
-          )
-          return debtorIou?.creditorId === i
+          );
+          return debtorIou?.creditorId === i;
         })
-        .reduce((sum, di) => sum + di.interestDue, 0)
+        .reduce((sum, di) => sum + di.interestDue, 0);
 
       if (interestToReceive > 0) {
         return {
@@ -1925,29 +2177,29 @@ export class GameRoom implements GameActions {
           cash: p.cash + interestToReceive,
           iousReceivable: p.iousReceivable.map((iou) => {
             if (debtService.ious.some((di) => di.id === iou.id)) {
-              return { ...iou, interestDue: 0 }
+              return { ...iou, interestDue: 0 };
             }
-            return iou
+            return iou;
           }),
-        }
+        };
       }
-      return p
-    })
+      return p;
+    });
 
     this.setState({
       players: updatedPlayers,
       phase: "resolving_space",
       pendingDebtService: null,
-    })
+    });
 
     this.addLogEntry(
       `💰 ${player.name} paid $${debtService.totalInterestDue} in debt service interest to creditors`,
       "system",
       playerIndex,
-    )
+    );
 
     // Continue resolving the space
-    this.resolveSpace(playerIndex)
+    this.resolveSpace(playerIndex);
   }
 
   // Creditor decides how to handle missed debt service
@@ -1955,12 +2207,12 @@ export class GameRoom implements GameActions {
     decision: "restructure" | "foreclose",
     propertyId?: number,
   ) {
-    const foreclosure = this.state.pendingForeclosure
-    if (!foreclosure) return
+    const foreclosure = this.state.pendingForeclosure;
+    if (!foreclosure) return;
 
-    const debtor = this.state.players[foreclosure.debtorIndex]
-    const creditor = this.state.players[foreclosure.creditorIndex]
-    if (!debtor || !creditor) return
+    const debtor = this.state.players[foreclosure.debtorIndex];
+    const creditor = this.state.players[foreclosure.creditorIndex];
+    if (!debtor || !creditor) return;
 
     if (decision === "restructure") {
       // Lead Creditor decides to restructure ALL due interest for the debtor
@@ -1973,11 +2225,11 @@ export class GameRoom implements GameActions {
               currentAmount: iou.currentAmount + (iou.interestDue || 0),
               interestDue: 0,
             })),
-          }
+          };
         }
 
         // Update all creditors' receivable IOUs for this debtor
-        const debtorIouIds = debtor.iousPayable.map((iou) => iou.id)
+        const debtorIouIds = debtor.iousPayable.map((iou) => iou.id);
         return {
           ...p,
           iousReceivable: p.iousReceivable.map((iou) => {
@@ -1986,45 +2238,45 @@ export class GameRoom implements GameActions {
                 ...iou,
                 currentAmount: iou.currentAmount + (iou.interestDue || 0),
                 interestDue: 0,
-              }
+              };
             }
-            return iou
+            return iou;
           }),
-        }
-      })
+        };
+      });
 
       this.setState({
         players: updatedPlayers,
         phase: "resolving_space",
         pendingForeclosure: null,
-      })
+      });
 
       this.addLogEntry(
         `🤝 Lead creditor ${creditor.name} mandated a general restructuring of ${debtor.name}'s debts. All due interest capitalized.`,
         "system",
         foreclosure.creditorIndex,
-      )
+      );
 
-      this.resolveSpace(foreclosure.debtorIndex)
+      this.resolveSpace(foreclosure.debtorIndex);
     } else if (decision === "foreclose") {
       // Find the representative IOU
-      const iou = debtor.iousPayable.find((i) => i.id === foreclosure.iouId)
-      if (!iou) return
+      const iou = debtor.iousPayable.find((i) => i.id === foreclosure.iouId);
+      if (!iou) return;
 
       // Seize property or force sale
       if (propertyId != null) {
         // Lead creditor seizes property for themselves
-        const property = this.state.spaces[propertyId] as Property
+        const property = this.state.spaces[propertyId] as Property;
         if (property && property.owner === foreclosure.debtorIndex) {
           // Transfer ownership
-          let housesReturned = 0
-          let hotelsReturned = 0
+          let housesReturned = 0;
+          let hotelsReturned = 0;
 
           const updatedSpaces = this.state.spaces.map((s, idx) => {
             if (idx === propertyId) {
-              const p = s as Property
-              housesReturned = p.houses
-              hotelsReturned = p.hotel ? 1 : 0
+              const p = s as Property;
+              housesReturned = p.houses;
+              hotelsReturned = p.hotel ? 1 : 0;
               return {
                 ...p,
                 owner: foreclosure.creditorIndex,
@@ -2033,10 +2285,10 @@ export class GameRoom implements GameActions {
                 hotel: false,
                 isInsured: false,
                 insurancePaidUntilRound: 0,
-              }
+              };
             }
-            return s
-          })
+            return s;
+          });
 
           // Update player properties lists
           const updatedPlayers = this.state.players.map((p, i) => {
@@ -2044,13 +2296,13 @@ export class GameRoom implements GameActions {
               return {
                 ...p,
                 properties: p.properties.filter((id) => id !== propertyId),
-              }
+              };
             }
             if (i === foreclosure.creditorIndex) {
-              return { ...p, properties: [...p.properties, propertyId] }
+              return { ...p, properties: [...p.properties, propertyId] };
             }
-            return p
-          })
+            return p;
+          });
 
           this.setState({
             spaces: updatedSpaces,
@@ -2059,15 +2311,15 @@ export class GameRoom implements GameActions {
             availableHotels: this.state.availableHotels + hotelsReturned,
             phase: "resolving_space",
             pendingForeclosure: null,
-          })
+          });
 
           this.addLogEntry(
             `🏠 Foreclosure! Lead creditor ${creditor.name} seized ${property.name} from ${debtor.name}.`,
             "system",
             foreclosure.creditorIndex,
-          )
+          );
 
-          this.resolveSpace(foreclosure.debtorIndex)
+          this.resolveSpace(foreclosure.debtorIndex);
         }
       } else {
         // Force liquidation - ONLY available if the representative IOU is due
@@ -2076,41 +2328,41 @@ export class GameRoom implements GameActions {
             `🚫 ${creditor.name} cannot force liquidation yet. The IOU term has ${iou.roundsRemaining} rounds remaining.`,
             "system",
             foreclosure.creditorIndex,
-          )
-          return
+          );
+          return;
         }
 
         // Force liquidation of ALL due amounts (expired IOUs + all interest)
         const expiredIOUs = debtor.iousPayable.filter(
           (i) => (i.roundsRemaining || 0) <= 0,
-        )
+        );
         const totalInterestDue = debtor.iousPayable.reduce(
           (sum, i) => sum + (i.interestDue || 0),
           0,
-        )
+        );
         const totalPrincipalDue = expiredIOUs.reduce(
           (sum, i) => sum + i.currentAmount,
           0,
-        )
-        const totalDue = totalInterestDue + totalPrincipalDue
+        );
+        const totalDue = totalInterestDue + totalPrincipalDue;
 
         this.addLogEntry(
           `⚖️ Lead creditor ${creditor.name} demanded immediate settlement of all $${totalDue} due obligations.`,
           "system",
           foreclosure.creditorIndex,
-        )
+        );
 
         if (debtor.cash < totalDue) {
           // Debtor cannot afford to settle all due obligations
-          this.setState({ pendingForeclosure: null })
+          this.setState({ pendingForeclosure: null });
           this.offerRestructuring(
             foreclosure.debtorIndex,
             foreclosure.creditorIndex,
             totalDue,
-          )
+          );
         } else {
           // Pay off all expired IOUs and all interest
-          this.setState({ pendingForeclosure: null })
+          this.setState({ pendingForeclosure: null });
 
           // Use payIOU for each expired IOU (this handles principal + interest)
           expiredIOUs.forEach((eIou) => {
@@ -2118,19 +2370,19 @@ export class GameRoom implements GameActions {
               foreclosure.debtorIndex,
               eIou.id,
               eIou.currentAmount + (eIou.interestDue || 0),
-            )
-          })
+            );
+          });
 
           // Pay remaining interest on non-expired IOUs
           const remainingIousWithInterest = this.state.players[
             foreclosure.debtorIndex
-          ]!.iousPayable.filter((i) => (i.interestDue || 0) > 0)
+          ]!.iousPayable.filter((i) => (i.interestDue || 0) > 0);
           remainingIousWithInterest.forEach((rIou) => {
-            this.payIOU(foreclosure.debtorIndex, rIou.id, rIou.interestDue)
-          })
+            this.payIOU(foreclosure.debtorIndex, rIou.id, rIou.interestDue);
+          });
 
-          this.setState({ phase: "resolving_space" })
-          this.resolveSpace(foreclosure.debtorIndex)
+          this.setState({ phase: "resolving_space" });
+          this.resolveSpace(foreclosure.debtorIndex);
         }
       }
     }
@@ -2138,27 +2390,27 @@ export class GameRoom implements GameActions {
 
   // Apply interest to all IOUs at end of turn
   public applyIOUInterest(playerIndex: number) {
-    const activePlayers = this.state.players.filter((p) => !p.bankrupt)
-    const activeCount = activePlayers.length
-    if (activeCount === 0) return
+    const activePlayers = this.state.players.filter((p) => !p.bankrupt);
+    const activeCount = activePlayers.length;
+    if (activeCount === 0) return;
 
-    let anyUpdated = false
+    let anyUpdated = false;
     const updatedPlayers = this.state.players.map((p, idx) => {
-      if (p.bankrupt || p.iousPayable.length === 0) return p
+      if (p.bankrupt || p.iousPayable.length === 0) return p;
 
-      let totalInterestThisTurn = 0
+      let totalInterestThisTurn = 0;
       const updatedIousPayable = p.iousPayable.map((iou) => {
         // Interest per turn = Round Interest / Number of Active Players
         // This ensures that after a full round, the total interest equals what's due.
-        const interestPerTurn = (iou.interestRate || 0) / activeCount
-        const exactInterest = iou.currentAmount * interestPerTurn
-        const totalFraction = (iou.interestFraction || 0) + exactInterest
-        const interest = Math.floor(totalFraction)
-        const newFraction = totalFraction - interest
+        const interestPerTurn = (iou.interestRate || 0) / activeCount;
+        const exactInterest = iou.currentAmount * interestPerTurn;
+        const totalFraction = (iou.interestFraction || 0) + exactInterest;
+        const interest = Math.floor(totalFraction);
+        const newFraction = totalFraction - interest;
 
         if (interest > 0 || newFraction !== (iou.interestFraction || 0)) {
-          totalInterestThisTurn += interest
-          anyUpdated = true
+          totalInterestThisTurn += interest;
+          anyUpdated = true;
           // We add interest to interestDue, which is payable on GO.
           // We don't add to currentAmount yet to avoid compounding within the round,
           // and to keep interestDue as the "due" amount.
@@ -2166,80 +2418,80 @@ export class GameRoom implements GameActions {
             ...iou,
             interestDue: (iou.interestDue || 0) + interest,
             interestFraction: newFraction,
-          }
+          };
         }
-        return iou
-      })
+        return iou;
+      });
 
       if (totalInterestThisTurn > 0) {
-        return { ...p, iousPayable: updatedIousPayable }
+        return { ...p, iousPayable: updatedIousPayable };
       }
-      return p
-    })
+      return p;
+    });
 
     if (anyUpdated) {
       // Now sync iousReceivable for all creditors
       const finalPlayers = updatedPlayers.map((p, idx) => {
-        if (p.bankrupt) return p
+        if (p.bankrupt) return p;
 
         // Find any IOUs where this player is the creditor
-        let receivedUpdated = false
+        let receivedUpdated = false;
         const updatedIousReceivable = p.iousReceivable.map((ir) => {
           // Find the corresponding IOU in the debtor's iousPayable
-          const debtor = updatedPlayers[ir.debtorId]
-          if (!debtor) return ir
+          const debtor = updatedPlayers[ir.debtorId];
+          if (!debtor) return ir;
 
-          const updatedIou = debtor.iousPayable.find((up) => up.id === ir.id)
+          const updatedIou = debtor.iousPayable.find((up) => up.id === ir.id);
           if (
             updatedIou &&
             (updatedIou.interestDue !== ir.interestDue ||
               updatedIou.currentAmount !== ir.currentAmount ||
               updatedIou.interestFraction !== ir.interestFraction)
           ) {
-            receivedUpdated = true
-            return updatedIou
+            receivedUpdated = true;
+            return updatedIou;
           }
-          return ir
-        })
+          return ir;
+        });
 
         return receivedUpdated
           ? { ...p, iousReceivable: updatedIousReceivable }
-          : p
-      })
+          : p;
+      });
 
-      this.setState({ players: finalPlayers })
+      this.setState({ players: finalPlayers });
     }
   }
 
   // Update rounds remaining for all IOUs at end of round
   public updateIOURounds() {
     const updatedPlayers = this.state.players.map((p) => {
-      if (p.bankrupt || p.iousPayable.length === 0) return p
+      if (p.bankrupt || p.iousPayable.length === 0) return p;
 
       const updatedIousPayable = p.iousPayable.map((iou) => ({
         ...iou,
         roundsRemaining: Math.max(0, iou.roundsRemaining - 1),
-      }))
+      }));
 
-      return { ...p, iousPayable: updatedIousPayable }
-    })
+      return { ...p, iousPayable: updatedIousPayable };
+    });
 
     // Sync receivables
     const finalPlayers = updatedPlayers.map((p) => {
-      if (p.bankrupt) return p
+      if (p.bankrupt) return p;
 
       const updatedIousReceivable = p.iousReceivable.map((ir) => {
-        const debtor = updatedPlayers[ir.debtorId]
-        const updatedIou = debtor?.iousPayable.find((up) => up.id === ir.id)
+        const debtor = updatedPlayers[ir.debtorId];
+        const updatedIou = debtor?.iousPayable.find((up) => up.id === ir.id);
         return updatedIou
           ? { ...ir, roundsRemaining: updatedIou.roundsRemaining }
-          : ir
-      })
+          : ir;
+      });
 
-      return { ...p, iousReceivable: updatedIousReceivable }
-    })
+      return { ...p, iousReceivable: updatedIousReceivable };
+    });
 
-    this.setState({ players: finalPlayers })
+    this.setState({ players: finalPlayers });
   }
 
   /**
@@ -2248,14 +2500,14 @@ export class GameRoom implements GameActions {
    * The penalty is added to the Jackpot.
    */
   public applyJailPenalty(playerIndex: number) {
-    const player = this.state.players[playerIndex]
-    if (!player || !player.inJail || player.bankrupt) return
+    const player = this.state.players[playerIndex];
+    if (!player || !player.inJail || player.bankrupt) return;
 
-    const penaltyRate = this.state.settings.jailPenaltyRate || 0
-    if (penaltyRate <= 0) return
+    const penaltyRate = this.state.settings.jailPenaltyRate || 0;
+    if (penaltyRate <= 0) return;
 
-    const netWorth = calculateNetWorth(this.state, playerIndex)
-    const penaltyAmount = Math.max(1, Math.floor(netWorth * penaltyRate))
+    const netWorth = calculateNetWorth(this.state, playerIndex);
+    const penaltyAmount = Math.max(1, Math.floor(netWorth * penaltyRate));
 
     if (penaltyAmount > 0) {
       // Deduct from cash (can go negative, requiring liquidation)
@@ -2264,56 +2516,56 @@ export class GameRoom implements GameActions {
           i === playerIndex ? { ...p, cash: p.cash - penaltyAmount } : p,
         ),
         jackpot: this.state.jackpot + penaltyAmount,
-      })
+      });
 
       this.addLogEntry(
         `⚖️ Jail Penalty: ${player.name} paid $${penaltyAmount} (based on net worth) to the Jackpot`,
         "jail",
         playerIndex,
-      )
+      );
 
       // If cash is negative, player might need to liquidate
       if (player.cash - penaltyAmount < 0) {
-        this.offerRestructuring(playerIndex)
+        this.offerRestructuring(playerIndex);
       }
     }
   }
 
   // Creditor demands immediate payment or property transfer
   public demandImmediatePaymentOrProperty(propertyIdToTransfer?: number) {
-    const negotiation = this.state.pendingRentNegotiation
-    if (!negotiation) return
+    const negotiation = this.state.pendingRentNegotiation;
+    if (!negotiation) return;
 
-    const { debtorIndex, creditorIndex, propertyId, rentAmount } = negotiation
-    const debtor = this.state.players[debtorIndex]
-    const creditor = this.state.players[creditorIndex]
+    const { debtorIndex, creditorIndex, propertyId, rentAmount } = negotiation;
+    const debtor = this.state.players[debtorIndex];
+    const creditor = this.state.players[creditorIndex];
 
-    if (!debtor || !creditor) return
+    if (!debtor || !creditor) return;
 
     if (propertyIdToTransfer != null) {
       // Transfer property as payment
       const propertyToTransfer = this.state.spaces.find(
         (s) => s.id === propertyIdToTransfer,
-      ) as Property
+      ) as Property;
       if (!propertyToTransfer || propertyToTransfer.owner !== debtorIndex)
-        return
+        return;
 
       // Calculate property value using precision-safe effective value
       const propertyValue = propertyToTransfer.mortgaged
         ? this.getEffectiveMortgageValue(propertyToTransfer.id)
-        : this.getEffectivePropertyValue(propertyToTransfer.id)
+        : this.getEffectivePropertyValue(propertyToTransfer.id);
 
       // Transfer property and settle difference
-      const difference = rentAmount - propertyValue
-      let housesReturned = 0
-      let hotelsReturned = 0
+      const difference = rentAmount - propertyValue;
+      let housesReturned = 0;
+      let hotelsReturned = 0;
 
       this.setState({
         spaces: this.state.spaces.map((s) => {
           if (s.id === propertyIdToTransfer) {
-            const p = s as Property
-            housesReturned = p.houses
-            hotelsReturned = p.hotel ? 1 : 0
+            const p = s as Property;
+            housesReturned = p.houses;
+            hotelsReturned = p.hotel ? 1 : 0;
             return {
               ...p,
               owner: creditorIndex,
@@ -2322,55 +2574,56 @@ export class GameRoom implements GameActions {
               hotel: false,
               isInsured: false,
               insurancePaidUntilRound: 0,
-            } as Property
+            } as Property;
           }
-          return s
+          return s;
         }),
         players: this.state.players.map((p, i) => {
           if (i === debtorIndex) {
             const newProps = p.properties.filter(
               (pid) => pid !== propertyIdToTransfer,
-            )
+            );
             // If debtor owes more than property value, pay the difference from cash
-            const cashChange = difference > 0 ? Math.min(difference, p.cash) : 0
-            return { ...p, properties: newProps, cash: p.cash - cashChange }
+            const cashChange =
+              difference > 0 ? Math.min(difference, p.cash) : 0;
+            return { ...p, properties: newProps, cash: p.cash - cashChange };
           }
           if (i === creditorIndex) {
             const cashChange =
-              difference > 0 ? Math.min(difference, debtor.cash) : 0
+              difference > 0 ? Math.min(difference, debtor.cash) : 0;
             return {
               ...p,
               properties: [...p.properties, propertyIdToTransfer],
               cash: p.cash + cashChange,
-            }
+            };
           }
-          return p
+          return p;
         }),
         availableHouses: this.state.availableHouses + housesReturned,
         availableHotels: this.state.availableHotels + hotelsReturned,
         phase: "resolving_space",
         pendingRentNegotiation: null,
         utilityMultiplierOverride: null,
-      })
+      });
 
       this.addLogEntry(
         `${debtor.name} transferred ${propertyToTransfer.name} to ${creditor.name} as rent payment`,
         "rent",
         debtorIndex,
-      )
+      );
     } else {
       // No property transfer - debtor goes bankrupt
       this.setState({
         pendingRentNegotiation: null,
         utilityMultiplierOverride: null,
-      })
-      this.declareBankruptcy(debtorIndex, creditorIndex)
+      });
+      this.declareBankruptcy(debtorIndex, creditorIndex);
     }
   }
 
   public payTax(playerIndex: number, amount: number) {
-    const player = this.state.players[playerIndex]
-    if (!player) return
+    const player = this.state.players[playerIndex];
+    if (!player) return;
 
     if (player.cash >= amount) {
       this.setState({
@@ -2378,23 +2631,23 @@ export class GameRoom implements GameActions {
           i === playerIndex ? { ...p, cash: p.cash - amount } : p,
         ),
         jackpot: this.state.jackpot + amount,
-      })
+      });
       this.addLogEntry(
         `${player.name} paid $${amount} in taxes to the Jackpot`,
         "tax",
         playerIndex,
-      )
+      );
     } else if (this.state.settings.enableBankruptcyRestructuring) {
       // Phase 3: Offer Chapter 11 restructuring
-      this.offerRestructuring(playerIndex, undefined, amount)
+      this.offerRestructuring(playerIndex, undefined, amount);
     } else {
-      this.declareBankruptcy(playerIndex)
+      this.declareBankruptcy(playerIndex);
     }
   }
 
   public endTurn() {
-    const roll = this.state.diceRoll
-    const currentPlayer = this.state.players[this.state.currentPlayerIndex]
+    const roll = this.state.diceRoll;
+    const currentPlayer = this.state.players[this.state.currentPlayerIndex];
     // Bankrupt players must never retain a "doubles" continuation — e.g. after
     // rent negotiation bankruptcy, the last roll may still be doubles; advancing
     // must skip to the next active player.
@@ -2402,29 +2655,29 @@ export class GameRoom implements GameActions {
       roll?.isDoubles &&
       currentPlayer &&
       !currentPlayer.inJail &&
-      !currentPlayer.bankrupt
+      !currentPlayer.bankrupt;
 
     if (isDoubles && currentPlayer && !currentPlayer.bankrupt) {
-      const newConsecutiveDoubles = this.state.consecutiveDoubles
+      const newConsecutiveDoubles = this.state.consecutiveDoubles;
 
       // Three doubles in a row = go to jail (already incremented in rollDice)
       if (newConsecutiveDoubles >= 3) {
         console.log(
           `[GameRoom] ${currentPlayer.name} rolled 3 doubles in a row! Going to jail.`,
-        )
+        );
         this.addLogEntry(
           `${currentPlayer.name} rolled 3 doubles in a row and went to Jail!`,
           "jail",
           this.state.currentPlayerIndex,
-        )
-        this.goToJail(this.state.currentPlayerIndex)
-        return
+        );
+        this.goToJail(this.state.currentPlayerIndex);
+        return;
       }
 
       // Less than 3 doubles - allow another roll
       console.log(
         `[GameRoom] ${currentPlayer.name} rolled doubles (${newConsecutiveDoubles}/3). Allowing another roll.`,
-      )
+      );
       this.setState({
         phase: "rolling",
         diceRoll: null,
@@ -2432,8 +2685,8 @@ export class GameRoom implements GameActions {
         consecutiveDoubles: newConsecutiveDoubles,
         lastCardDrawn: null,
         utilityMultiplierOverride: null, // Clear utility override on doubles reroll
-      })
-      return
+      });
+      return;
     }
 
     // Non-doubles roll or player in jail - reset consecutiveDoubles counter
@@ -2445,73 +2698,73 @@ export class GameRoom implements GameActions {
     ) {
       console.log(
         `[GameRoom] ${currentPlayer.name} rolled non-doubles. Resetting consecutiveDoubles counter.`,
-      )
+      );
     }
 
-    let nextPlayerIndex = this.state.currentPlayerIndex
-    let newConsecutiveDoubles = 0
+    let nextPlayerIndex = this.state.currentPlayerIndex;
+    let newConsecutiveDoubles = 0;
 
     if (isDoubles) {
       // This part should theoretically not be reached due to the return above,
       // but keeping it consistent with the logic for safety or future refactors.
-      newConsecutiveDoubles = this.state.consecutiveDoubles
+      newConsecutiveDoubles = this.state.consecutiveDoubles;
     } else {
       // Normal end of turn - move to next player
       nextPlayerIndex =
-        (this.state.currentPlayerIndex + 1) % this.state.players.length
-      let loopCount = 0
+        (this.state.currentPlayerIndex + 1) % this.state.players.length;
+      let loopCount = 0;
       while (
         this.state.players[nextPlayerIndex]?.bankrupt &&
         loopCount < this.state.players.length
       ) {
-        nextPlayerIndex = (nextPlayerIndex + 1) % this.state.players.length
-        loopCount++
+        nextPlayerIndex = (nextPlayerIndex + 1) % this.state.players.length;
+        loopCount++;
       }
-      newConsecutiveDoubles = 0
+      newConsecutiveDoubles = 0;
     }
 
     // Check if we completed a full round (back to player 0 or first non-bankrupt player)
-    const activePlayers = this.state.players.filter((p) => !p.bankrupt)
+    const activePlayers = this.state.players.filter((p) => !p.bankrupt);
 
     // Safety check: if phase is still "moving" and diceRoll exists, move the player first
     if (this.state.phase === "moving" && this.state.diceRoll) {
       console.log(
         `[GameRoom] endTurn called while phase is "moving". Moving player ${this.state.currentPlayerIndex} first.`,
-      )
-      this.movePlayer(this.state.currentPlayerIndex, this.state.diceRoll.total)
+      );
+      this.movePlayer(this.state.currentPlayerIndex, this.state.diceRoll.total);
     }
 
     // Apply loan interest to the current player before ending their turn
-    const endingPlayer = this.state.players[this.state.currentPlayerIndex]
+    const endingPlayer = this.state.players[this.state.currentPlayerIndex];
     if (endingPlayer && !endingPlayer.bankrupt && !isDoubles) {
-      this.applyLoanInterest(this.state.currentPlayerIndex)
+      this.applyLoanInterest(this.state.currentPlayerIndex);
       // Phase 3: Apply IOU interest at end of turn
-      this.applyIOUInterest(this.state.currentPlayerIndex)
+      this.applyIOUInterest(this.state.currentPlayerIndex);
       // Jail penalty for passive income deterrent
       // Only apply if they've been in jail for at least one full turn (jailTurns > 0)
       // to avoid penalizing them on the exact turn they are sent to jail
       if (endingPlayer.inJail && endingPlayer.jailTurns > 0) {
-        this.applyJailPenalty(this.state.currentPlayerIndex)
+        this.applyJailPenalty(this.state.currentPlayerIndex);
       }
       // Phase 3: Check Chapter 11 status
       if (endingPlayer.inChapter11) {
-        this.checkChapter11Status(this.state.currentPlayerIndex)
+        this.checkChapter11Status(this.state.currentPlayerIndex);
       }
     }
 
-    const firstActiveIndex = this.state.players.findIndex((p) => !p.bankrupt)
+    const firstActiveIndex = this.state.players.findIndex((p) => !p.bankrupt);
     const completedRound =
       nextPlayerIndex <= this.state.currentPlayerIndex &&
       nextPlayerIndex === firstActiveIndex &&
-      activePlayers.length > 1
+      activePlayers.length > 1;
 
-    let newRoundsCompleted = this.state.roundsCompleted
-    let newGoSalary = this.state.currentGoSalary
-    const newMarketHistory = [...this.state.marketHistory]
+    let newRoundsCompleted = this.state.roundsCompleted;
+    let newGoSalary = this.state.currentGoSalary;
+    const newMarketHistory = [...this.state.marketHistory];
 
     if (completedRound) {
-      newRoundsCompleted = this.state.roundsCompleted + 1
-      const calculatedSalary = calculateGoSalary(newRoundsCompleted)
+      newRoundsCompleted = this.state.roundsCompleted + 1;
+      const calculatedSalary = calculateGoSalary(newRoundsCompleted);
 
       // Log inflation if salary increased
       if (
@@ -2521,9 +2774,9 @@ export class GameRoom implements GameActions {
         this.addLogEntry(
           `💹 Inflation! GO salary increased to $${calculatedSalary}`,
           "system",
-        )
+        );
       }
-      newGoSalary = calculatedSalary
+      newGoSalary = calculatedSalary;
 
       // Record market history
       newMarketHistory.push({
@@ -2531,19 +2784,19 @@ export class GameRoom implements GameActions {
         inflation: newGoSalary,
         gini: calculateGiniCoefficient(this.state),
         moneyInCirculation: calculateMoneyInCirculation(this.state),
-      })
+      });
 
       // Update economic events at end of round
-      this.updateEconomicEvents()
+      this.updateEconomicEvents();
 
       // Phase 3: Check for expired insurance policies at end of round
-      this.checkInsuranceExpiry()
+      this.checkInsuranceExpiry();
 
       // Phase 3: Update IOU rounds remaining
-      this.updateIOURounds()
+      this.updateIOURounds();
     }
 
-    const nextPlayer = this.state.players[nextPlayerIndex]
+    const nextPlayer = this.state.players[nextPlayerIndex];
     this.setState({
       currentPlayerIndex: nextPlayerIndex,
       phase: nextPlayer?.inJail ? "jail_decision" : "rolling",
@@ -2557,12 +2810,12 @@ export class GameRoom implements GameActions {
       currentGoSalary: newGoSalary,
       marketHistory: newMarketHistory,
       utilityMultiplierOverride: null, // Clear utility override at end of turn
-    })
+    });
   }
 
   public goToJail(playerIndex: number) {
-    const player = this.state.players[playerIndex]
-    const wasThreeDoubles = this.state.consecutiveDoubles >= 2 // Check before reset
+    const player = this.state.players[playerIndex];
+    const wasThreeDoubles = this.state.consecutiveDoubles >= 2; // Check before reset
 
     this.setState({
       players: this.state.players.map((p, i) =>
@@ -2574,25 +2827,25 @@ export class GameRoom implements GameActions {
       diceRoll: null,
       lastDiceRoll: null,
       phase: "jail_decision", // Set phase to jail decision
-    })
+    });
 
     if (player) {
-      const reason = wasThreeDoubles ? " (3 doubles in a row)" : ""
+      const reason = wasThreeDoubles ? " (3 doubles in a row)" : "";
       this.addLogEntry(
         `${player.name} went to Jail!${reason}`,
         "jail",
         playerIndex,
-      )
+      );
     }
 
     // Do NOT end turn immediately to allow client to show animation/message.
     // The player must click "End Turn" or AI will handle it.
-    this.setState({ phase: "resolving_space" })
+    this.setState({ phase: "resolving_space" });
   }
 
   public getOutOfJail(playerIndex: number, method: "roll" | "pay" | "card") {
-    const player = this.state.players[playerIndex]
-    if (!player) return
+    const player = this.state.players[playerIndex];
+    if (!player) return;
 
     if (method === "pay") {
       if (player.cash >= 50) {
@@ -2603,7 +2856,7 @@ export class GameRoom implements GameActions {
               : p,
           ),
           phase: "rolling",
-        })
+        });
       }
     } else if (method === "card") {
       if (player.jailFreeCards > 0) {
@@ -2619,12 +2872,12 @@ export class GameRoom implements GameActions {
               : p,
           ),
           phase: "rolling",
-        })
+        });
       }
     } else if (method === "roll") {
-      const roll = this.rollDice()
+      const roll = this.rollDice();
       const { mustPay, staysInJail, getsOut, newJailTurns } =
-        calculateJailOutcome(player.jailTurns, roll.isDoubles)
+        calculateJailOutcome(player.jailTurns, roll.isDoubles);
 
       if (getsOut) {
         if (mustPay) {
@@ -2634,23 +2887,23 @@ export class GameRoom implements GameActions {
                 ? { ...p, cash: p.cash - 50, inJail: false, jailTurns: 0 }
                 : p,
             ),
-          })
+          });
         } else {
           this.setState({
             players: this.state.players.map((p, i) =>
               i === playerIndex ? { ...p, inJail: false, jailTurns: 0 } : p,
             ),
             consecutiveDoubles: 0,
-          })
+          });
         }
-        this.movePlayer(playerIndex, roll.total)
+        this.movePlayer(playerIndex, roll.total);
       } else if (staysInJail) {
         this.setState({
           players: this.state.players.map((p, i) =>
             i === playerIndex ? { ...p, jailTurns: newJailTurns } : p,
           ),
-        })
-        this.endTurn()
+        });
+        this.endTurn();
       }
     }
   }
@@ -2658,27 +2911,27 @@ export class GameRoom implements GameActions {
   // ... (Implementing other methods similarly, standard logic) ...
   // To save space, I'll implement the rest quickly.
 
-  public buildHouse(propertyId: number) {
-    const playerIndex = this.state.currentPlayerIndex
+  public buildHouse(propertyId: number): boolean {
+    const playerIndex = this.state.currentPlayerIndex;
 
     // Validate turn order
     const turnValidation = validatePlayerTurn(this.state, playerIndex, [
       "rolling",
       "resolving_space",
-    ])
+    ]);
     if (!turnValidation.valid) {
       this.addLogEntry(
         turnValidation.error || "Invalid action",
         "system",
         playerIndex,
-      )
-      return
+      );
+      return false;
     }
 
-    const player = this.state.players[playerIndex]
+    const player = this.state.players[playerIndex];
     if (!player) {
-      this.addLogEntry("Player not found", "system", playerIndex)
-      return
+      this.addLogEntry("Player not found", "system", playerIndex);
+      return false;
     }
 
     // Validate building rules
@@ -2686,43 +2939,43 @@ export class GameRoom implements GameActions {
       this.state,
       propertyId,
       playerIndex,
-    )
+    );
     if (!buildingValidation.valid) {
       this.addLogEntry(
         buildingValidation.error || "Cannot build house",
         "system",
         playerIndex,
-      )
-      return
+      );
+      return false;
     }
 
     const property = this.state.spaces.find(
       (s) => s.id === propertyId,
-    ) as Property
+    ) as Property;
     if (!property || property.houses >= 4 || !property.buildingCost) {
       this.addLogEntry(
         "Cannot build more houses on this property",
         "system",
         playerIndex,
-      )
-      return
+      );
+      return false;
     }
 
     // Calculate actual building cost (may be modified by economic events)
-    let buildingCost = property.buildingCost
+    let buildingCost = property.buildingCost;
     if (this.isEconomicEventActive("housing_boom")) {
-      buildingCost = Math.floor(buildingCost * 1.5) // 50% increase during housing boom
+      buildingCost = Math.floor(buildingCost * 1.5); // 50% increase during housing boom
     }
 
     // Validate cash
-    const cashValidation = validateCash(player, buildingCost, "build house")
+    const cashValidation = validateCash(player, buildingCost, "build house");
     if (!cashValidation.valid) {
       this.addLogEntry(
         cashValidation.error || "Insufficient funds",
         "system",
         playerIndex,
-      )
-      return
+      );
+      return false;
     }
 
     // Housing scarcity check
@@ -2734,8 +2987,8 @@ export class GameRoom implements GameActions {
         `🏠 Housing shortage! No houses available to build.`,
         "system",
         playerIndex,
-      )
-      return
+      );
+      return false;
     }
 
     this.setState({
@@ -2749,36 +3002,38 @@ export class GameRoom implements GameActions {
       availableHouses: this.state.settings.enableHousingScarcity
         ? this.state.availableHouses - 1
         : this.state.availableHouses,
-    })
+    });
 
-    const housesLeft = this.state.availableHouses
+    const housesLeft = this.state.availableHouses;
     const scarcityWarning =
       this.state.settings.enableHousingScarcity && housesLeft <= 5
         ? ` (${housesLeft} houses left!)`
-        : ""
-    const boomWarning = this.isEconomicEventActive("housing_boom") ? " 🏗️" : ""
+        : "";
+    const boomWarning = this.isEconomicEventActive("housing_boom") ? " 🏗️" : "";
     this.addLogEntry(
       `${player.name} built a house on ${property.name} for $${buildingCost}${scarcityWarning}${boomWarning}`,
       "system",
       playerIndex,
-    )
+    );
 
     // Phase 3: Property Value Fluctuation - appreciate properties in color group
     if (
       this.state.settings.enablePropertyValueFluctuation &&
       property.colorGroup
     ) {
-      this.appreciateColorGroup(property.colorGroup)
+      this.appreciateColorGroup(property.colorGroup);
     }
+
+    return true;
   }
 
-  public buildHotel(propertyId: number) {
-    const playerIndex = this.state.currentPlayerIndex
-    const player = this.state.players[playerIndex]
-    if (!player) return
+  public buildHotel(propertyId: number): boolean {
+    const playerIndex = this.state.currentPlayerIndex;
+    const player = this.state.players[playerIndex];
+    if (!player) return false;
     const property = this.state.spaces.find(
       (s) => s.id === propertyId,
-    ) as Property
+    ) as Property;
     if (
       !property ||
       property.owner !== playerIndex ||
@@ -2786,12 +3041,12 @@ export class GameRoom implements GameActions {
       !property.buildingCost ||
       !property.colorGroup
     )
-      return
+      return false;
 
     // Calculate actual building cost (may be modified by economic events)
-    let buildingCost = property.buildingCost
+    let buildingCost = property.buildingCost;
     if (this.isEconomicEventActive("housing_boom")) {
-      buildingCost = Math.floor(buildingCost * 1.5) // 50% increase during housing boom
+      buildingCost = Math.floor(buildingCost * 1.5); // 50% increase during housing boom
     }
 
     if (player.cash < buildingCost) {
@@ -2799,8 +3054,8 @@ export class GameRoom implements GameActions {
         `Cannot afford $${buildingCost} to build hotel${this.isEconomicEventActive("housing_boom") ? " (Housing Boom prices!)" : ""}`,
         "system",
         playerIndex,
-      )
-      return
+      );
+      return false;
     }
 
     // Hotel scarcity check
@@ -2812,15 +3067,16 @@ export class GameRoom implements GameActions {
         `🏨 Hotel shortage! No hotels available to build.`,
         "system",
         playerIndex,
-      )
-      return
+      );
+      return false;
     }
 
     const groupProperties = this.state.spaces.filter(
       (s): s is Property =>
         isProperty(s) && s.colorGroup === property.colorGroup,
-    )
-    if (!groupProperties.every((p) => p.houses === 4 || p.hotel)) return
+    );
+    if (!groupProperties.every((p) => p.houses === 4 || p.hotel))
+      return false;
 
     this.setState({
       spaces: this.state.spaces.map((s) =>
@@ -2836,40 +3092,42 @@ export class GameRoom implements GameActions {
       availableHotels: this.state.settings.enableHousingScarcity
         ? this.state.availableHotels - 1
         : this.state.availableHotels,
-    })
+    });
 
-    const hotelsLeft = this.state.availableHotels
+    const hotelsLeft = this.state.availableHotels;
     const scarcityWarning =
       this.state.settings.enableHousingScarcity && hotelsLeft <= 3
         ? ` (${hotelsLeft} hotels left!)`
-        : ""
-    const boomWarning = this.isEconomicEventActive("housing_boom") ? " 🏗️" : ""
+        : "";
+    const boomWarning = this.isEconomicEventActive("housing_boom") ? " 🏗️" : "";
     this.addLogEntry(
       `${player.name} built a hotel on ${property.name} for $${buildingCost}${scarcityWarning}${boomWarning}`,
       "system",
       playerIndex,
-    )
+    );
 
     // Phase 3: Property Value Fluctuation - appreciate properties in color group (hotels appreciate more)
     if (
       this.state.settings.enablePropertyValueFluctuation &&
       property.colorGroup
     ) {
-      this.appreciateColorGroup(property.colorGroup, 2) // Double appreciation for hotels
+      this.appreciateColorGroup(property.colorGroup, 2); // Double appreciation for hotels
     }
+
+    return true;
   }
 
   public sellHouse(propertyId: number) {
-    const playerIndex = this.state.currentPlayerIndex
-    const player = this.state.players[playerIndex]
-    if (!player) return
+    const playerIndex = this.state.currentPlayerIndex;
+    const player = this.state.players[playerIndex];
+    if (!player) return;
     const property = this.state.spaces.find(
       (s) => s.id === propertyId,
-    ) as Property
+    ) as Property;
     if (!property || property.owner !== playerIndex || property.houses <= 0)
-      return
+      return;
 
-    const sellValue = Math.floor((property.buildingCost ?? 0) / 2)
+    const sellValue = Math.floor((property.buildingCost ?? 0) / 2);
     this.setState({
       spaces: this.state.spaces.map((s) =>
         s.id === propertyId ? { ...s, houses: (s as Property).houses - 1 } : s,
@@ -2881,22 +3139,22 @@ export class GameRoom implements GameActions {
       availableHouses: this.state.settings.enableHousingScarcity
         ? this.state.availableHouses + 1
         : this.state.availableHouses,
-    })
+    });
     this.addLogEntry(
       `${player.name} sold a house on ${property.name} for $${sellValue}`,
       "system",
       playerIndex,
-    )
+    );
   }
 
   public sellHotel(propertyId: number) {
-    const playerIndex = this.state.currentPlayerIndex
-    const player = this.state.players[playerIndex]
-    if (!player) return
+    const playerIndex = this.state.currentPlayerIndex;
+    const player = this.state.players[playerIndex];
+    if (!player) return;
     const property = this.state.spaces.find(
       (s) => s.id === propertyId,
-    ) as Property
-    if (!property || property.owner !== playerIndex || !property.hotel) return
+    ) as Property;
+    if (!property || property.owner !== playerIndex || !property.hotel) return;
 
     // When selling a hotel, you get 4 houses back - but only if there are enough houses available!
     if (
@@ -2907,11 +3165,11 @@ export class GameRoom implements GameActions {
         `🏠 Cannot sell hotel - not enough houses available (need 4, have ${this.state.availableHouses})`,
         "system",
         playerIndex,
-      )
-      return
+      );
+      return;
     }
 
-    const sellValue = Math.floor((property.buildingCost ?? 0) / 2)
+    const sellValue = Math.floor((property.buildingCost ?? 0) / 2);
     this.setState({
       spaces: this.state.spaces.map((s) =>
         s.id === propertyId ? { ...s, houses: 4, hotel: false } : s,
@@ -2926,29 +3184,29 @@ export class GameRoom implements GameActions {
       availableHotels: this.state.settings.enableHousingScarcity
         ? this.state.availableHotels + 1
         : this.state.availableHotels,
-    })
+    });
     this.addLogEntry(
       `${player.name} sold a hotel on ${property.name} for $${sellValue}`,
       "system",
       playerIndex,
-    )
+    );
   }
 
   public mortgageProperty(propertyId: number) {
-    const playerIndex = this.state.currentPlayerIndex
+    const playerIndex = this.state.currentPlayerIndex;
 
     // Validate turn order
     const turnValidation = validatePlayerTurn(this.state, playerIndex, [
       "rolling",
       "resolving_space",
-    ])
+    ]);
     if (!turnValidation.valid) {
       this.addLogEntry(
         turnValidation.error || "Invalid action",
         "system",
         playerIndex,
-      )
-      return
+      );
+      return;
     }
 
     // Validate mortgage
@@ -2957,22 +3215,24 @@ export class GameRoom implements GameActions {
       propertyId,
       playerIndex,
       false,
-    )
+    );
     if (!mortgageValidation.valid) {
       this.addLogEntry(
         mortgageValidation.error || "Cannot mortgage property",
         "system",
         playerIndex,
-      )
-      return
+      );
+      return;
     }
 
-    const space = this.state.spaces.find((s) => s.id === propertyId) as Property
-    if (!space) return
+    const space = this.state.spaces.find(
+      (s) => s.id === propertyId,
+    ) as Property;
+    if (!space) return;
 
     // Calculate jackpot contribution (15% of mortgage value)
-    const jackpotContribution = Math.floor(space.mortgageValue * 0.15)
-    const playerReceives = space.mortgageValue - jackpotContribution
+    const jackpotContribution = Math.floor(space.mortgageValue * 0.15);
+    const playerReceives = space.mortgageValue - jackpotContribution;
 
     this.setState({
       spaces: this.state.spaces.map((s) =>
@@ -2982,32 +3242,32 @@ export class GameRoom implements GameActions {
         i === playerIndex ? { ...p, cash: p.cash + playerReceives } : p,
       ),
       jackpot: this.state.jackpot + jackpotContribution,
-    })
-    const owner = this.state.players[playerIndex]
+    });
+    const owner = this.state.players[playerIndex];
     if (owner) {
       this.addLogEntry(
         `${owner.name} mortgaged ${space.name} (received $${playerReceives}, $${jackpotContribution} added to jackpot)`,
         "system",
         playerIndex,
-      )
+      );
     }
   }
 
   public unmortgageProperty(propertyId: number) {
-    const playerIndex = this.state.currentPlayerIndex
+    const playerIndex = this.state.currentPlayerIndex;
 
     // Validate turn order
     const turnValidation = validatePlayerTurn(this.state, playerIndex, [
       "rolling",
       "resolving_space",
-    ])
+    ]);
     if (!turnValidation.valid) {
       this.addLogEntry(
         turnValidation.error || "Invalid action",
         "system",
         playerIndex,
-      )
-      return
+      );
+      return;
     }
 
     // Validate unmortgage
@@ -3016,22 +3276,24 @@ export class GameRoom implements GameActions {
       propertyId,
       playerIndex,
       true,
-    )
+    );
     if (!mortgageValidation.valid) {
       this.addLogEntry(
         mortgageValidation.error || "Cannot unmortgage property",
         "system",
         playerIndex,
-      )
-      return
+      );
+      return;
     }
 
-    const space = this.state.spaces.find((s) => s.id === propertyId) as Property
-    if (!space) return
+    const space = this.state.spaces.find(
+      (s) => s.id === propertyId,
+    ) as Property;
+    if (!space) return;
 
-    const unmortgageCost = Math.floor(space.mortgageValue * 1.1)
-    const player = this.state.players[playerIndex]
-    if (!player) return
+    const unmortgageCost = Math.floor(space.mortgageValue * 1.1);
+    const player = this.state.players[playerIndex];
+    if (!player) return;
 
     this.setState({
       spaces: this.state.spaces.map((s) =>
@@ -3040,53 +3302,53 @@ export class GameRoom implements GameActions {
       players: this.state.players.map((p, i) =>
         i === playerIndex ? { ...p, cash: p.cash - unmortgageCost } : p,
       ),
-    })
+    });
     this.addLogEntry(
       `${player.name} unmortgaged ${space.name} for $${unmortgageCost}`,
       "system",
       playerIndex,
-    )
+    );
   }
 
   // ============ PROPERTY INSURANCE SYSTEM (Phase 3) ============
 
   // Calculate insurance cost for a property
   public getInsuranceCost(propertyId: number): number {
-    if (!this.state.settings.enablePropertyInsurance) return 0
+    if (!this.state.settings.enablePropertyInsurance) return 0;
 
     const property = this.state.spaces.find(
       (s) => s.id === propertyId,
-    ) as Property
-    if (!property) return 0
+    ) as Property;
+    if (!property) return 0;
 
     // Insurance cost is a percentage of property value per round
-    const currentPrice = getCurrentPropertyPrice(this.state, property)
-    return Math.ceil(currentPrice * this.state.settings.insuranceCostPercent)
+    const currentPrice = getCurrentPropertyPrice(this.state, property);
+    return Math.ceil(currentPrice * this.state.settings.insuranceCostPercent);
   }
 
   // Buy insurance for a property (covers for 5 rounds)
   public buyPropertyInsurance(propertyId: number, playerIndex: number) {
-    if (!this.state.settings.enablePropertyInsurance) return
+    if (!this.state.settings.enablePropertyInsurance) return;
 
     const property = this.state.spaces.find(
       (s) => s.id === propertyId,
-    ) as Property
-    const player = this.state.players[playerIndex]
+    ) as Property;
+    const player = this.state.players[playerIndex];
 
-    if (!property || !player || property.owner !== playerIndex) return
+    if (!property || !player || property.owner !== playerIndex) return;
 
-    const insuranceCost = this.getInsuranceCost(propertyId)
+    const insuranceCost = this.getInsuranceCost(propertyId);
     if (player.cash < insuranceCost) {
       this.addLogEntry(
         `${player.name} cannot afford $${insuranceCost} insurance for ${property.name}`,
         "system",
         playerIndex,
-      )
-      return
+      );
+      return;
     }
 
-    const coverageRounds = 5 // Insurance covers for 5 rounds
-    const newPaidUntilRound = this.state.roundsCompleted + coverageRounds
+    const coverageRounds = 5; // Insurance covers for 5 rounds
+    const newPaidUntilRound = this.state.roundsCompleted + coverageRounds;
 
     this.setState({
       spaces: this.state.spaces.map((s) =>
@@ -3101,19 +3363,19 @@ export class GameRoom implements GameActions {
       players: this.state.players.map((p, i) =>
         i === playerIndex ? { ...p, cash: p.cash - insuranceCost } : p,
       ),
-    })
+    });
 
     this.addLogEntry(
       `${player.name} insured ${property.name} for $${insuranceCost} (covers ${coverageRounds} rounds)`,
       "system",
       playerIndex,
-    )
+    );
   }
 
   // Check and expire insurance at the end of each round
   public checkInsuranceExpiry() {
-    const currentRound = this.state.roundsCompleted
-    const expiredProperties: string[] = []
+    const currentRound = this.state.roundsCompleted;
+    const expiredProperties: string[] = [];
 
     const updatedSpaces = this.state.spaces.map((s) => {
       if (
@@ -3121,38 +3383,38 @@ export class GameRoom implements GameActions {
         s.isInsured &&
         s.insurancePaidUntilRound <= currentRound
       ) {
-        expiredProperties.push(s.name)
+        expiredProperties.push(s.name);
         return {
           ...s,
           isInsured: false,
           insurancePaidUntilRound: 0,
-        } as Property
+        } as Property;
       }
-      return s
-    })
+      return s;
+    });
 
     if (expiredProperties.length > 0) {
-      this.setState({ spaces: updatedSpaces })
+      this.setState({ spaces: updatedSpaces });
       this.addLogEntry(
         `Insurance expired on: ${expiredProperties.join(", ")}`,
         "system",
-      )
+      );
     }
   }
 
   // Check if property is insured (used for card effects)
   public isPropertyInsured(propertyId: number): boolean {
-    if (!this.state.settings.enablePropertyInsurance) return false
+    if (!this.state.settings.enablePropertyInsurance) return false;
 
     const property = this.state.spaces.find(
       (s) => s.id === propertyId,
-    ) as Property
-    if (!property) return false
+    ) as Property;
+    if (!property) return false;
 
     return (
       property.isInsured &&
       property.insurancePaidUntilRound > this.state.roundsCompleted
-    )
+    );
   }
 
   // ============ PROPERTY VALUE FLUCTUATION (Phase 3) ============
@@ -3160,123 +3422,126 @@ export class GameRoom implements GameActions {
   // Appreciate all properties in a color group (called when building)
   public appreciateColorGroup(colorGroup: ColorGroup, multiplier: number = 1) {
     if (!this.state.settings.enablePropertyValueFluctuation || !colorGroup)
-      return
+      return;
 
-    const rate = this.state.settings.appreciationRate * multiplier
-    const appreciatedProperties: string[] = []
+    const rate = this.state.settings.appreciationRate * multiplier;
+    const appreciatedProperties: string[] = [];
 
     const updatedSpaces = this.state.spaces.map((s) => {
       if (isProperty(s) && s.colorGroup === colorGroup) {
         // Use precision to avoid floating point issues
-        const newMultiplier = Math.round((s.valueMultiplier + rate) * 100) / 100
-        const cappedMultiplier = Math.min(2.0, newMultiplier) // Cap at 2x
+        const newMultiplier =
+          Math.round((s.valueMultiplier + rate) * 100) / 100;
+        const cappedMultiplier = Math.min(2.0, newMultiplier); // Cap at 2x
 
         if (cappedMultiplier !== s.valueMultiplier) {
-          appreciatedProperties.push(s.name)
-          return { ...s, valueMultiplier: cappedMultiplier } as Property
+          appreciatedProperties.push(s.name);
+          return { ...s, valueMultiplier: cappedMultiplier } as Property;
         }
       }
-      return s
-    })
+      return s;
+    });
 
     if (appreciatedProperties.length > 0) {
-      this.setState({ spaces: updatedSpaces })
-      const percentChange = Math.round(rate * 100)
+      this.setState({ spaces: updatedSpaces });
+      const percentChange = Math.round(rate * 100);
       this.addLogEntry(
         `📈 ${colorGroup.replace("_", " ")} properties appreciated ${percentChange}%!`,
         "system",
-      )
+      );
     }
   }
 
   // Depreciate all properties in a color group (called by economic events or mortgaging)
   public depreciateColorGroup(colorGroup: ColorGroup, rate: number = 0.05) {
     if (!this.state.settings.enablePropertyValueFluctuation || !colorGroup)
-      return
+      return;
 
-    const depreciatedProperties: string[] = []
-    const protectedProperties: string[] = []
+    const depreciatedProperties: string[] = [];
+    const protectedProperties: string[] = [];
 
     const updatedSpaces = this.state.spaces.map((s) => {
       if (isProperty(s) && s.colorGroup === colorGroup) {
         // Phase 3: Insurance protects against depreciation
         if (this.isPropertyInsured(s.id)) {
-          protectedProperties.push(s.name)
-          return s
+          protectedProperties.push(s.name);
+          return s;
         }
 
         // Use precision to avoid floating point issues
-        const newMultiplier = Math.round((s.valueMultiplier - rate) * 100) / 100
-        const cappedMultiplier = Math.max(0.5, newMultiplier) // Floor at 0.5x
+        const newMultiplier =
+          Math.round((s.valueMultiplier - rate) * 100) / 100;
+        const cappedMultiplier = Math.max(0.5, newMultiplier); // Floor at 0.5x
 
         if (cappedMultiplier !== s.valueMultiplier) {
-          depreciatedProperties.push(s.name)
-          return { ...s, valueMultiplier: cappedMultiplier } as Property
+          depreciatedProperties.push(s.name);
+          return { ...s, valueMultiplier: cappedMultiplier } as Property;
         }
       }
-      return s
-    })
+      return s;
+    });
 
     if (depreciatedProperties.length > 0 || protectedProperties.length > 0) {
-      this.setState({ spaces: updatedSpaces })
-      const percentChange = Math.round(rate * 100)
+      this.setState({ spaces: updatedSpaces });
+      const percentChange = Math.round(rate * 100);
       if (depreciatedProperties.length > 0) {
         this.addLogEntry(
           `📉 ${colorGroup.replace("_", " ")} properties depreciated ${percentChange}%!`,
           "system",
-        )
+        );
       }
       if (protectedProperties.length > 0) {
         this.addLogEntry(
           `🛡️ Insurance protected ${protectedProperties.join(", ")} from depreciation!`,
           "system",
-        )
+        );
       }
     }
   }
 
   // Apply market-wide value changes (for economic events)
   public applyMarketValueChange(changePercent: number) {
-    if (!this.state.settings.enablePropertyValueFluctuation) return
+    if (!this.state.settings.enablePropertyValueFluctuation) return;
 
-    const rate = changePercent / 100
-    const protectedProperties: string[] = []
+    const rate = changePercent / 100;
+    const protectedProperties: string[] = [];
 
     const updatedSpaces = this.state.spaces.map((s) => {
       if (isProperty(s)) {
         // Phase 3: Insurance protects against depreciation during market downturns
         if (rate < 0 && this.isPropertyInsured(s.id)) {
-          protectedProperties.push(s.name)
-          return s
+          protectedProperties.push(s.name);
+          return s;
         }
 
         // Use precision to avoid floating point issues
-        const newMultiplier = Math.round((s.valueMultiplier + rate) * 100) / 100
+        const newMultiplier =
+          Math.round((s.valueMultiplier + rate) * 100) / 100;
         return {
           ...s,
           valueMultiplier: Math.max(0.5, Math.min(2.0, newMultiplier)),
-        } as Property
+        } as Property;
       }
-      return s
-    })
+      return s;
+    });
 
-    this.setState({ spaces: updatedSpaces })
+    this.setState({ spaces: updatedSpaces });
 
     if (changePercent > 0) {
       this.addLogEntry(
         `📈 Market rally! All properties appreciated ${changePercent}%`,
         "system",
-      )
+      );
     } else {
       this.addLogEntry(
         `📉 Market downturn! Properties depreciated ${Math.abs(changePercent)}%`,
         "system",
-      )
+      );
       if (protectedProperties.length > 0) {
         this.addLogEntry(
           `🛡️ Insurance protected ${protectedProperties.length} properties from the market crash!`,
           "system",
-        )
+        );
       }
     }
   }
@@ -3285,68 +3550,68 @@ export class GameRoom implements GameActions {
   public getEffectivePropertyValue(propertyId: number): number {
     const property = this.state.spaces.find(
       (s) => s.id === propertyId,
-    ) as Property
-    if (!property) return 0
+    ) as Property;
+    if (!property) return 0;
 
-    return getCurrentPropertyPrice(this.state, property)
+    return getCurrentPropertyPrice(this.state, property);
   }
 
   // Get effective mortgage value
   public getEffectiveMortgageValue(propertyId: number): number {
     const property = this.state.spaces.find(
       (s) => s.id === propertyId,
-    ) as Property
-    if (!property) return 0
+    ) as Property;
+    if (!property) return 0;
 
     if (!this.state.settings.enablePropertyValueFluctuation) {
-      return property.mortgageValue
+      return property.mortgageValue;
     }
 
-    return Math.round(property.mortgageValue * property.valueMultiplier)
+    return Math.round(property.mortgageValue * property.valueMultiplier);
   }
 
   // ============ BANK LOANS SYSTEM (Phase 2) ============
 
   // Calculate net worth for loan limit calculations
   private calculateNetWorth(playerIndex: number): number {
-    const player = this.state.players[playerIndex]
-    if (!player || player.bankrupt) return 0
+    const player = this.state.players[playerIndex];
+    if (!player || player.bankrupt) return 0;
 
-    let netWorth = player.cash
+    let netWorth = player.cash;
 
     // Add property values
     this.state.spaces.forEach((space) => {
       if (isProperty(space) && space.owner === playerIndex) {
         if (!space.mortgaged) {
           // Use precision-safe effective value
-          netWorth += this.getEffectivePropertyValue(space.id)
+          netWorth += this.getEffectivePropertyValue(space.id);
           // Add building values at half cost (liquidation value)
-          const buildingCost = space.buildingCost ?? 0
-          netWorth += Math.floor(space.houses * (buildingCost / 2))
-          if (space.hotel) netWorth += Math.floor(buildingCost / 2)
+          const buildingCost = space.buildingCost ?? 0;
+          netWorth += Math.floor(space.houses * (buildingCost / 2));
+          if (space.hotel) netWorth += Math.floor(buildingCost / 2);
         }
       }
-    })
+    });
 
     // Subtract existing debt
-    netWorth -= player.totalDebt
+    netWorth -= player.totalDebt;
 
-    return Math.max(0, Math.round(netWorth))
+    return Math.max(0, Math.round(netWorth));
   }
 
   // Get maximum loan amount a player can take
   public getMaxLoanAmount(playerIndex: number): number {
-    if (!this.state.settings.enableBankLoans) return 0
+    if (!this.state.settings.enableBankLoans) return 0;
 
-    const player = this.state.players[playerIndex]
-    if (!player || player.bankrupt) return 0
+    const player = this.state.players[playerIndex];
+    if (!player || player.bankrupt) return 0;
 
-    const netWorth = this.calculateNetWorth(playerIndex)
-    const maxLoan = Math.floor(netWorth * this.state.settings.maxLoanPercent)
+    const netWorth = this.calculateNetWorth(playerIndex);
+    const maxLoan = Math.floor(netWorth * this.state.settings.maxLoanPercent);
 
     // Subtract existing loans from max
-    const existingLoans = player.totalDebt
-    return Math.max(0, maxLoan - existingLoans)
+    const existingLoans = player.totalDebt;
+    return Math.max(0, maxLoan - existingLoans);
   }
 
   // Take a loan from the bank
@@ -3356,37 +3621,37 @@ export class GameRoom implements GameActions {
         "Bank loans are disabled for this game.",
         "system",
         playerIndex,
-      )
-      return
+      );
+      return;
     }
 
-    const player = this.state.players[playerIndex]
-    if (!player || player.bankrupt) return
+    const player = this.state.players[playerIndex];
+    if (!player || player.bankrupt) return;
 
     // Validate loan amount
-    const maxLoan = this.getMaxLoanAmount(playerIndex)
+    const maxLoan = this.getMaxLoanAmount(playerIndex);
     if (amount <= 0) {
-      this.addLogEntry("Invalid loan amount.", "system", playerIndex)
-      return
+      this.addLogEntry("Invalid loan amount.", "system", playerIndex);
+      return;
     }
     if (amount > maxLoan) {
       this.addLogEntry(
         `Cannot borrow $${amount}. Maximum available: $${maxLoan}`,
         "system",
         playerIndex,
-      )
-      return
+      );
+      return;
     }
 
     // Minimum loan amount
-    const minLoan = 50
+    const minLoan = 50;
     if (amount < minLoan) {
       this.addLogEntry(
         `Minimum loan amount is $${minLoan}`,
         "system",
         playerIndex,
-      )
-      return
+      );
+      return;
     }
 
     // Create the loan
@@ -3396,7 +3661,7 @@ export class GameRoom implements GameActions {
       interestRate: this.state.settings.loanInterestRate,
       turnTaken: this.state.turn,
       totalOwed: amount,
-    }
+    };
 
     this.setState({
       players: this.state.players.map((p, i) =>
@@ -3409,67 +3674,67 @@ export class GameRoom implements GameActions {
             }
           : p,
       ),
-    })
+    });
 
     const interestPercent = Math.round(
       this.state.settings.loanInterestRate * 100,
-    )
+    );
     this.addLogEntry(
       `🏦 ${player.name} took a loan of $${amount} (${interestPercent}% interest/turn)`,
       "system",
       playerIndex,
-    )
+    );
   }
 
   // Repay a loan (partially or fully)
   public repayLoan(playerIndex: number, loanId: number, amount: number) {
-    const player = this.state.players[playerIndex]
-    if (!player || player.bankrupt) return
+    const player = this.state.players[playerIndex];
+    if (!player || player.bankrupt) return;
 
-    const loanIndex = player.bankLoans.findIndex((l) => l.id === loanId)
+    const loanIndex = player.bankLoans.findIndex((l) => l.id === loanId);
     if (loanIndex === -1) {
-      this.addLogEntry("Loan not found.", "system", playerIndex)
-      return
+      this.addLogEntry("Loan not found.", "system", playerIndex);
+      return;
     }
 
-    const loan = player.bankLoans[loanIndex]!
+    const loan = player.bankLoans[loanIndex]!;
 
     // Validate repayment amount
     if (amount <= 0) {
-      this.addLogEntry("Invalid repayment amount.", "system", playerIndex)
-      return
+      this.addLogEntry("Invalid repayment amount.", "system", playerIndex);
+      return;
     }
     if (amount > player.cash) {
       this.addLogEntry(
         `Insufficient funds. You have $${player.cash}`,
         "system",
         playerIndex,
-      )
-      return
+      );
+      return;
     }
 
-    const actualRepayment = Math.min(amount, loan.totalOwed)
-    const remainingDebt = loan.totalOwed - actualRepayment
+    const actualRepayment = Math.min(amount, loan.totalOwed);
+    const remainingDebt = loan.totalOwed - actualRepayment;
 
-    let updatedLoans: typeof player.bankLoans
+    let updatedLoans: typeof player.bankLoans;
     if (remainingDebt <= 0) {
       // Loan fully repaid - remove it
-      updatedLoans = player.bankLoans.filter((l) => l.id !== loanId)
+      updatedLoans = player.bankLoans.filter((l) => l.id !== loanId);
       this.addLogEntry(
         `🏦 ${player.name} fully repaid a loan of $${actualRepayment}!`,
         "system",
         playerIndex,
-      )
+      );
     } else {
       // Partial repayment
       updatedLoans = player.bankLoans.map((l) =>
         l.id === loanId ? { ...l, totalOwed: remainingDebt } : l,
-      )
+      );
       this.addLogEntry(
         `🏦 ${player.name} repaid $${actualRepayment} on loan ($${remainingDebt} remaining)`,
         "system",
         playerIndex,
-      )
+      );
     }
 
     this.setState({
@@ -3483,29 +3748,29 @@ export class GameRoom implements GameActions {
             }
           : p,
       ),
-    })
+    });
   }
 
   // Apply interest to all loans at end of turn
   public applyLoanInterest(playerIndex: number) {
-    if (!this.state.settings.enableBankLoans) return
+    if (!this.state.settings.enableBankLoans) return;
 
-    const player = this.state.players[playerIndex]
-    if (!player || player.bankrupt || player.bankLoans.length === 0) return
+    const player = this.state.players[playerIndex];
+    if (!player || player.bankrupt || player.bankLoans.length === 0) return;
 
     // Check for banking crisis - double interest rates
     const interestMultiplier = this.isEconomicEventActive("banking_crisis")
       ? 2
-      : 1
+      : 1;
 
-    let totalInterest = 0
+    let totalInterest = 0;
     const updatedLoans = player.bankLoans.map((loan) => {
       const interest = Math.ceil(
         loan.totalOwed * loan.interestRate * interestMultiplier,
-      )
-      totalInterest += interest
-      return { ...loan, totalOwed: loan.totalOwed + interest }
-    })
+      );
+      totalInterest += interest;
+      return { ...loan, totalOwed: loan.totalOwed + interest };
+    });
 
     if (totalInterest > 0) {
       this.setState({
@@ -3522,12 +3787,12 @@ export class GameRoom implements GameActions {
             : p,
         ),
         jackpot: this.state.jackpot + totalInterest,
-      })
+      });
       this.addLogEntry(
         `📈 ${player.name}'s loans accrued $${totalInterest} in interest (total debt: $${updatedLoans.reduce((sum, l) => sum + l.totalOwed, 0)}, $${totalInterest} added to Jackpot)`,
         "system",
         playerIndex,
-      )
+      );
     }
   }
 
@@ -3542,115 +3807,115 @@ export class GameRoom implements GameActions {
       playerIndex,
       message,
       type,
-    }
-    this.setState({ gameLog: [...this.state.gameLog.slice(-49), entry] })
+    };
+    this.setState({ gameLog: [...this.state.gameLog.slice(-49), entry] });
   }
 
   public drawCard(playerIndex: number, type: "chance" | "community_chest") {
     const deck =
-      type === "chance" ? this.state.chanceDeck : this.state.communityChestDeck
-    const card = deck[0]
-    const player = this.state.players[playerIndex]
-    if (!card || !player) return
+      type === "chance" ? this.state.chanceDeck : this.state.communityChestDeck;
+    const card = deck[0];
+    const player = this.state.players[playerIndex];
+    if (!card || !player) return;
 
     this.addLogEntry(
       `${player.name} drew ${type === "chance" ? "Chance" : "Community Chest"}: "${card.text}"`,
       "card",
       playerIndex,
-    )
-    this.applyCardEffect(card, playerIndex)
+    );
+    this.applyCardEffect(card, playerIndex);
 
-    const updatedDeck = [...deck.slice(1), card]
-    if (type === "chance") this.setState({ chanceDeck: updatedDeck })
-    else this.setState({ communityChestDeck: updatedDeck })
+    const updatedDeck = [...deck.slice(1), card];
+    if (type === "chance") this.setState({ chanceDeck: updatedDeck });
+    else this.setState({ communityChestDeck: updatedDeck });
   }
 
   public applyCardEffect(card: Card, playerIndex: number) {
-    const effect = card.getEffect(this.state, playerIndex)
-    const player = this.state.players[playerIndex]
-    if (!player) return
+    const effect = card.getEffect(this.state, playerIndex);
+    const player = this.state.players[playerIndex];
+    if (!player) return;
 
-    let newPlayers = [...this.state.players]
-    let cashChange = effect.cashChange ?? 0
-    let newPosition = player.position
+    let newPlayers = [...this.state.players];
+    let cashChange = effect.cashChange ?? 0;
+    let newPosition = player.position;
 
     if (effect.jailFreeCard) {
       newPlayers = newPlayers.map((p, i) =>
         i === playerIndex ? { ...p, jailFreeCards: p.jailFreeCards + 1 } : p,
-      )
+      );
     }
 
     if (effect.positionChange !== undefined) {
       if (effect.positionChange === "jail") {
-        this.goToJail(playerIndex)
-        return
+        this.goToJail(playerIndex);
+        return;
       } else {
-        newPosition = effect.positionChange
-        if (effect.passGoBonus) cashChange += 200
+        newPosition = effect.positionChange;
+        if (effect.passGoBonus) cashChange += 200;
       }
     }
 
     if (effect.collectFromEach) {
-      const amount = effect.collectFromEach
+      const amount = effect.collectFromEach;
       newPlayers = newPlayers.map((p, i) => {
-        if (i === playerIndex) return p
+        if (i === playerIndex) return p;
         if (!p.bankrupt) {
-          const payment = Math.min(p.cash, amount)
-          cashChange += payment
-          return { ...p, cash: p.cash - payment }
+          const payment = Math.min(p.cash, amount);
+          cashChange += payment;
+          return { ...p, cash: p.cash - payment };
         }
-        return p
-      })
+        return p;
+      });
     }
 
     if (effect.payToEach) {
-      const amount = effect.payToEach
+      const amount = effect.payToEach;
       newPlayers = newPlayers.map((p, i) => {
-        if (i === playerIndex) return p
+        if (i === playerIndex) return p;
         if (!p.bankrupt) {
-          cashChange -= amount
-          return { ...p, cash: p.cash + amount }
+          cashChange -= amount;
+          return { ...p, cash: p.cash + amount };
         }
-        return p
-      })
+        return p;
+      });
     }
 
     if (effect.perHouseCost || effect.perHotelCost) {
-      const playerProperties = getPlayerProperties(this.state, playerIndex)
-      let totalCost = 0
-      let insuredSavings = 0
+      const playerProperties = getPlayerProperties(this.state, playerIndex);
+      let totalCost = 0;
+      let insuredSavings = 0;
       playerProperties.forEach((prop) => {
         // Phase 3: Check if property is insured - insured properties don't pay repair costs
         if (this.isPropertyInsured(prop.id)) {
-          if (prop.hotel) insuredSavings += effect.perHotelCost ?? 0
-          else insuredSavings += prop.houses * (effect.perHouseCost ?? 0)
+          if (prop.hotel) insuredSavings += effect.perHotelCost ?? 0;
+          else insuredSavings += prop.houses * (effect.perHouseCost ?? 0);
         } else {
-          if (prop.hotel) totalCost += effect.perHotelCost ?? 0
-          else totalCost += prop.houses * (effect.perHouseCost ?? 0)
+          if (prop.hotel) totalCost += effect.perHotelCost ?? 0;
+          else totalCost += prop.houses * (effect.perHouseCost ?? 0);
         }
-      })
-      cashChange -= totalCost
+      });
+      cashChange -= totalCost;
       if (insuredSavings > 0) {
         this.addLogEntry(
           `${player.name} saved $${insuredSavings} thanks to property insurance!`,
           "system",
           playerIndex,
-        )
+        );
       }
     }
 
-    let jackpotUpdate = this.state.jackpot
+    let jackpotUpdate = this.state.jackpot;
     if (effect.jackpotPercentage && this.state.jackpot > 0) {
       const winAmount = Math.floor(
         this.state.jackpot * effect.jackpotPercentage,
-      )
-      cashChange += winAmount
-      jackpotUpdate -= winAmount
+      );
+      cashChange += winAmount;
+      jackpotUpdate -= winAmount;
       this.addLogEntry(
         `🎉 ${player.name} won $${winAmount} from the Lottery (${Math.round(effect.jackpotPercentage * 100)}% of the Jackpot)!`,
         "system",
         playerIndex,
-      )
+      );
     }
 
     this.setState({
@@ -3663,14 +3928,14 @@ export class GameRoom implements GameActions {
       lastCardDrawn: card,
       // Set utility multiplier override if card specifies one
       utilityMultiplierOverride: effect.utilityMultiplier,
-    })
+    });
 
-    if (effect.triggerSpaceResolution) this.resolveSpace(playerIndex)
+    if (effect.triggerSpaceResolution) this.resolveSpace(playerIndex);
   }
 
   public checkBankruptcy(playerIndex: number) {
-    const player = this.state.players[playerIndex]
-    if (player && player.cash < 0) this.declareBankruptcy(playerIndex)
+    const player = this.state.players[playerIndex];
+    if (player && player.cash < 0) this.declareBankruptcy(playerIndex);
   }
 
   // Phase 3: Offer Chapter 11 restructuring before full bankruptcy
@@ -3680,23 +3945,23 @@ export class GameRoom implements GameActions {
     debtAmount?: number,
   ) {
     if (!this.state.settings.enableBankruptcyRestructuring) {
-      this.declareBankruptcy(playerIndex, creditorIndex)
-      return
+      this.declareBankruptcy(playerIndex, creditorIndex);
+      return;
     }
 
-    const player = this.state.players[playerIndex]
+    const player = this.state.players[playerIndex];
     if (!player || player.inChapter11) {
       // Already in Chapter 11 or doesn't exist - proceed to full bankruptcy
-      this.declareBankruptcy(playerIndex, creditorIndex)
-      return
+      this.declareBankruptcy(playerIndex, creditorIndex);
+      return;
     }
 
     // Check if player has any assets to restructure with
-    const hasAssets = player.properties.length > 0
+    const hasAssets = player.properties.length > 0;
     if (!hasAssets) {
       // No assets to restructure - proceed to full bankruptcy
-      this.declareBankruptcy(playerIndex, creditorIndex)
-      return
+      this.declareBankruptcy(playerIndex, creditorIndex);
+      return;
     }
 
     // Store pending bankruptcy info and offer restructuring choice
@@ -3708,25 +3973,25 @@ export class GameRoom implements GameActions {
         debtAmount: debtAmount ?? Math.abs(player.cash),
       },
       utilityMultiplierOverride: null,
-    })
+    });
 
     this.addLogEntry(
       `⚠️ ${player.name} is facing bankruptcy! They can choose Chapter 11 restructuring or declare full bankruptcy.`,
       "bankrupt",
       playerIndex,
-    )
+    );
   }
 
   // Player chooses to enter Chapter 11 restructuring
   public enterChapter11() {
-    const pending = this.state.pendingBankruptcy
-    if (!pending) return
+    const pending = this.state.pendingBankruptcy;
+    if (!pending) return;
 
-    const { playerIndex, creditorIndex, debtAmount } = pending
-    const player = this.state.players[playerIndex]
-    if (!player) return
+    const { playerIndex, creditorIndex, debtAmount } = pending;
+    const player = this.state.players[playerIndex];
+    if (!player) return;
 
-    const turnsToRepay = this.state.settings.chapter11Turns
+    const turnsToRepay = this.state.settings.chapter11Turns;
 
     this.setState({
       players: this.state.players.map((p, i) =>
@@ -3749,30 +4014,30 @@ export class GameRoom implements GameActions {
           this.state.trade.offer.toPlayer === playerIndex)
           ? null
           : this.state.trade,
-    })
+    });
 
     this.addLogEntry(
       `📋 ${player.name} entered Chapter 11 restructuring! They have ${turnsToRepay} turns to pay off $${debtAmount} or will be liquidated.`,
       "bankrupt",
       playerIndex,
-    )
+    );
   }
 
   // Player chooses full bankruptcy instead of restructuring
   public declineRestructuring() {
-    const pending = this.state.pendingBankruptcy
+    const pending = this.state.pendingBankruptcy;
     if (!pending) {
       console.warn(
         "[GameRoom] declineRestructuring called but no pending bankruptcy",
-      )
-      return
+      );
+      return;
     }
 
-    const { playerIndex, creditorIndex } = pending
+    const { playerIndex, creditorIndex } = pending;
 
     console.log(
       `[GameRoom] Player ${playerIndex} declining restructuring, declaring bankruptcy`,
-    )
+    );
 
     this.setState({
       pendingBankruptcy: null,
@@ -3780,17 +4045,17 @@ export class GameRoom implements GameActions {
         this.state.phase === "awaiting_bankruptcy_decision"
           ? "resolving_space"
           : this.state.phase,
-    })
-    this.declareBankruptcy(playerIndex, creditorIndex)
+    });
+    this.declareBankruptcy(playerIndex, creditorIndex);
   }
 
   // Check Chapter 11 status at end of turn
   public checkChapter11Status(playerIndex: number) {
-    const player = this.state.players[playerIndex]
-    if (!player || !player.inChapter11) return
+    const player = this.state.players[playerIndex];
+    if (!player || !player.inChapter11) return;
 
     // Decrement turns remaining
-    const newTurnsRemaining = player.chapter11TurnsRemaining - 1
+    const newTurnsRemaining = player.chapter11TurnsRemaining - 1;
 
     if (
       shouldChapter11Succeed(
@@ -3812,12 +4077,12 @@ export class GameRoom implements GameActions {
               }
             : p,
         ),
-      })
+      });
       this.addLogEntry(
         `✅ ${player.name} successfully emerged from Chapter 11!`,
         "bankrupt",
         playerIndex,
-      )
+      );
     } else if (
       shouldChapter11Fail(
         player.cash,
@@ -3832,8 +4097,8 @@ export class GameRoom implements GameActions {
             ? { ...p, inChapter11: false, chapter11TurnsRemaining: 0 }
             : p,
         ),
-      })
-      this.declareBankruptcy(playerIndex, player.chapter11CreditorIndex)
+      });
+      this.declareBankruptcy(playerIndex, player.chapter11CreditorIndex);
     } else {
       // Continue Chapter 11
       this.setState({
@@ -3842,27 +4107,27 @@ export class GameRoom implements GameActions {
             ? { ...p, chapter11TurnsRemaining: newTurnsRemaining }
             : p,
         ),
-      })
+      });
     }
   }
 
   public declareBankruptcy(playerIndex: number, creditorIndex?: number) {
-    const player = this.state.players[playerIndex]
-    if (!player) return
+    const player = this.state.players[playerIndex];
+    if (!player) return;
 
-    const playerPropertyIds = player.properties
-    let housesToReturn = 0
-    let hotelsToReturn = 0
+    const playerPropertyIds = player.properties;
+    let housesToReturn = 0;
+    let hotelsToReturn = 0;
 
     this.state.spaces.forEach((s) => {
       if (isProperty(s) && s.owner === playerIndex) {
         if (s.hotel) {
-          hotelsToReturn += 1
+          hotelsToReturn += 1;
         } else {
-          housesToReturn += s.houses
+          housesToReturn += s.houses;
         }
       }
-    })
+    });
 
     this.setState({
       players: this.state.players.map((p, i) => {
@@ -3880,7 +4145,7 @@ export class GameRoom implements GameActions {
             totalDebt: 0,
             iousPayable: [],
             iousReceivable: [],
-          }
+          };
         if (i === creditorIndex && creditorIndex != null) {
           return {
             ...p,
@@ -3895,7 +4160,7 @@ export class GameRoom implements GameActions {
                 creditorId: creditorIndex,
               })),
             ],
-          }
+          };
         }
         // Hardening: Update other players' IOUs
         const updatedPayable = p.iousPayable
@@ -3906,17 +4171,17 @@ export class GameRoom implements GameActions {
           )
           .filter(
             (iou) => iou.creditorId !== playerIndex || creditorIndex != null,
-          )
+          );
 
         const updatedReceivable = p.iousReceivable.filter(
           (iou) => iou.debtorId !== playerIndex,
-        )
+        );
 
         return {
           ...p,
           iousPayable: updatedPayable,
           iousReceivable: updatedReceivable,
-        }
+        };
       }),
       spaces: this.state.spaces.map((s) =>
         isProperty(s) && s.owner === playerIndex
@@ -3954,33 +4219,69 @@ export class GameRoom implements GameActions {
           ? "resolving_space"
           : this.state.phase,
       utilityMultiplierOverride: null,
-    })
-    this.addLogEntry(`${player.name} went bankrupt!`, "bankrupt", playerIndex)
+    });
+    this.addLogEntry(`${player.name} went bankrupt!`, "bankrupt", playerIndex);
 
-    this.checkWinCondition()
+    this.checkWinCondition();
 
     if (this.state.currentPlayerIndex === playerIndex) {
-      this.endTurn()
+      this.endTurn();
     }
   }
 
   public checkWinCondition() {
-    const activePlayers = this.state.players.filter((p) => !p.bankrupt)
+    const rulesetConfig = getRulesetConfig(
+      this.state.settings.rulesetId ?? "classic",
+    );
+
+    // 1906: End game after N complete wage cycles (endAfterWagesCount)
+    if (rulesetConfig.endAfterWagesCount > 0) {
+      const roundsCompleted = this.state.roundsCompleted ?? 0;
+      if (roundsCompleted >= rulesetConfig.endAfterWagesCount) {
+        // Determine winner by net worth
+        let richestPlayerIndex = 0;
+        let richestNetWorth = -Infinity;
+
+        for (let i = 0; i < this.state.players.length; i++) {
+          const player = this.state.players[i];
+          if (player?.bankrupt) continue;
+
+          const netWorth = calculateNetWorth(this.state, i);
+          if (netWorth > richestNetWorth) {
+            richestNetWorth = netWorth;
+            richestPlayerIndex = i;
+          }
+        }
+
+        this.setState({
+          winner: this.state.players[richestPlayerIndex]!.id,
+          phase: "game_over",
+        });
+        this.addLogEntry(
+          `🏆 Game over after ${rulesetConfig.endAfterWagesCount} wage cycles! ${this.state.players[richestPlayerIndex]?.name} wins with $${richestNetWorth} net worth!`,
+          "system",
+        );
+        return;
+      }
+    }
+
+    // Classic: Last player standing wins
+    const activePlayers = this.state.players.filter((p) => !p.bankrupt);
     if (activePlayers.length === 1) {
-      this.setState({ winner: activePlayers[0]!.id, phase: "game_over" })
+      this.setState({ winner: activePlayers[0]!.id, phase: "game_over" });
     }
   }
 
   public startAuction(propertyId: number) {
-    const startingBidder = this.state.currentPlayerIndex
+    const startingBidder = this.state.currentPlayerIndex;
     const property = this.state.spaces.find(
       (s) => s.id === propertyId,
-    ) as Property
+    ) as Property;
     // Starting bid is 10% of property value (minimum $10)
     const currentPrice = property
       ? getCurrentPropertyPrice(this.state, property)
-      : 100
-    const startingBid = calculateStartingBid(currentPrice)
+      : 100;
+    const startingBid = calculateStartingBid(currentPrice);
 
     this.setState({
       auction: {
@@ -3991,55 +4292,59 @@ export class GameRoom implements GameActions {
         passedPlayers: [],
       },
       phase: "auction",
-    })
+    });
     this.addLogEntry(
       `🔨 Auction started for ${property?.name}! Minimum opening bid: $${startingBid}`,
       "auction",
-    )
+    );
   }
 
   // Calculate minimum bid increment
   public getMinimumBid(propertyId: number): number {
-    const auction = this.state.auction
-    if (!auction) return 10
+    const auction = this.state.auction;
+    if (!auction) return 10;
 
     const property = this.state.spaces.find(
       (s) => s.id === propertyId,
-    ) as Property
+    ) as Property;
 
     const currentPrice = property
       ? getCurrentPropertyPrice(this.state, property)
-      : 100
+      : 100;
 
-    return calculateMinimumBid(auction.currentBid, currentPrice)
+    return calculateMinimumBid(auction.currentBid, currentPrice);
   }
 
   public placeBid(playerIndex: number, amount: number) {
-    if (!this.state.auction) return
+    if (!this.state.auction) return;
 
-    const player = this.state.players[playerIndex]
-    if (!player || player.bankrupt) return
+    const player = this.state.players[playerIndex];
+    if (!player || player.bankrupt) return;
 
     // CRITICAL: Only allow the active player to bid
     if (playerIndex !== this.state.auction.activePlayerIndex) {
       console.warn(
         `[GameRoom] Security: Player ${playerIndex} attempted to bid when active player is ${this.state.auction.activePlayerIndex}`,
-      )
+      );
       this.addLogEntry(
         `It's not ${player.name}'s turn to bid`,
         "system",
         playerIndex,
-      )
-      return
+      );
+      return;
     }
 
-    const minimumBid = this.getMinimumBid(this.state.auction.propertyId)
+    const minimumBid = this.getMinimumBid(this.state.auction.propertyId);
 
     // Validate bid amount
-    const validation = validateBid(amount, minimumBid, player.cash)
+    const validation = validateBid(amount, minimumBid, player.cash);
     if (!validation.valid) {
-      this.addLogEntry(validation.error || "Invalid bid", "system", playerIndex)
-      return
+      this.addLogEntry(
+        validation.error || "Invalid bid",
+        "system",
+        playerIndex,
+      );
+      return;
     }
 
     // Find next active bidder
@@ -4047,7 +4352,7 @@ export class GameRoom implements GameActions {
       playerIndex,
       this.state.players,
       this.state.auction.passedPlayers,
-    )
+    );
 
     this.setState({
       auction: {
@@ -4056,42 +4361,46 @@ export class GameRoom implements GameActions {
         highestBidder: playerIndex,
         activePlayerIndex: nextBidder,
       },
-    })
+    });
 
-    this.addLogEntry(`${player.name} bid $${amount}`, "auction", playerIndex)
+    this.addLogEntry(`${player.name} bid $${amount}`, "auction", playerIndex);
   }
 
   public passAuction(playerIndex: number) {
-    if (!this.state.auction) return
+    if (!this.state.auction) return;
 
-    const player = this.state.players[playerIndex]
-    if (!player || player.bankrupt) return
+    const player = this.state.players[playerIndex];
+    if (!player || player.bankrupt) return;
 
     // CRITICAL: Only allow the active player to pass
     if (playerIndex !== this.state.auction.activePlayerIndex) {
       console.warn(
         `[GameRoom] Security: Player ${playerIndex} attempted to pass when active player is ${this.state.auction.activePlayerIndex}`,
-      )
+      );
       this.addLogEntry(
         `It's not ${player.name}'s turn to bid`,
         "system",
         playerIndex,
-      )
-      return
+      );
+      return;
     }
 
     if (player) {
-      this.addLogEntry(`${player.name} passed`, "auction", playerIndex)
+      this.addLogEntry(`${player.name} passed`, "auction", playerIndex);
     }
 
-    const passed = [...this.state.auction.passedPlayers, playerIndex]
+    const passed = [...this.state.auction.passedPlayers, playerIndex];
 
     if (shouldEndAuction(this.state.players, passed)) {
       // If only one player left (or none), end auction
-      this.endAuction()
+      this.endAuction();
     } else {
       // Find next active bidder
-      const nextBidder = findNextBidder(playerIndex, this.state.players, passed)
+      const nextBidder = findNextBidder(
+        playerIndex,
+        this.state.players,
+        passed,
+      );
 
       this.setState({
         auction: {
@@ -4099,18 +4408,18 @@ export class GameRoom implements GameActions {
           passedPlayers: passed,
           activePlayerIndex: nextBidder,
         },
-      })
+      });
     }
   }
 
   public endAuction() {
-    const auction = this.state.auction
-    if (!auction) return
+    const auction = this.state.auction;
+    if (!auction) return;
 
-    const property = this.state.spaces.find((s) => s.id === auction.propertyId)
+    const property = this.state.spaces.find((s) => s.id === auction.propertyId);
 
     if (auction.highestBidder !== null && auction.currentBid > 0) {
-      const winner = this.state.players[auction.highestBidder]!
+      const winner = this.state.players[auction.highestBidder]!;
       this.setState({
         spaces: this.state.spaces.map((s) =>
           s.id === auction.propertyId
@@ -4128,18 +4437,18 @@ export class GameRoom implements GameActions {
         ),
         auction: null,
         phase: "resolving_space",
-      })
+      });
       this.addLogEntry(
         `🎉 ${winner.name} won ${property?.name} for $${auction.currentBid}!`,
         "auction",
-      )
+      );
     } else {
       // No bids - property goes back to the bank
-      this.setState({ auction: null, phase: "resolving_space" })
+      this.setState({ auction: null, phase: "resolving_space" });
       this.addLogEntry(
         `No bids placed. ${property?.name} remains unowned.`,
         "auction",
-      )
+      );
     }
   }
 
@@ -4160,36 +4469,36 @@ export class GameRoom implements GameActions {
       },
       phase: "trading",
       previousPhase: this.state.phase,
-    })
+    });
   }
 
   public updateTradeOffer(offer: TradeOffer) {
-    if (!this.state.trade) return
+    if (!this.state.trade) return;
     const rolesSwapped = areRolesSwapped(
       offer,
       this.state.trade.offer.fromPlayer,
-    )
+    );
     this.setState({
       trade: {
         ...this.state.trade,
         offer,
         ...(rolesSwapped ? { status: "draft" as const } : {}),
       },
-    })
+    });
   }
 
   public proposeTrade(offer: TradeOffer) {
-    const fromPlayer = this.state.players[offer.fromPlayer]
+    const fromPlayer = this.state.players[offer.fromPlayer];
     if (fromPlayer) {
       const tradeHistoryKey = generateTradeHistoryKey(
         offer.toPlayer,
         offer.propertiesRequested,
-      )
-      const existingHistory = fromPlayer.tradeHistory ?? {}
+      );
+      const existingHistory = fromPlayer.tradeHistory ?? {};
       const currentTurnHistory = existingHistory[tradeHistoryKey] ?? {
         attempts: 0,
         lastOffer: 0,
-      }
+      };
 
       this.setState({
         players: this.state.players.map((player, index) =>
@@ -4208,7 +4517,7 @@ export class GameRoom implements GameActions {
               }
             : player,
         ),
-      })
+      });
     }
 
     this.setState({
@@ -4217,40 +4526,40 @@ export class GameRoom implements GameActions {
         status: "pending",
       },
       phase: "trading",
-    })
+    });
   }
 
   private validateTradeOffer(offer: TradeOffer): {
-    valid: boolean
-    error?: string
+    valid: boolean;
+    error?: string;
   } {
-    const fromPlayer = this.state.players[offer.fromPlayer]
-    const toPlayer = this.state.players[offer.toPlayer]
+    const fromPlayer = this.state.players[offer.fromPlayer];
+    const toPlayer = this.state.players[offer.toPlayer];
 
     return validateTradeOfferFn(
       offer,
       fromPlayer!,
       toPlayer!,
       this.state.spaces,
-    )
+    );
   }
 
   public acceptTrade() {
-    const trade = this.state.trade
-    if (!trade) return
+    const trade = this.state.trade;
+    if (!trade) return;
 
-    const validation = this.validateTradeOffer(trade.offer)
+    const validation = this.validateTradeOffer(trade.offer);
     if (!validation.valid) {
-      this.addLogEntry(`Trade failed: ${validation.error}`, "system")
+      this.addLogEntry(`Trade failed: ${validation.error}`, "system");
       this.setState({
         trade: null,
         phase: this.state.previousPhase ?? "resolving_space",
         previousPhase: null,
-      })
-      return
+      });
+      return;
     }
 
-    const { offer } = trade
+    const { offer } = trade;
     this.setState({
       players: this.state.players.map((p, i) => {
         if (i === offer.fromPlayer) {
@@ -4267,7 +4576,7 @@ export class GameRoom implements GameActions {
               ),
               ...offer.propertiesRequested,
             ],
-          }
+          };
         }
         if (i === offer.toPlayer) {
           return {
@@ -4283,61 +4592,61 @@ export class GameRoom implements GameActions {
               ),
               ...offer.propertiesOffered,
             ],
-          }
+          };
         }
-        return p
+        return p;
       }),
       spaces: this.state.spaces.map((s) => {
-        if (!isProperty(s)) return s
+        if (!isProperty(s)) return s;
         if (offer.propertiesOffered.includes(s.id))
-          return { ...s, owner: offer.toPlayer }
+          return { ...s, owner: offer.toPlayer };
         if (offer.propertiesRequested.includes(s.id))
-          return { ...s, owner: offer.fromPlayer }
-        return s
+          return { ...s, owner: offer.fromPlayer };
+        return s;
       }),
       trade: null,
       phase: this.state.previousPhase ?? "resolving_space",
       previousPhase: null,
-    })
-    this.addLogEntry(`Trade completed!`, "trade")
+    });
+    this.addLogEntry(`Trade completed!`, "trade");
   }
 
   public rejectTrade() {
-    const trade = this.state.trade
+    const trade = this.state.trade;
     if (trade) {
       // Normal rejection
-      const initiator = this.state.players[trade.offer.fromPlayer]
+      const initiator = this.state.players[trade.offer.fromPlayer];
       if (initiator && initiator.isAI) {
-        const newHistory = { ...(initiator.tradeHistory || {}) }
+        const newHistory = { ...(initiator.tradeHistory || {}) };
         const requestedPropertyIds = [...trade.offer.propertiesRequested].sort(
           (a, b) => a - b,
-        )
-        const setHistoryKey = `${trade.offer.toPlayer}-set:${requestedPropertyIds.join(",")}`
+        );
+        const setHistoryKey = `${trade.offer.toPlayer}-set:${requestedPropertyIds.join(",")}`;
         const existingSetHistory = newHistory[setHistoryKey] ?? {
           attempts: 0,
           lastOffer: 0,
-        }
+        };
 
         trade.offer.propertiesRequested.forEach((propId) => {
-          const key = `${trade.offer.toPlayer}-${propId}`
-          const current = newHistory[key] || { attempts: 0, lastOffer: 0 }
+          const key = `${trade.offer.toPlayer}-${propId}`;
+          const current = newHistory[key] || { attempts: 0, lastOffer: 0 };
           newHistory[key] = {
             attempts: current.attempts + 1,
             lastOffer: trade.offer.cashOffered,
-          }
-        })
+          };
+        });
         newHistory[setHistoryKey] = {
           attempts: existingSetHistory.attempts + 1,
           lastOffer: trade.offer.cashOffered,
           lastOfferTurn: this.state.turn,
-        }
+        };
         this.setState({
           players: this.state.players.map((p, i) =>
             i === trade.offer.fromPlayer
               ? { ...p, tradeHistory: newHistory }
               : p,
           ),
-        })
+        });
       }
     }
 
@@ -4345,7 +4654,7 @@ export class GameRoom implements GameActions {
       trade: null,
       phase: this.state.previousPhase ?? "resolving_space",
       previousPhase: null,
-    })
+    });
   }
 
   public cancelTrade() {
@@ -4353,24 +4662,24 @@ export class GameRoom implements GameActions {
       trade: null,
       phase: this.state.previousPhase ?? "resolving_space",
       previousPhase: null,
-    })
+    });
   }
 
   public counterOffer(counterOffer: TradeOffer) {
-    const trade = this.state.trade
-    if (!trade || trade.status !== "pending") return
+    const trade = this.state.trade;
+    if (!trade || trade.status !== "pending") return;
 
     // Only the receiver can make a counter-offer
     if (counterOffer.fromPlayer !== trade.offer.toPlayer) {
-      console.warn("[GameRoom] Only the receiver can make a counter-offer")
-      return
+      console.warn("[GameRoom] Only the receiver can make a counter-offer");
+      return;
     }
 
     // Validate counter-offer: receiver becomes the new initiator
-    const receiver = this.state.players[counterOffer.fromPlayer]
-    const originalInitiator = this.state.players[trade.offer.fromPlayer]
+    const receiver = this.state.players[counterOffer.fromPlayer];
+    const originalInitiator = this.state.players[trade.offer.fromPlayer];
 
-    if (!receiver || !originalInitiator) return
+    if (!receiver || !originalInitiator) return;
 
     // Validate cash amounts
     if (
@@ -4381,8 +4690,8 @@ export class GameRoom implements GameActions {
         `${receiver.name} doesn't have enough cash for counter-offer`,
         "system",
         counterOffer.fromPlayer,
-      )
-      return
+      );
+      return;
     }
 
     if (
@@ -4393,8 +4702,8 @@ export class GameRoom implements GameActions {
         `${originalInitiator.name} doesn't have enough cash for this counter-offer`,
         "system",
         counterOffer.fromPlayer,
-      )
-      return
+      );
+      return;
     }
 
     // Update trade state with counter-offer becoming the new offer
@@ -4404,24 +4713,24 @@ export class GameRoom implements GameActions {
         offer: counterOffer,
         status: "pending",
       },
-    })
+    });
 
     this.addLogEntry(
       `${receiver.name} made a counter-offer to ${originalInitiator.name}`,
       "trade",
       counterOffer.fromPlayer,
-    )
+    );
   }
 
   public executeAITurn() {
-    const player = this.state.players[this.state.currentPlayerIndex]
+    const player = this.state.players[this.state.currentPlayerIndex];
     console.log(
       `[GameRoom] executeAITurn called for ${player?.name} (index ${this.state.currentPlayerIndex}, phase ${this.state.phase})`,
-    )
-    executeAITurn(this.state, this)
+    );
+    executeAITurn(this.state, this);
   }
 
   public executeAITradeResponse() {
-    executeAITradeResponse(this.state, this)
+    executeAITradeResponse(this.state, this);
   }
 }

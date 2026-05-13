@@ -9,6 +9,12 @@ export interface ValidationResult {
   error?: string
 }
 
+/** Monopoly building level for even-build rules (hotel counts as 5; raw `houses` is 0 when `hotel` is true). */
+export function effectiveBuildingTier(p: Property): number {
+  if (p.hotel) return 5
+  return p.houses
+}
+
 /**
  * Check if a player can perform an action (turn order enforcement)
  */
@@ -188,20 +194,20 @@ export function validateBuilding(
     }
   }
 
-  // Check even building rule
-  const housesInGroup = groupProperties.map((p) => p.houses)
-  const minHouses = Math.min(...housesInGroup)
-  const maxHouses = Math.max(...housesInGroup)
+  // Check even building rule (use effective tiers so hotels don't look like 0 houses)
+  const tiersInGroup = groupProperties.map((p) => effectiveBuildingTier(p))
+  const minTier = Math.min(...tiersInGroup)
+  const maxTier = Math.max(...tiersInGroup)
+  const propTier = effectiveBuildingTier(property)
 
-  if (property.houses < minHouses) {
+  if (propTier < minTier) {
     return {
       valid: false,
       error: "You must build evenly across all properties in this color group",
     }
   }
 
-  // Check if building would violate even building rule
-  if (property.houses === maxHouses && maxHouses > minHouses) {
+  if (propTier === maxTier && maxTier > minTier) {
     return {
       valid: false,
       error: "You must build evenly across all properties in this color group",

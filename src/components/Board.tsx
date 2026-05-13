@@ -1,103 +1,161 @@
-import React from "react"
-import { motion } from "framer-motion"
-import { useGameStore } from "../store/gameStore"
-import type { Property } from "../types/game"
-import { BoardMarketStatus } from "./BoardMarketStatus"
-import { getCurrentPropertyPrice } from "../logic/rules/economics"
-import { PropertyTooltip } from "./PropertyTooltip"
+import React from "react";
+import { motion } from "framer-motion";
+import { useGameStore } from "../store/gameStore";
+import type { Property } from "../types/game";
+import { BoardMarketStatus } from "./BoardMarketStatus";
+import { getCurrentPropertyPrice } from "../logic/rules/economics";
+import { PropertyTooltip } from "./PropertyTooltip";
 
 // Responsive space size based on viewport - maximize board size for readability
-const getSpaceSize = () => {
-  if (typeof window === "undefined") return 80
-  const vh = window.innerHeight
-  const vw = window.innerWidth
-  const isMobile = vw <= 768
+const getSpaceSize = (spacesCount: number) => {
+  if (typeof window === "undefined") return spacesCount === 48 ? 60 : 80;
+  const vh = window.innerHeight;
+  const vw = window.innerWidth;
+  const isMobile = vw <= 768;
 
   // Account for fixed UI elements (updated for optimized UI):
   // - GameLog on left: 180px + 8px margin + 8px spacing = 196px
   // - Main panel on right: 300px + 8px margin + 8px spacing = 316px
   // - Top burger menu: ~48px (reduced from 60px)
   // - Bottom UserPanel: ~52px (reduced from 60px)
-  const leftPanelWidth = isMobile ? 0 : 196
-  const rightPanelWidth = isMobile ? 0 : 316
-  const topSpace = isMobile ? 60 : 48 // A bit more space at top for mobile
-  const bottomSpace = isMobile ? 80 : 52 // More space for UserPanel on mobile
+  const leftPanelWidth = isMobile ? 0 : 196;
+  const rightPanelWidth = isMobile ? 0 : 316;
+  const topSpace = isMobile ? 60 : 48; // A bit more space at top for mobile
+  const bottomSpace = isMobile ? 80 : 52; // More space for UserPanel on mobile
 
   // Calculate available space for the board
-  const availableWidth = vw - (isMobile ? 20 : leftPanelWidth + rightPanelWidth)
-  const availableHeight = vh - topSpace - bottomSpace
+  const availableWidth =
+    vw - (isMobile ? 20 : leftPanelWidth + rightPanelWidth);
+  const availableHeight = vh - topSpace - bottomSpace;
 
   // Use the smaller available dimension to ensure board fits proportionally
-  const minAvailable = Math.min(availableWidth, availableHeight)
+  const minAvailable = Math.min(availableWidth, availableHeight);
 
-  // Calculate size: use ~99.8% of available space for maximum board size, with 11 spaces per side
-  // Board scales proportionally to screen size
-  const calculatedSize = Math.floor((minAvailable * 0.998) / 11)
+  // Calculate size: use ~99.8% of available space for maximum board size
+  // 1906 board: 13 spaces per side (48 spaces), Classic: 11 spaces per side (40 spaces)
+  const spacesPerSide = spacesCount === 48 ? 13 : 11;
+  const calculatedSize = Math.floor((minAvailable * 0.998) / spacesPerSide);
 
-  // Clamp between 40 and 600 for better fit - increased max for very large screens
-  const result = Math.max(40, Math.min(600, calculatedSize))
+  // Clamp between 35 and 600 for better fit
+  const result = Math.max(35, Math.min(600, calculatedSize));
 
-  return result
-}
+  return result;
+};
 
-const BOARD_SIZE = 11
-const BOARD_PADDING = 4
-const SPACE_GAP = 0 // Minimal gap for maximum space utilization
+/**
+ * Get the effective board size (spaces per side) based on total space count.
+ * Classic: 40 spaces → 11×11 grid. 1906: 48 spaces → 13×13 grid.
+ */
+/**
+ * Get the effective board size (spaces per side) based on total space count.
+ * Classic: 40 spaces → 11×11 grid. 1906: 48 spaces → 13×13 grid.
+ */
+const getBoardSize = (spacesCount: number): number => {
+  return spacesCount === 48 ? 13 : 11;
+};
 
-// Calculate dynamic values
-const SPACE_SIZE = getSpaceSize()
+const BOARD_PADDING = 4;
+const SPACE_GAP = 0; // Minimal gap for maximum space utilization
 
-const getSpacePosition = (index: number, spaceSize: number) => {
-  if (index === 0) return { row: 10, col: 10 } // GO - bottom right
-  if (index <= 9) return { row: 10, col: 10 - index } // Bottom row (right to left)
-  if (index === 10) return { row: 10, col: 0 } // Jail - bottom left
-  if (index <= 19) return { row: 10 - (index - 10), col: 0 } // Left column (bottom to top)
-  if (index === 20) return { row: 0, col: 0 } // Free Parking - top left
-  if (index <= 29) return { row: 0, col: index - 20 } // Top row (left to right)
-  if (index === 30) return { row: 0, col: 10 } // Go To Jail - top right
-  return { row: index - 30, col: 10 } // Right column (top to bottom)
-}
+/**
+ * Calculate position on the grid for a given space index.
+ * Handles both 40-space (11×11) and 48-space (13×13) boards.
+ */
+const getSpacePosition = (
+  index: number,
+  spaceSize: number,
+  totalSpaces: number,
+) => {
+  const is1906 = totalSpaces === 48;
+  const offset = is1906 ? 12 : 10; // Grid offset (13×13 vs 11×11)
+
+  if (is1906) {
+    // 48-space board: 13×13 grid layout
+    // Layout: Mother Earth(0) → ... → Railroad(7) → ... → Railroad(18) → ... → Railroad(30) → ... → Railroad(41) → ... → Miscellaneous(47-center)
+    if (index === 0) return { row: offset - 1, col: offset - 1 }; // Mother Earth - bottom row, near right
+    if (index <= 6) return { row: offset - 1, col: offset - 1 - index }; // Bottom row (right to left)
+    if (index === 7) return { row: offset - 1, col: 0 }; // 1st Railroad - bottom-left corner
+    if (index <= 11) return { row: offset - 1 - (index - 7), col: 0 }; // Left side going up
+    if (index === 11) return { row: offset - 5, col: 0 }; // Jail area
+    if (index <= 17) return { row: offset - 5 - (index - 11), col: 0 }; // Continue up left side
+    if (index === 18) return { row: 0, col: 0 }; // 2nd Railroad - top-left corner
+    if (index <= 22) return { row: 0, col: index - 18 }; // Top row (left to right)
+    if (index === 22) return { row: 0, col: offset - 1 }; // Public Treasury - top row, near right
+    if (index <= 29) return { row: 0, col: offset - 1 + (index - 22) }; // Continue right on top
+    if (index === 30) return { row: 0, col: offset - 1 }; // 3rd Railroad - top-right corner
+    if (index <= 33) return { row: index - 30, col: offset - 1 }; // Right side going down
+    if (index === 33) return { row: offset - 5, col: offset - 1 }; // Go To Jail area
+    if (index <= 41) return { row: offset - 5 + (index - 33), col: offset - 1 }; // Continue down right side
+    if (index === 41) return { row: offset - 1, col: offset - 1 }; // 4th Railroad - bottom-right corner
+    if (index <= 46) return { row: offset - 1 + (index - 41), col: 0 }; // Bottom of right column
+    if (index === 47)
+      return {
+        row: Math.floor(offset / 2),
+        col: Math.floor(offset / 2),
+      }; // Miscellaneous - center
+    return {
+      row: Math.floor(offset / 2),
+      col: Math.floor(offset / 2),
+    }; // Fallback: center
+  }
+
+  // Classic 40-space board: 11×11 grid
+  if (index === 0) return { row: 10, col: 10 }; // GO - bottom right
+  if (index <= 9) return { row: 10, col: 10 - index }; // Bottom row (right to left)
+  if (index === 10) return { row: 10, col: 0 }; // Jail - bottom left
+  if (index <= 19) return { row: 10 - (index - 10), col: 0 }; // Left column (bottom to top)
+  if (index === 20) return { row: 0, col: 0 }; // Free Parking - top left
+  if (index <= 29) return { row: 0, col: index - 20 }; // Top row (left to right)
+  if (index === 30) return { row: 0, col: 10 }; // Go To Jail - top right
+  return { row: index - 30, col: 10 }; // Right column (top to bottom)
+};
 
 // Store for board dimensions and position (for token positioning)
 let boardDimensions: {
-  spaceSize: number
-  boardLeft: number
-  boardTop: number
-  boardWidth: number
-  boardHeight: number
+  spaceSize: number;
+  boardLeft: number;
+  boardTop: number;
+  boardWidth: number;
+  boardHeight: number;
+  totalSpaces: number;
 } = {
-  spaceSize: getSpaceSize(),
+  spaceSize: 80,
   boardLeft: 0,
   boardTop: 0,
   boardWidth: 0,
   boardHeight: 0,
-}
+  totalSpaces: 40,
+};
 
 // Callback to notify when board dimensions change
-const boardDimensionsListeners: Set<() => void> = new Set()
+const boardDimensionsListeners: Set<() => void> = new Set();
 
 export const subscribeToBoardDimensions = (callback: () => void) => {
-  boardDimensionsListeners.add(callback)
+  boardDimensionsListeners.add(callback);
   return () => {
-    boardDimensionsListeners.delete(callback)
-  }
-}
+    boardDimensionsListeners.delete(callback);
+  };
+};
 
 // Export for PlayerToken to use
 export const getSpacePositionForToken = (index: number) => {
-  return getSpacePosition(index, boardDimensions.spaceSize)
-}
+  return getSpacePosition(
+    index,
+    boardDimensions.spaceSize,
+    boardDimensions.totalSpaces,
+  );
+};
 
-export const getSpaceSizeForToken = () => boardDimensions.spaceSize
+export const getSpaceSizeForToken = () => boardDimensions.spaceSize;
 
-export const getBoardDimensions = () => boardDimensions
+export const getBoardDimensions = () => boardDimensions;
 
 const getColorForSpace = (space: {
-  type: string
-  colorGroup?: string | null
+  type: string;
+  colorGroup?: string | null;
 }): string => {
-  if (space.type === "railroad") return "#87CEEB"
-  if (space.type === "utility") return "#90EE90"
+  if (space.type === "railroad") return "#87CEEB";
+  if (space.type === "utility") return "#90EE90";
   if (space.type === "property" && space.colorGroup) {
     const colors: Record<string, string> = {
       brown: "#8B4513",
@@ -108,63 +166,77 @@ const getColorForSpace = (space: {
       yellow: "#FFD700",
       green: "#008000",
       dark_blue: "#00008B",
-    }
-    return colors[space.colorGroup] || "#f0f0f0"
+      // 1906 color groups
+      pale_green: "#98FB98",
+      teal: "#008080",
+      lavender: "#E6E6FA",
+      gold: "#FFD700",
+    };
+    return colors[space.colorGroup] || "#f0f0f0";
   }
-  if (space.type === "go") return "#32CD32"
-  if (space.type === "jail") return "#808080"
-  if (space.type === "go_to_jail") return "#FF6347"
-  if (space.type === "free_parking") return "#FFD700"
-  if (space.type === "tax") return "#DC143C"
+  if (space.type === "go" || space.type === "mother_earth") return "#32CD32";
+  if (space.type === "jail") return "#808080";
+  if (space.type === "go_to_jail") return "#FF6347";
+  if (space.type === "free_parking" || space.type === "public_treasury")
+    return "#FFD700";
+  if (space.type === "tax") return "#DC143C";
   if (space.type === "chance" || space.type === "community_chest")
-    return "#FF8C00"
-  return "#f0f0f0"
-}
+    return "#FF8C00";
+  if (space.type === "speculation") return "#FF69B4";
+  if (space.type === "miscellaneous") return "#DDA0DD";
+  return "#f0f0f0";
+};
 
 const getSpaceIcon = (space: { type: string; name: string }) => {
-  if (space.type === "railroad") return "🚂"
+  if (space.type === "railroad") return "🚂";
   if (space.type === "utility")
-    return space.name.includes("Water") ? "💧" : "💡"
-  if (space.type === "chance") return "❓"
-  if (space.type === "community_chest") return "📦"
-  if (space.type === "go") return "🏁"
-  if (space.type === "jail") return "🔒"
-  if (space.type === "go_to_jail") return "👮"
-  if (space.type === "free_parking") return "🚗"
-  if (space.type === "tax") return "💰"
-  return null
-}
+    return space.name.includes("Water") ? "💧" : "💡";
+  if (space.type === "chance") return "❓";
+  if (space.type === "community_chest") return "📦";
+  if (space.type === "go" || space.type === "mother_earth") return "🌍";
+  if (space.type === "jail") return "🔒";
+  if (space.type === "go_to_jail") return "👮";
+  if (space.type === "free_parking" || space.type === "public_treasury")
+    return "🚗";
+  if (space.type === "tax") return "💰";
+  if (space.type === "speculation") return "🎲";
+  if (space.type === "miscellaneous") return "🏛️";
+  return null;
+};
 
 const Space = ({
   space,
   spaceSize,
   onPropertyClick,
 }: {
-  space: { id: number; name: string; type: string; colorGroup?: string | null }
-  spaceSize: number
-  onPropertyClick?: (property: Property) => void
+  space: { id: number; name: string; type: string; colorGroup?: string | null };
+  spaceSize: number;
+  onPropertyClick?: (property: Property) => void;
 }) => {
-  const pos = getSpacePosition(space.id, spaceSize)
-  const spaces = useGameStore((s) => s.spaces)
-  const activeEconomicEvents = useGameStore((s) => s.activeEconomicEvents)
-  const property = spaces.find((s) => s.id === space.id) as Property | undefined
+  const totalSpaces = useGameStore((s) => s.spaces.length);
+  const pos = getSpacePosition(space.id, spaceSize, totalSpaces);
+  const spaces = useGameStore((s) => s.spaces);
+  const activeEconomicEvents = useGameStore((s) => s.activeEconomicEvents);
+  const property = spaces.find((s) => s.id === space.id) as
+    | Property
+    | undefined;
 
-  const [isHovered, setIsHovered] = React.useState(false)
+  const [isHovered, setIsHovered] = React.useState(false);
 
-  const icon = getSpaceIcon(space)
-  const isPropertyType = space.type === "property"
+  const icon = getSpaceIcon(space);
+  const isPropertyType = space.type === "property";
   const isClickableProperty =
     property !== undefined &&
     (space.type === "property" ||
       space.type === "railroad" ||
-      space.type === "utility")
-  const color = getColorForSpace(space)
+      space.type === "utility");
+  const color = getColorForSpace(space);
 
   // Calculate font sizes based on space size - scale proportionally for larger boards
   // Optimized for better text fitting and readability
-  const fontSize = Math.max(8, Math.floor(spaceSize * 0.16)) // Reduced to fit more text
-  const priceFontSize = Math.max(7, Math.floor(spaceSize * 0.14)) // Reduced for better fit
-  const iconSize = Math.max(14, Math.floor(spaceSize * 0.3)) // Reduced to make room for text
+  const fontSize = Math.max(8, Math.floor(spaceSize * 0.16)); // Reduced to fit more text
+  const priceFontSize = Math.max(7, Math.floor(spaceSize * 0.14)); // Reduced for better fit
+  const iconSize = Math.max(14, Math.floor(spaceSize * 0.3)); // Reduced to make room for text
 
   return (
     <motion.div
@@ -195,9 +267,9 @@ const Space = ({
       onHoverEnd={() => setIsHovered(false)}
       transition={{ type: "spring", stiffness: 300, damping: 20 }}
       onClick={(e) => {
-        e.stopPropagation()
+        e.stopPropagation();
         if (isClickableProperty && onPropertyClick) {
-          onPropertyClick(property)
+          onPropertyClick(property);
         }
       }}
     >
@@ -321,63 +393,66 @@ const Space = ({
         )}
       </div>
     </motion.div>
-  )
-}
+  );
+};
 
 export const Board = ({
   onPropertyClick,
 }: {
-  onPropertyClick?: (property: Property) => void
+  onPropertyClick?: (property: Property) => void;
 }) => {
-  const spaces = useGameStore((s) => s.spaces)
-  const jackpot = useGameStore((s) => s.jackpot)
-  const boardRef = React.useRef<HTMLDivElement>(null)
-  const containerRef = React.useRef<HTMLDivElement>(null)
-  const [spaceSize, setSpaceSize] = React.useState(getSpaceSize())
+  const spaces = useGameStore((s) => s.spaces);
+  const jackpot = useGameStore((s) => s.jackpot);
+  const boardRef = React.useRef<HTMLDivElement>(null);
+  const containerRef = React.useRef<HTMLDivElement>(null);
+  const totalSpaces = spaces.length;
+  const boardSize = getBoardSize(totalSpaces); // 11 for classic, 13 for 1906
+  const [spaceSize, setSpaceSize] = React.useState(getSpaceSize(totalSpaces));
 
   // Calculate space size based on actual container dimensions
   React.useEffect(() => {
     const updateSpaceSize = () => {
-      if (!containerRef.current || !boardRef.current) return
+      if (!containerRef.current || !boardRef.current) return;
 
-      const container = containerRef.current
-      const containerWidth = container.clientWidth
-      const containerHeight = container.clientHeight
-      const isMobile = window.innerWidth <= 768
+      const container = containerRef.current;
+      const containerWidth = container.clientWidth;
+      const containerHeight = container.clientHeight;
+      const isMobile = window.innerWidth <= 768;
 
       // Account for board border (6px on each side = 12px total)
-      const borderWidth = 12
-      const availableWidth = containerWidth - borderWidth
-      const availableHeight = containerHeight - borderWidth
+      const borderWidth = 12;
+      const availableWidth = containerWidth - borderWidth;
+      const availableHeight = containerHeight - borderWidth;
 
       // Calculate space size based on both dimensions - use the smaller to maintain square board
       // Board expands to fill available space proportionally, positioned at top-left
       // Use maximum available space (99.8%) to ensure board fills screen
-      const widthBasedSize = Math.floor((availableWidth * 0.998) / 11)
-      const heightBasedSize = Math.floor((availableHeight * 0.998) / 11)
+      // 1906: 13 spaces per side, Classic: 11 spaces per side
+      const widthBasedSize = Math.floor((availableWidth * 0.998) / boardSize);
+      const heightBasedSize = Math.floor((availableHeight * 0.998) / boardSize);
 
       // Use the smaller dimension to maintain square board, ensuring maximum expansion
       // This allows the board to expand down and to the right as much as possible
       // Board scales proportionally to screen size
-      const calculatedSize = Math.min(widthBasedSize, heightBasedSize)
+      const calculatedSize = Math.min(widthBasedSize, heightBasedSize);
 
-      // Clamp between 40 and 600 for better fit - increased max for very large screens
+      // Clamp between 35 and 600 for better fit
       // Property cards will scale proportionally with space size
-      const result = Math.max(40, Math.min(600, calculatedSize))
+      const result = Math.max(35, Math.min(600, calculatedSize));
 
-      setSpaceSize(result)
+      setSpaceSize(result);
 
       // Update board dimensions for token positioning
       // Board is positioned at top-left (0, 0) within the container
       // Note: boardWidth/Height in the style includes the border (12px total), so we match that here
       const actualBoardWidth =
-        BOARD_SIZE * (result + SPACE_GAP) + BOARD_PADDING * 2 + 12 // +12 for border (6px each side)
+        boardSize * (result + SPACE_GAP) + BOARD_PADDING * 2 + 12; // +12 for border (6px each side)
       const actualBoardHeight =
-        BOARD_SIZE * (result + SPACE_GAP) + BOARD_PADDING * 2 + 12
+        boardSize * (result + SPACE_GAP) + BOARD_PADDING * 2 + 12;
 
       // Board is positioned at top-left (butting up against game log)
-      const boardLeft = 0
-      const boardTop = 0
+      const boardLeft = 0;
+      const boardTop = 0;
 
       boardDimensions = {
         spaceSize: result,
@@ -385,25 +460,26 @@ export const Board = ({
         boardTop: boardTop,
         boardWidth: actualBoardWidth,
         boardHeight: actualBoardHeight,
-      }
+        totalSpaces,
+      };
 
       // Notify all listeners that board dimensions have changed
-      boardDimensionsListeners.forEach((callback) => callback())
-    }
+      boardDimensionsListeners.forEach((callback) => callback());
+    };
 
     // Initial calculation
-    updateSpaceSize()
+    updateSpaceSize();
 
     // Listen for resize
-    window.addEventListener("resize", updateSpaceSize)
-    return () => window.removeEventListener("resize", updateSpaceSize)
-  }, [])
+    window.addEventListener("resize", updateSpaceSize);
+    return () => window.removeEventListener("resize", updateSpaceSize);
+  }, [boardSize, totalSpaces]);
 
-  const boardWidth = BOARD_SIZE * (spaceSize + SPACE_GAP) + BOARD_PADDING * 2
-  const boardHeight = BOARD_SIZE * (spaceSize + SPACE_GAP) + BOARD_PADDING * 2
-  const centerSize = (BOARD_SIZE - 2) * (spaceSize + SPACE_GAP)
-  const centerTop = spaceSize + BOARD_PADDING
-  const centerLeft = spaceSize + BOARD_PADDING
+  const boardWidth = boardSize * (spaceSize + SPACE_GAP) + BOARD_PADDING * 2;
+  const boardHeight = boardSize * (spaceSize + SPACE_GAP) + BOARD_PADDING * 2;
+  const centerSize = (boardSize - 2) * (spaceSize + SPACE_GAP);
+  const centerTop = spaceSize + BOARD_PADDING;
+  const centerLeft = spaceSize + BOARD_PADDING;
 
   return (
     <div
@@ -676,5 +752,5 @@ export const Board = ({
         </div>
       </div>
     </div>
-  )
-}
+  );
+};

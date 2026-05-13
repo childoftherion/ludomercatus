@@ -1,4 +1,4 @@
-import { GameRoom } from './GameRoom'
+import { GameRoom } from "./GameRoom"
 
 const ROOM_IDLE_TIMEOUT_MS = 10 * 60 * 1000 // 10 minutes
 const CLEANUP_INTERVAL_MS = 60 * 1000 // check every minute
@@ -20,9 +20,10 @@ export class GameManager {
 
   public createRoom(
     roomId: string,
-    mode: 'single' | 'multi' = 'single',
+    mode: "single" | "multi" = "single",
+    settings: Partial<GameSettings> = {},
   ): GameRoom {
-    const room = new GameRoom(mode === 'multi' ? 'lobby' : 'setup')
+    const room = new GameRoom(mode === "multi" ? "lobby" : "setup", settings)
     this.rooms.set(roomId, room)
     this.roomLastActivity.set(roomId, Date.now())
     this.ensureCleanupRunning()
@@ -60,18 +61,24 @@ export class GameManager {
 
   private ensureCleanupRunning(): void {
     if (this.cleanupTimer) return
-    this.cleanupTimer = setInterval(() => this.cleanupIdleRooms(), CLEANUP_INTERVAL_MS)
+    this.cleanupTimer = setInterval(
+      () => this.cleanupIdleRooms(),
+      CLEANUP_INTERVAL_MS,
+    )
   }
 
   private cleanupIdleRooms(): void {
     const now = Date.now()
     for (const [roomId, lastActivity] of this.roomLastActivity) {
-      if (roomId === 'default') continue
+      if (roomId === "default") continue
       if (now - lastActivity > ROOM_IDLE_TIMEOUT_MS) {
         const room = this.rooms.get(roomId)
-        const hasConnected = room?.state.players.some(p => p.isConnected) ?? false
+        const hasConnected =
+          room?.state.players.some((p) => p.isConnected) ?? false
         if (!hasConnected) {
-          console.log(`[GameManager] Cleaning up idle room '${roomId}' (inactive for ${Math.round((now - lastActivity) / 1000)}s)`)
+          console.log(
+            `[GameManager] Cleaning up idle room '${roomId}' (inactive for ${Math.round((now - lastActivity) / 1000)}s)`,
+          )
           this.deleteRoom(roomId)
         }
       }
