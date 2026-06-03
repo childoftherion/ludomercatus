@@ -6,7 +6,13 @@
   "scripts": {
     "dev": "bun run index.ts",
     "test": "bun test",
-    "lint": "eslint src --ext .ts,.tsx"
+    "test:ci": "bun test --coverage",
+    "lint": "eslint src --ext .ts,.tsx",
+    "lint:fix": "eslint src --ext .ts,.tsx --fix",
+    "typecheck": "tsc --noEmit",
+    "build": "tsc",
+    "prettier": "prettier --write 'src/**/*.{ts,tsx}'",
+    "prettier:check": "prettier --check 'src/**/*.{ts,tsx}'"
   },
   "devDependencies": {
     "@types/bun": "latest",

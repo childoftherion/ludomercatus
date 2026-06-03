@@ -4,55 +4,81 @@ import type {
   TradeOffer,
   ColorGroup,
   AIDifficulty,
-} from "../../types/game"
-import { effectiveBuildingTier } from "../../utils/validation"
-import { hasMonopoly } from "../rules/monopoly"
-import { calculateNetWorth, getCurrentPropertyPrice } from "../rules/economics"
+} from "../../types/game";
+import { effectiveBuildingTier } from "../../utils/validation";
+import { hasMonopoly } from "../rules/monopoly";
+import { calculateNetWorth, getCurrentPropertyPrice } from "../rules/economics";
+
+// Re-export modularized AI strategies
+export type { AIContext, DifficultyModifiers } from "./turn";
+export {
+  createAIContext,
+  getDifficultyModifiers,
+  decidePropertyBuy,
+  decideBuilding,
+  decideMortgage,
+  calculateMaxAuctionBid,
+} from "./turn";
+export type { TradeEvaluation, TradeProposal } from "./trade";
+export {
+  evaluateTradeOffer,
+  generateTradeProposal,
+  generateCounterOffer,
+} from "./trade";
+export type { AuctionDecision } from "./auction";
+export {
+  decideAuctionAction,
+  calculateMaxReasonableBid,
+  calculateAuctionValue,
+} from "./auction";
 
 export interface GameActions {
-  rollDice: () => any
-  movePlayer: (index: number, steps: number) => void
-  buyProperty: (id: number) => void
-  declineProperty: (id: number) => void
-  endTurn: () => void
-  getOutOfJail: (index: number, method: "card" | "pay" | "roll") => void
-  placeBid: (index: number, amount: number) => void
-  passAuction: (index: number) => void
-  startTrade: (from: number, to: number) => void
-  updateTradeOffer: (offer: TradeOffer) => void
-  proposeTrade: (offer: TradeOffer) => void
-  acceptTrade: () => void
-  rejectTrade: () => void
-  mortgageProperty: (id: number) => void
-  sellHouse: (id: number) => void
-  sellHotel: (id: number) => void
-  buildHouse: (id: number) => boolean
-  buildHotel: (id: number) => boolean
+  rollDice: () => any;
+  movePlayer: (index: number, steps: number) => void;
+  buyProperty: (id: number) => void;
+  declineProperty: (id: number) => void;
+  endTurn: () => void;
+  getOutOfJail: (index: number, method: "card" | "pay" | "roll") => void;
+  placeBid: (index: number, amount: number) => void;
+  passAuction: (index: number) => void;
+  startTrade: (from: number, to: number) => void;
+  updateTradeOffer: (offer: TradeOffer) => void;
+  proposeTrade: (offer: TradeOffer) => void;
+  acceptTrade: () => void;
+  rejectTrade: () => void;
+  mortgageProperty: (id: number) => void;
+  sellHouse: (id: number) => void;
+  sellHotel: (id: number) => void;
+  buildHouse: (id: number) => boolean;
+  buildHotel: (id: number) => boolean;
   // Phase 2: Bank Loans
-  takeLoan?: (playerIndex: number, amount: number) => void
-  repayLoan?: (playerIndex: number, loanId: number, amount: number) => void
-  getMaxLoanAmount?: (playerIndex: number) => number
+  takeLoan?: (playerIndex: number, amount: number) => void;
+  repayLoan?: (playerIndex: number, loanId: number, amount: number) => void;
+  getMaxLoanAmount?: (playerIndex: number) => number;
   // Phase 3: Rent Negotiation
-  forgiveRent?: () => void
-  offerPaymentPlan?: (partialPayment: number, interestRate: number) => void
-  acceptPaymentPlan?: () => void
-  rejectPaymentPlan?: () => void
-  createRentIOU?: (partialPayment: number) => void
-  payIOU?: (debtorIndex: number, iouId: number, amount?: number) => void
-  demandImmediatePaymentOrProperty?: (propertyIdToTransfer?: number) => void
+  forgiveRent?: () => void;
+  offerPaymentPlan?: (partialPayment: number, interestRate: number) => void;
+  acceptPaymentPlan?: () => void;
+  rejectPaymentPlan?: () => void;
+  createRentIOU?: (partialPayment: number) => void;
+  payIOU?: (debtorIndex: number, iouId: number, amount?: number) => void;
+  demandImmediatePaymentOrProperty?: (propertyIdToTransfer?: number) => void;
   // Phase 3: Property Insurance
-  buyPropertyInsurance?: (propertyId: number, playerIndex: number) => void
+  buyPropertyInsurance?: (propertyId: number, playerIndex: number) => void;
   // Phase 3: Tax Decision
-  chooseTaxOption?: (playerIndex: number, choice: "flat" | "percentage") => void
+  chooseTaxOption?: (
+    playerIndex: number,
+    choice: "flat" | "percentage",
+  ) => void;
   // Phase 3: Bankruptcy
-  enterChapter11?: () => void
-  declineRestructuring?: () => void
+  enterChapter11?: () => void;
+  declineRestructuring?: () => void;
   // Phase 3: Debt Service & Foreclosure
-  payDebtService?: () => void
+  payDebtService?: () => void;
   handleForeclosureDecision?: (
     outcome: "restructure" | "foreclose",
     propertyId?: number,
-  ) => void
+  ) => void;
 }
 
 const isProperty = (space: any): space is Property => {
@@ -60,8 +86,8 @@ const isProperty = (space: any): space is Property => {
     space.type === "property" ||
     space.type === "railroad" ||
     space.type === "utility"
-  )
-}
+  );
+};
 
 // Difficulty-based modifiers for AI decision-making
 const getDifficultyModifiers = (difficulty: AIDifficulty = "medium") => {
@@ -74,7 +100,7 @@ const getDifficultyModifiers = (difficulty: AIDifficulty = "medium") => {
         buildingThreshold: 0.4, // Build only if cash > 40% of net worth
         loanThreshold: 0.2, // Only take loans if debt < 20% of net worth
         tradeAcceptanceThreshold: 1.2, // Only accept trades if 20% better value
-      }
+      };
     case "hard":
       return {
         cashReserveMultiplier: 0.08, // Keep less cash (8% of net worth)
@@ -83,7 +109,7 @@ const getDifficultyModifiers = (difficulty: AIDifficulty = "medium") => {
         buildingThreshold: 0.15, // Build if cash > 15% of net worth
         loanThreshold: 0.5, // Take loans up to 50% of net worth
         tradeAcceptanceThreshold: 0.95, // Accept trades if 5% better value
-      }
+      };
     case "medium":
     default:
       return {
@@ -93,9 +119,9 @@ const getDifficultyModifiers = (difficulty: AIDifficulty = "medium") => {
         buildingThreshold: 0.25, // Build if cash > 25% of net worth
         loanThreshold: 0.3, // Take loans up to 30% of net worth
         tradeAcceptanceThreshold: 1.05, // Accept trades if 5% better value
-      }
+      };
   }
-}
+};
 
 // Helper: Calculate ROI for a property
 const calculatePropertyROI = (
@@ -103,26 +129,26 @@ const calculatePropertyROI = (
   property: Property,
   playerIndex: number,
 ): number => {
-  if (property.owner !== undefined && property.owner !== playerIndex) return 0
+  if (property.owner !== undefined && property.owner !== playerIndex) return 0;
 
-  let expectedRent = property.baseRent
+  let expectedRent = property.baseRent;
 
   // If we'd complete a monopoly, rent doubles
   if (property.colorGroup) {
     const groupProps = state.spaces.filter(
       (s): s is Property =>
         isProperty(s) && s.colorGroup === property.colorGroup,
-    )
-    const ownedByPlayer = groupProps.filter((s) => s.owner === playerIndex)
+    );
+    const ownedByPlayer = groupProps.filter((s) => s.owner === playerIndex);
     if (ownedByPlayer.length === groupProps.length - 1) {
-      expectedRent *= 2 // Would complete monopoly
+      expectedRent *= 2; // Would complete monopoly
     }
   }
 
   // Rough ROI: expected rent per turn / current price
-  const currentPrice = getCurrentPropertyPrice(state, property)
-  return expectedRent / currentPrice
-}
+  const currentPrice = getCurrentPropertyPrice(state, property);
+  return expectedRent / currentPrice;
+};
 
 // Helper: Check if buying would complete a monopoly
 const wouldCompleteMonopoly = (
@@ -130,15 +156,15 @@ const wouldCompleteMonopoly = (
   playerIndex: number,
   property: Property,
 ): boolean => {
-  if (!property.colorGroup) return false
+  if (!property.colorGroup) return false;
 
   const groupProps = state.spaces.filter(
     (s): s is Property => isProperty(s) && s.colorGroup === property.colorGroup,
-  )
-  const ownedByPlayer = groupProps.filter((s) => s.owner === playerIndex)
+  );
+  const ownedByPlayer = groupProps.filter((s) => s.owner === playerIndex);
 
-  return ownedByPlayer.length === groupProps.length - 1
-}
+  return ownedByPlayer.length === groupProps.length - 1;
+};
 
 // Helper: Check if buying would block an opponent's monopoly
 const wouldBlockOpponent = (
@@ -146,24 +172,24 @@ const wouldBlockOpponent = (
   playerIndex: number,
   property: Property,
 ): boolean => {
-  if (!property.colorGroup) return false
+  if (!property.colorGroup) return false;
 
   const groupProps = state.spaces.filter(
     (s): s is Property => isProperty(s) && s.colorGroup === property.colorGroup,
-  )
+  );
 
   // Check if any single opponent owns all other properties in this group
-  const otherProps = groupProps.filter((s) => s.id !== property.id)
-  if (otherProps.length === 0) return false
+  const otherProps = groupProps.filter((s) => s.id !== property.id);
+  if (otherProps.length === 0) return false;
 
-  const firstOwner = otherProps[0]?.owner
-  if (firstOwner === undefined || firstOwner === playerIndex) return false
+  const firstOwner = otherProps[0]?.owner;
+  if (firstOwner === undefined || firstOwner === playerIndex) return false;
 
-  return otherProps.every((s) => s.owner === firstOwner)
-}
+  return otherProps.every((s) => s.owner === firstOwner);
+};
 
-const TRADE_ATTEMPT_COOLDOWN_TURNS = 3
-const TRADE_ATTEMPT_LIMIT = 3
+const TRADE_ATTEMPT_COOLDOWN_TURNS = 3;
+const TRADE_ATTEMPT_LIMIT = 3;
 
 const getTradeRequestKey = (
   targetPlayerIndex: number,
@@ -172,19 +198,19 @@ const getTradeRequestKey = (
   `${targetPlayerIndex}-set:${requestedPropertyIds
     .slice()
     .sort((a, b) => a - b)
-    .join(",")}`
+    .join(",")}`;
 
 export const executeAITurn = (state: GameState, actions: GameActions) => {
   // Determine which player should act in this phase
-  let playerIndex = state.currentPlayerIndex
+  let playerIndex = state.currentPlayerIndex;
 
   if (state.phase === "auction" && state.auction) {
-    playerIndex = state.auction.activePlayerIndex
+    playerIndex = state.auction.activePlayerIndex;
   } else if (
     state.phase === "awaiting_foreclosure_decision" &&
     state.pendingForeclosure
   ) {
-    playerIndex = state.pendingForeclosure.creditorIndex
+    playerIndex = state.pendingForeclosure.creditorIndex;
   } else if (
     state.phase === "awaiting_rent_negotiation" &&
     state.pendingRentNegotiation
@@ -192,36 +218,36 @@ export const executeAITurn = (state: GameState, actions: GameActions) => {
     playerIndex =
       state.pendingRentNegotiation.status === "creditor_decision"
         ? state.pendingRentNegotiation.creditorIndex
-        : state.pendingRentNegotiation.debtorIndex
+        : state.pendingRentNegotiation.debtorIndex;
   } else if (
     state.phase === "awaiting_bankruptcy_decision" &&
     (state as any).pendingBankruptcy
   ) {
-    playerIndex = (state as any).pendingBankruptcy.playerIndex
+    playerIndex = (state as any).pendingBankruptcy.playerIndex;
   }
 
-  const player = state.players[playerIndex]
+  const player = state.players[playerIndex];
 
   if (!player || !player.isAI || player.bankrupt) {
     console.log(
       `[AI] Skipping turn for player ${playerIndex}: exists=${!!player}, isAI=${player?.isAI}, bankrupt=${player?.bankrupt}`,
-    )
-    return
+    );
+    return;
   }
 
   console.log(
     `[AI] Processing turn for ${player.name} (${playerIndex}) in phase ${state.phase}`,
-  )
+  );
 
-  const currentSpace = state.spaces[player.position]
+  const currentSpace = state.spaces[player.position];
 
   // Get difficulty-based modifiers
-  const difficulty = player.aiDifficulty || "medium"
-  const modifiers = getDifficultyModifiers(difficulty)
+  const difficulty = player.aiDifficulty || "medium";
+  const modifiers = getDifficultyModifiers(difficulty);
 
   // Calculate AI's net worth for economic decisions
-  const netWorth = calculateNetWorth(state, playerIndex)
-  const cashReserve = Math.max(200, netWorth * modifiers.cashReserveMultiplier)
+  const netWorth = calculateNetWorth(state, playerIndex);
+  const cashReserve = Math.max(200, netWorth * modifiers.cashReserveMultiplier);
 
   // --- Phase 3: Handle Debt Service ---
   if (state.phase === "awaiting_debt_service" && state.pendingDebtService) {
@@ -231,9 +257,9 @@ export const executeAITurn = (state: GameState, actions: GameActions) => {
     ) {
       console.log(
         `[AI] ${player.name} paying debt service of ${state.pendingDebtService.totalInterestDue}`,
-      )
-      actions.payDebtService()
-      return
+      );
+      actions.payDebtService();
+      return;
     }
   }
 
@@ -242,13 +268,13 @@ export const executeAITurn = (state: GameState, actions: GameActions) => {
     state.phase === "awaiting_foreclosure_decision" &&
     state.pendingForeclosure
   ) {
-    const foreclosure = state.pendingForeclosure
+    const foreclosure = state.pendingForeclosure;
     if (
       foreclosure.creditorIndex === playerIndex &&
       actions.handleForeclosureDecision
     ) {
-      const debtor = state.players[foreclosure.debtorIndex]
-      if (!debtor) return
+      const debtor = state.players[foreclosure.debtorIndex];
+      if (!debtor) return;
 
       // Strategy:
       // 1. If debtor has properties, seize the best one
@@ -257,86 +283,86 @@ export const executeAITurn = (state: GameState, actions: GameActions) => {
       const debtorProperties = state.spaces.filter(
         (s): s is Property =>
           isProperty(s) && s.owner === foreclosure.debtorIndex && !s.mortgaged,
-      )
+      );
 
       if (debtorProperties.length > 0) {
         // Seize most valuable property
         const bestProperty = debtorProperties.reduce((best, prop) => {
-          const currentPrice = getCurrentPropertyPrice(state, prop)
-          const bestPrice = best ? getCurrentPropertyPrice(state, best) : 0
-          return currentPrice > bestPrice ? prop : best
-        })
+          const currentPrice = getCurrentPropertyPrice(state, prop);
+          const bestPrice = best ? getCurrentPropertyPrice(state, best) : 0;
+          return currentPrice > bestPrice ? prop : best;
+        });
         console.log(
           `[AI] ${player.name} seizing property ${bestProperty.name} from ${debtor.name}`,
-        )
-        actions.handleForeclosureDecision("foreclose", bestProperty.id)
+        );
+        actions.handleForeclosureDecision("foreclose", bestProperty.id);
       } else {
         // No properties to seize
         // Check if IOU is due before forcing liquidation
-        const iou = debtor.iousPayable.find((i) => i.id === foreclosure.iouId)
-        const isDue = iou && iou.roundsRemaining === 0
+        const iou = debtor.iousPayable.find((i) => i.id === foreclosure.iouId);
+        const isDue = iou && iou.roundsRemaining === 0;
 
         if (difficulty === "hard" && isDue) {
           console.log(
             `[AI] ${player.name} forcing foreclosure on ${debtor.name}`,
-          )
-          actions.handleForeclosureDecision("foreclose")
+          );
+          actions.handleForeclosureDecision("foreclose");
         } else {
           console.log(
             `[AI] ${player.name} restructuring debt for ${debtor.name}`,
-          )
-          actions.handleForeclosureDecision("restructure")
+          );
+          actions.handleForeclosureDecision("restructure");
         }
       }
-      return
+      return;
     }
   }
 
   // --- Phase 3: Handle Bankruptcy Decision ---
   if (state.phase === "awaiting_bankruptcy_decision") {
-    const pending = (state as any).pendingBankruptcy
-    if (!pending) return
+    const pending = (state as any).pendingBankruptcy;
+    if (!pending) return;
 
-    const { playerIndex: bankruptPlayerIndex, debtAmount } = pending
-    const bankruptPlayer = state.players[bankruptPlayerIndex]
+    const { playerIndex: bankruptPlayerIndex, debtAmount } = pending;
+    const bankruptPlayer = state.players[bankruptPlayerIndex];
 
     // Only handle if this AI player is the one facing bankruptcy
-    if (bankruptPlayerIndex !== playerIndex || !bankruptPlayer) return
+    if (bankruptPlayerIndex !== playerIndex || !bankruptPlayer) return;
 
     // Calculate player's assets
     const playerProperties = state.spaces.filter(
       (s): s is Property => isProperty(s) && s.owner === playerIndex,
-    )
+    );
 
     const totalAssetValue = playerProperties.reduce((sum, prop) => {
-      if (prop.mortgaged) return sum + prop.mortgageValue
-      const currentPrice = getCurrentPropertyPrice(state, prop)
-      return sum + currentPrice + prop.houses * (prop.buildingCost ?? 0)
-    }, 0)
+      if (prop.mortgaged) return sum + prop.mortgageValue;
+      const currentPrice = getCurrentPropertyPrice(state, prop);
+      return sum + currentPrice + prop.houses * (prop.buildingCost ?? 0);
+    }, 0);
 
     // Strategy: Choose Chapter 11 if we have assets worth more than the debt
     // Otherwise, declare full bankruptcy (no point in restructuring if we can't pay)
-    const canRealisticallyPay = totalAssetValue >= debtAmount * 0.8 // Need 80% of debt in assets
+    const canRealisticallyPay = totalAssetValue >= debtAmount * 0.8; // Need 80% of debt in assets
 
     if (canRealisticallyPay && actions.enterChapter11) {
       // Try to survive with Chapter 11
-      actions.enterChapter11()
-      return
+      actions.enterChapter11();
+      return;
     } else if (actions.declineRestructuring) {
       // Not enough assets - declare full bankruptcy
-      actions.declineRestructuring()
-      return
+      actions.declineRestructuring();
+      return;
     }
   }
 
   // --- Phase 3: Handle Tax Decision ---
   if (state.phase === "awaiting_tax_decision" && state.awaitingTaxDecision) {
     if (actions.chooseTaxOption) {
-      const { flatAmount, percentageAmount } = state.awaitingTaxDecision
+      const { flatAmount, percentageAmount } = state.awaitingTaxDecision;
       // AI chooses the cheaper option
-      const choice = flatAmount <= percentageAmount ? "flat" : "percentage"
-      actions.chooseTaxOption(playerIndex, choice)
-      return
+      const choice = flatAmount <= percentageAmount ? "flat" : "percentage";
+      actions.chooseTaxOption(playerIndex, choice);
+      return;
     }
   }
 
@@ -345,7 +371,7 @@ export const executeAITurn = (state: GameState, actions: GameActions) => {
     state.phase === "awaiting_rent_negotiation" &&
     state.pendingRentNegotiation
   ) {
-    const negotiation = state.pendingRentNegotiation
+    const negotiation = state.pendingRentNegotiation;
     const {
       creditorIndex,
       debtorIndex,
@@ -353,12 +379,12 @@ export const executeAITurn = (state: GameState, actions: GameActions) => {
       debtorCanAfford,
       status,
       proposedIOU,
-    } = negotiation
+    } = negotiation;
 
     // AI is the creditor - decide what to do
     if (creditorIndex === playerIndex && status === "creditor_decision") {
-      const debtor = state.players[debtorIndex]
-      if (!debtor) return
+      const debtor = state.players[debtorIndex];
+      if (!debtor) return;
 
       // Strategy:
       // 1. If we haven't offered a plan yet, try to offer one with interest
@@ -367,7 +393,7 @@ export const executeAITurn = (state: GameState, actions: GameActions) => {
       // If no plan has been offered or a previous one was rejected (proposedIOU is undefined in creditor_decision)
       if (!proposedIOU && actions.offerPaymentPlan) {
         // AI prefers a payment plan if the debtor has some assets or cash
-        const debtorNetWorth = calculateNetWorth(state, debtorIndex)
+        const debtorNetWorth = calculateNetWorth(state, debtorIndex);
 
         if (debtorNetWorth > rentAmount * 0.5) {
           // Offer a plan: pay what they have, rest as IOU
@@ -375,36 +401,36 @@ export const executeAITurn = (state: GameState, actions: GameActions) => {
           const interestRate =
             difficulty === "easy"
               ? 0
-              : (state.settings?.iouInterestRate ?? 0.05)
-          actions.offerPaymentPlan(debtorCanAfford, interestRate)
-          return
+              : (state.settings?.iouInterestRate ?? 0.05);
+          actions.offerPaymentPlan(debtorCanAfford, interestRate);
+          return;
         } else {
           // Debtor is too poor for a plan, try to seize property
           const debtorProperties = state.spaces.filter(
             (s): s is Property =>
               isProperty(s) && s.owner === debtorIndex && !s.mortgaged,
-          )
+          );
 
           if (
             debtorProperties.length > 0 &&
             actions.demandImmediatePaymentOrProperty
           ) {
             const bestProperty = debtorProperties.reduce((best, prop) => {
-              const currentPrice = getCurrentPropertyPrice(state, prop)
-              const bestPrice = best ? getCurrentPropertyPrice(state, best) : 0
-              return currentPrice > bestPrice ? prop : best
-            })
-            actions.demandImmediatePaymentOrProperty(bestProperty.id)
-            return
+              const currentPrice = getCurrentPropertyPrice(state, prop);
+              const bestPrice = best ? getCurrentPropertyPrice(state, best) : 0;
+              return currentPrice > bestPrice ? prop : best;
+            });
+            actions.demandImmediatePaymentOrProperty(bestProperty.id);
+            return;
           } else if (actions.forgiveRent) {
             // Nothing to take, just forgive or force bankruptcy
             // AI is more likely to forgive if "easy" or if rent is small
             if (difficulty === "easy" || rentAmount < 100) {
-              actions.forgiveRent()
+              actions.forgiveRent();
             } else if (actions.demandImmediatePaymentOrProperty) {
-              actions.demandImmediatePaymentOrProperty(undefined) // Force bankruptcy
+              actions.demandImmediatePaymentOrProperty(undefined); // Force bankruptcy
             }
-            return
+            return;
           }
         }
       }
@@ -418,18 +444,18 @@ export const executeAITurn = (state: GameState, actions: GameActions) => {
     ) {
       // AI almost always accepts a payment plan as it's better than immediate bankruptcy
       // Only reject if the interest rate is absurdly high (e.g. > 50% - not currently possible via UI but for future proofing)
-      const offeredRate = Number(proposedIOU.interestRate)
-      const rate = Number.isFinite(offeredRate) ? offeredRate : 0
+      const offeredRate = Number(proposedIOU.interestRate);
+      const rate = Number.isFinite(offeredRate) ? offeredRate : 0;
       if (rate <= 0.5 && actions.acceptPaymentPlan) {
-        actions.acceptPaymentPlan()
+        actions.acceptPaymentPlan();
       } else if (actions.rejectPaymentPlan) {
-        actions.rejectPaymentPlan()
+        actions.rejectPaymentPlan();
       }
-      return
+      return;
     }
 
     // Creditor/debtor is human or no AI branch applied — do not fall through to the phase switch
-    return
+    return;
   }
 
   // --- Phase 2: Smart Loan Management ---
@@ -444,27 +470,27 @@ export const executeAITurn = (state: GameState, actions: GameActions) => {
       player.totalDebt < netWorth * modifiers.loanThreshold
     ) {
       // Calculate desired loan amount
-      const desiredLoan = Math.min(200, Math.floor(netWorth * 0.2))
+      const desiredLoan = Math.min(200, Math.floor(netWorth * 0.2));
       // Check maximum available loan amount to prevent infinite loops
-      const maxAvailableLoan = actions.getMaxLoanAmount(playerIndex)
+      const maxAvailableLoan = actions.getMaxLoanAmount(playerIndex);
       if (maxAvailableLoan > 0) {
         // Take the smaller of desired amount or maximum available
-        const loanAmount = Math.min(desiredLoan, maxAvailableLoan)
+        const loanAmount = Math.min(desiredLoan, maxAvailableLoan);
         if (loanAmount >= 50) {
-          actions.takeLoan(playerIndex, loanAmount)
-          return
+          actions.takeLoan(playerIndex, loanAmount);
+          return;
         }
       }
     }
 
     // Repay loans if we have excess cash
     if (player.bankLoans.length > 0 && player.cash > cashReserve * 2) {
-      const loan = player.bankLoans[0]
+      const loan = player.bankLoans[0];
       if (loan && actions.repayLoan) {
-        const repayAmount = Math.min(loan.totalOwed, player.cash - cashReserve)
+        const repayAmount = Math.min(loan.totalOwed, player.cash - cashReserve);
         if (repayAmount > 0) {
-          actions.repayLoan(playerIndex, loan.id, repayAmount)
-          return
+          actions.repayLoan(playerIndex, loan.id, repayAmount);
+          return;
         }
       }
     }
@@ -476,19 +502,19 @@ export const executeAITurn = (state: GameState, actions: GameActions) => {
     player.iousPayable.length > 0 &&
     player.cash > cashReserve
   ) {
-    const iou = player.iousPayable[0]
+    const iou = player.iousPayable[0];
     if (iou && actions.payIOU) {
       // Calculate payment amount, ensuring it's a whole number and at least $1
       const rawPayAmount = Math.min(
         iou.currentAmount,
         player.cash - cashReserve,
-      )
+      );
       // Round down to whole number and ensure minimum of $1
-      const payAmount = Math.max(1, Math.floor(rawPayAmount))
+      const payAmount = Math.max(1, Math.floor(rawPayAmount));
       // Only pay if we have at least $1 available and the IOU has at least $1 remaining
       if (payAmount >= 1 && rawPayAmount >= 1 && player.cash >= payAmount) {
-        actions.payIOU(playerIndex, iou.id, payAmount)
-        return
+        actions.payIOU(playerIndex, iou.id, payAmount);
+        return;
       }
     }
   }
@@ -506,24 +532,24 @@ export const executeAITurn = (state: GameState, actions: GameActions) => {
         !s.mortgaged &&
         !s.isInsured &&
         (s.houses > 0 || s.hotel), // Only insure developed properties
-    )
+    );
 
     if (uninsuredProps.length > 0) {
       // Insure the most developed property first
       const propToInsure = uninsuredProps.sort((a, b) => {
-        const aValue = a.hotel ? 5 : a.houses
-        const bValue = b.hotel ? 5 : b.houses
-        return bValue - aValue
-      })[0]
+        const aValue = a.hotel ? 5 : a.houses;
+        const bValue = b.hotel ? 5 : b.houses;
+        return bValue - aValue;
+      })[0];
 
       if (propToInsure) {
-        const currentPrice = getCurrentPropertyPrice(state, propToInsure)
+        const currentPrice = getCurrentPropertyPrice(state, propToInsure);
         const insuranceCost = Math.ceil(
           currentPrice * (state.settings.insuranceCostPercent ?? 0.05),
-        )
+        );
         if (player.cash > insuranceCost + cashReserve) {
-          actions.buyPropertyInsurance(propToInsure.id, playerIndex)
-          return
+          actions.buyPropertyInsurance(propToInsure.id, playerIndex);
+          return;
         }
       }
     }
@@ -537,13 +563,13 @@ export const executeAITurn = (state: GameState, actions: GameActions) => {
     const propsWithBuildings = state.spaces.filter(
       (s): s is Property =>
         isProperty(s) && s.owner === playerIndex && (s.houses > 0 || s.hotel),
-    )
+    );
 
     if (propsWithBuildings.length > 0) {
-      const prop = propsWithBuildings[0]!
-      if (prop.hotel) actions.sellHotel(prop.id)
-      else actions.sellHouse(prop.id)
-      return // Execute one action at a time
+      const prop = propsWithBuildings[0]!;
+      if (prop.hotel) actions.sellHotel(prop.id);
+      else actions.sellHouse(prop.id);
+      return; // Execute one action at a time
     }
 
     // 2. Mortgage properties
@@ -554,11 +580,11 @@ export const executeAITurn = (state: GameState, actions: GameActions) => {
         !s.mortgaged &&
         s.houses === 0 &&
         !s.hotel,
-    )
+    );
 
     if (mortgageableProps.length > 0) {
-      actions.mortgageProperty(mortgageableProps[0]!.id)
-      return
+      actions.mortgageProperty(mortgageableProps[0]!.id);
+      return;
     }
   }
 
@@ -576,23 +602,23 @@ export const executeAITurn = (state: GameState, actions: GameActions) => {
       "yellow",
       "green",
       "dark_blue",
-    ]
+    ];
 
     for (const group of colorGroups) {
-      if (!group) continue
+      if (!group) continue;
       const groupProps = state.spaces.filter(
         (s): s is Property => isProperty(s) && s.colorGroup === group,
-      )
-      const ownedByAI = groupProps.filter((s) => s.owner === playerIndex)
+      );
+      const ownedByAI = groupProps.filter((s) => s.owner === playerIndex);
 
       // If AI has some but not all
       if (ownedByAI.length > 0 && ownedByAI.length < groupProps.length) {
-        const missingProps = groupProps.filter((s) => s.owner !== playerIndex)
+        const missingProps = groupProps.filter((s) => s.owner !== playerIndex);
 
-        const owners = new Set(missingProps.map((s) => s.owner))
+        const owners = new Set(missingProps.map((s) => s.owner));
         if (owners.size === 1 && !owners.has(undefined)) {
-          const targetPlayerIndex = [...owners][0]!
-          const targetPlayer = state.players[targetPlayerIndex]
+          const targetPlayerIndex = [...owners][0]!;
+          const targetPlayer = state.players[targetPlayerIndex];
 
           if (
             targetPlayer &&
@@ -600,18 +626,18 @@ export const executeAITurn = (state: GameState, actions: GameActions) => {
             targetPlayerIndex !== playerIndex
           ) {
             // Calculate offer
-            let totalMarketValue = 0
-            const propIds: number[] = []
-            let skipTrade = false
-            let maxAttempts = 0
+            let totalMarketValue = 0;
+            const propIds: number[] = [];
+            let skipTrade = false;
+            let maxAttempts = 0;
             const tradeRequestKey = getTradeRequestKey(
               targetPlayerIndex,
               missingProps.map((p) => p.id),
-            )
-            const requestHistory = player.tradeHistory?.[tradeRequestKey]
+            );
+            const requestHistory = player.tradeHistory?.[tradeRequestKey];
 
             if ((requestHistory?.attempts ?? 0) >= TRADE_ATTEMPT_LIMIT) {
-              continue
+              continue;
             }
 
             if (
@@ -619,37 +645,37 @@ export const executeAITurn = (state: GameState, actions: GameActions) => {
               state.turn - requestHistory.lastOfferTurn <
                 TRADE_ATTEMPT_COOLDOWN_TURNS
             ) {
-              continue
+              continue;
             }
 
             missingProps.forEach((p) => {
-              const key = `${targetPlayerIndex}-${p.id}`
-              const history = player.tradeHistory?.[key]
+              const key = `${targetPlayerIndex}-${p.id}`;
+              const history = player.tradeHistory?.[key];
 
               if (history) {
-                maxAttempts = Math.max(maxAttempts, history.attempts)
+                maxAttempts = Math.max(maxAttempts, history.attempts);
                 if (history.attempts >= 3) {
-                  skipTrade = true
+                  skipTrade = true;
                 }
               }
 
-              totalMarketValue += getCurrentPropertyPrice(state, p)
-              propIds.push(p.id)
-            })
+              totalMarketValue += getCurrentPropertyPrice(state, p);
+              propIds.push(p.id);
+            });
 
-            if (skipTrade) continue
+            if (skipTrade) continue;
 
             // Increase offer based on rejections: 1.5 -> 2.0 -> 2.5
             if (requestHistory?.attempts) {
-              maxAttempts = Math.max(maxAttempts, requestHistory.attempts)
+              maxAttempts = Math.max(maxAttempts, requestHistory.attempts);
             }
-            const multiplier = 1.5 + maxAttempts * 0.5
-            const offerCash = Math.floor(totalMarketValue * multiplier)
+            const multiplier = 1.5 + maxAttempts * 0.5;
+            const offerCash = Math.floor(totalMarketValue * multiplier);
 
             if (player.cash >= offerCash + 200) {
               // Ensure reserve
               // INITIATE TRADE
-              actions.startTrade(playerIndex, targetPlayerIndex)
+              actions.startTrade(playerIndex, targetPlayerIndex);
               actions.updateTradeOffer({
                 fromPlayer: playerIndex,
                 toPlayer: targetPlayerIndex,
@@ -659,7 +685,7 @@ export const executeAITurn = (state: GameState, actions: GameActions) => {
                 cashRequested: 0,
                 propertiesRequested: propIds,
                 jailCardsRequested: 0,
-              })
+              });
 
               actions.proposeTrade({
                 fromPlayer: playerIndex,
@@ -670,8 +696,8 @@ export const executeAITurn = (state: GameState, actions: GameActions) => {
                 cashRequested: 0,
                 propertiesRequested: propIds,
                 jailCardsRequested: 0,
-              })
-              return
+              });
+              return;
             }
           }
         }
@@ -680,10 +706,10 @@ export const executeAITurn = (state: GameState, actions: GameActions) => {
   }
 
   // Building with difficulty-aware cash reserve
-  const buildReserve = Math.max(200, netWorth * modifiers.buildingThreshold)
+  const buildReserve = Math.max(200, netWorth * modifiers.buildingThreshold);
   if (player.cash > buildReserve && state.phase === "rolling") {
-    const budget = player.cash - buildReserve
-    let spent = 0
+    const budget = player.cash - buildReserve;
+    let spent = 0;
 
     // Get all properties that can be built upon
     const buildableProps = state.spaces.filter(
@@ -695,57 +721,57 @@ export const executeAITurn = (state: GameState, actions: GameActions) => {
         hasMonopoly(state, playerIndex, s.colorGroup) &&
         !s.mortgaged &&
         !s.hotel,
-    )
+    );
 
     if (buildableProps.length > 0) {
       // Sort by Monopoly building tier (hotel = 5) so we never starve a color group
       buildableProps.sort(
         (a, b) => effectiveBuildingTier(a) - effectiveBuildingTier(b),
-      )
+      );
 
-      let actionsTaken = 0
+      let actionsTaken = 0;
       // Track virtual tiers to respect even building in a single turn (must match server rules)
-      const virtualHouses = new Map<number, number>()
+      const virtualHouses = new Map<number, number>();
       buildableProps.forEach((p) =>
         virtualHouses.set(p.id, effectiveBuildingTier(p)),
-      )
+      );
 
       // Attempt to build as many as possible in this tick
-      let canStillBuild = true
+      let canStillBuild = true;
       while (canStillBuild && actionsTaken < 10) {
         // Limit to 10 actions per tick for safety
-        canStillBuild = false
+        canStillBuild = false;
 
         // Re-sort buildableProps based on virtual tiers to maintain even building
         buildableProps.sort(
           (a, b) =>
             (virtualHouses.get(a.id) ?? 0) - (virtualHouses.get(b.id) ?? 0),
-        )
+        );
 
         for (const prop of buildableProps) {
-          const currentTier = virtualHouses.get(prop.id) ?? 0
-          if (currentTier >= 5) continue
+          const currentTier = virtualHouses.get(prop.id) ?? 0;
+          if (currentTier >= 5) continue;
 
-          const scarcityEnabled = state.settings?.enableHousingScarcity
+          const scarcityEnabled = state.settings?.enableHousingScarcity;
           if (currentTier === 4) {
-            if (scarcityEnabled && state.availableHotels <= 0) continue
+            if (scarcityEnabled && state.availableHotels <= 0) continue;
           } else {
-            if (scarcityEnabled && state.availableHouses <= 0) continue
+            if (scarcityEnabled && state.availableHouses <= 0) continue;
           }
 
-          const cost = prop.buildingCost ?? 0
+          const cost = prop.buildingCost ?? 0;
           if (spent + cost <= budget) {
             const ok =
               currentTier === 4
                 ? actions.buildHotel(prop.id)
-                : actions.buildHouse(prop.id)
-            if (!ok) continue
+                : actions.buildHouse(prop.id);
+            if (!ok) continue;
 
-            spent += cost
-            virtualHouses.set(prop.id, currentTier === 4 ? 5 : currentTier + 1)
-            actionsTaken++
-            canStillBuild = true
-            break
+            spent += cost;
+            virtualHouses.set(prop.id, currentTier === 4 ? 5 : currentTier + 1);
+            actionsTaken++;
+            canStillBuild = true;
+            break;
           }
         }
       }
@@ -753,8 +779,8 @@ export const executeAITurn = (state: GameState, actions: GameActions) => {
       if (actionsTaken > 0) {
         console.log(
           `[AI] Performed ${actionsTaken} building upgrades for ${player.name}`,
-        )
-        return
+        );
+        return;
       }
     }
   }
@@ -766,62 +792,62 @@ export const executeAITurn = (state: GameState, actions: GameActions) => {
       if (state.diceRoll) {
         console.log(
           `[AI] In moving phase with roll ${state.diceRoll.total}. Executing move...`,
-        )
-        actions.movePlayer(playerIndex, state.diceRoll.total)
+        );
+        actions.movePlayer(playerIndex, state.diceRoll.total);
       }
-      break
+      break;
     }
 
     case "rolling": {
-      console.log(`[AI] In rolling phase. InJail: ${player.inJail}`)
+      console.log(`[AI] In rolling phase. InJail: ${player.inJail}`);
       if (player.inJail) {
-        if (player.jailFreeCards > 0) actions.getOutOfJail(playerIndex, "card")
+        if (player.jailFreeCards > 0) actions.getOutOfJail(playerIndex, "card");
         else if (player.cash >= 50 && player.jailTurns >= 1)
-          actions.getOutOfJail(playerIndex, "pay")
-        else actions.getOutOfJail(playerIndex, "roll")
+          actions.getOutOfJail(playerIndex, "pay");
+        else actions.getOutOfJail(playerIndex, "roll");
       } else {
-        console.log(`[AI] Rolling dice...`)
-        actions.rollDice()
+        console.log(`[AI] Rolling dice...`);
+        actions.rollDice();
       }
-      break
+      break;
     }
 
     case "jail_decision": {
-      if (player.jailFreeCards > 0) actions.getOutOfJail(playerIndex, "card")
+      if (player.jailFreeCards > 0) actions.getOutOfJail(playerIndex, "card");
       else if (player.cash >= 50 && player.jailTurns >= 1)
-        actions.getOutOfJail(playerIndex, "pay")
-      else actions.getOutOfJail(playerIndex, "roll")
-      break
+        actions.getOutOfJail(playerIndex, "pay");
+      else actions.getOutOfJail(playerIndex, "roll");
+      break;
     }
 
     case "awaiting_buy_decision": {
-      if (!currentSpace || !isProperty(currentSpace)) return
-      const property = currentSpace as Property
+      if (!currentSpace || !isProperty(currentSpace)) return;
+      const property = currentSpace as Property;
 
       // Enhanced AI buying logic
-      let shouldBuy = false
-      const currentPrice = getCurrentPropertyPrice(state, property)
-      const priceWithReserve = currentPrice + cashReserve
+      let shouldBuy = false;
+      const currentPrice = getCurrentPropertyPrice(state, property);
+      const priceWithReserve = currentPrice + cashReserve;
 
       if (player.cash >= priceWithReserve) {
         // Always buy if we'd complete a monopoly
         if (wouldCompleteMonopoly(state, playerIndex, property)) {
-          shouldBuy = true
+          shouldBuy = true;
         }
         // Buy if we'd block an opponent's monopoly
         else if (wouldBlockOpponent(state, playerIndex, property)) {
-          shouldBuy = true
+          shouldBuy = true;
         }
         // Buy if ROI is good enough (based on difficulty)
         else {
-          const roi = calculatePropertyROI(state, property, playerIndex)
-          shouldBuy = roi >= modifiers.roiThreshold
+          const roi = calculatePropertyROI(state, property, playerIndex);
+          shouldBuy = roi >= modifiers.roiThreshold;
         }
       } else if (player.cash >= currentPrice) {
         // Low on cash but still can afford - only buy if completing/blocking monopoly
         shouldBuy =
           wouldCompleteMonopoly(state, playerIndex, property) ||
-          wouldBlockOpponent(state, playerIndex, property)
+          wouldBlockOpponent(state, playerIndex, property);
       }
 
       // Consider taking a loan to buy if it would complete a monopoly
@@ -832,33 +858,33 @@ export const executeAITurn = (state: GameState, actions: GameActions) => {
         actions.takeLoan &&
         actions.getMaxLoanAmount
       ) {
-        const shortfall = currentPrice - player.cash + 50 // Extra buffer
-        const maxAvailableLoan = actions.getMaxLoanAmount(playerIndex)
+        const shortfall = currentPrice - player.cash + 50; // Extra buffer
+        const maxAvailableLoan = actions.getMaxLoanAmount(playerIndex);
 
         if (
           maxAvailableLoan > 0 &&
           shortfall <= maxAvailableLoan &&
           shortfall >= 50
         ) {
-          actions.takeLoan(playerIndex, shortfall)
+          actions.takeLoan(playerIndex, shortfall);
           // Will buy on next turn after loan is processed
-          return
+          return;
         }
       }
 
       if (shouldBuy) {
-        actions.buyProperty(property.id)
+        actions.buyProperty(property.id);
       } else {
-        actions.declineProperty(property.id)
+        actions.declineProperty(property.id);
       }
-      break
+      break;
     }
 
     case "auction": {
-      const auction = state.auction
+      const auction = state.auction;
       if (!auction) {
-        console.warn("[AI] Auction phase but no auction state found")
-        break
+        console.warn("[AI] Auction phase but no auction state found");
+        break;
       }
 
       // During auctions, the active player is determined by auction.activePlayerIndex, not currentPlayerIndex
@@ -866,119 +892,120 @@ export const executeAITurn = (state: GameState, actions: GameActions) => {
       if (auction.activePlayerIndex === playerIndex) {
         const prop = state.spaces.find(
           (s) => s.id === auction.propertyId,
-        ) as Property
+        ) as Property;
 
         console.log(
           `[AI Auction] ${player.name} (${playerIndex}) is active bidder for ${prop?.name}, current bid: $${auction.currentBid}`,
-        )
+        );
 
         // Calculate max bid based on strategic value
-        let maxBidMultiplier = 1.0
+        let maxBidMultiplier = 1.0;
 
         // Bid more aggressively if completing monopoly
         if (prop && wouldCompleteMonopoly(state, playerIndex, prop)) {
-          maxBidMultiplier = 2.0 // Pay up to 2x for monopoly completion
+          maxBidMultiplier = 2.0; // Pay up to 2x for monopoly completion
           console.log(
             `[AI Auction] ${player.name} would complete monopoly - bidding aggressively`,
-          )
+          );
         }
         // Bid more if blocking opponent
         else if (prop && wouldBlockOpponent(state, playerIndex, prop)) {
-          maxBidMultiplier = 1.5 // Pay up to 1.5x to block
+          maxBidMultiplier = 1.5; // Pay up to 1.5x to block
           console.log(
             `[AI Auction] ${player.name} would block opponent - bidding moderately`,
-          )
+          );
         }
 
-        const currentPrice = prop ? getCurrentPropertyPrice(state, prop) : 0
+        const currentPrice = prop ? getCurrentPropertyPrice(state, prop) : 0;
         const maxBid = Math.min(
           player.cash - cashReserve,
           prop
             ? currentPrice * maxBidMultiplier * modifiers.auctionAggressiveness
             : player.cash,
-        )
+        );
 
         // Calculate minimum bid increment (10% or $10)
-        const minIncrement = Math.max(10, Math.floor(auction.currentBid * 0.1))
+        const minIncrement = Math.max(10, Math.floor(auction.currentBid * 0.1));
         const nextBid =
           auction.currentBid === 0
             ? Math.max(10, Math.floor((prop ? currentPrice : 100) * 0.1)) // Opening bid
-            : auction.currentBid + minIncrement
+            : auction.currentBid + minIncrement;
 
         console.log(
           `[AI Auction] ${player.name} maxBid: $${maxBid}, nextBid: $${nextBid}, cash: $${player.cash}, reserve: $${cashReserve}`,
-        )
+        );
 
         if (nextBid <= maxBid && nextBid <= player.cash) {
-          console.log(`[AI Auction] ${player.name} placing bid of $${nextBid}`)
-          actions.placeBid(playerIndex, nextBid)
+          console.log(`[AI Auction] ${player.name} placing bid of $${nextBid}`);
+          actions.placeBid(playerIndex, nextBid);
         } else {
           console.log(
             `[AI Auction] ${player.name} passing (nextBid $${nextBid} > maxBid $${maxBid} or cash)`,
-          )
-          actions.passAuction(playerIndex)
+          );
+          actions.passAuction(playerIndex);
         }
       } else {
         console.log(
           `[AI Auction] ${player.name} (${playerIndex}) is not active bidder (active: ${auction.activePlayerIndex})`,
-        )
+        );
       }
-      break
+      break;
     }
 
     case "awaiting_rent_negotiation": {
-      if (!state.pendingRentNegotiation) break
+      if (!state.pendingRentNegotiation) break;
       const { creditorIndex, debtorIndex, rentAmount } =
-        state.pendingRentNegotiation
-      if (creditorIndex !== playerIndex) break
+        state.pendingRentNegotiation;
+      if (creditorIndex !== playerIndex) break;
 
-      const debtor = state.players[debtorIndex]
-      if (!debtor) break
-      const difficulty = player.aiDifficulty || "medium"
+      const debtor = state.players[debtorIndex];
+      if (!debtor) break;
+      const difficulty = player.aiDifficulty || "medium";
 
       // AI as creditor: decide whether to forgive, IOU, or demand property
       if (difficulty === "easy") {
         // Easy AI is generous
-        if (actions.forgiveRent) actions.forgiveRent()
+        if (actions.forgiveRent) actions.forgiveRent();
       } else if (difficulty === "hard") {
         // Hard AI is ruthless - demand immediate payment or property transfer
         if (actions.demandImmediatePaymentOrProperty)
-          actions.demandImmediatePaymentOrProperty()
+          actions.demandImmediatePaymentOrProperty();
       } else {
         // Medium AI: Accept IOU if debtor has some assets
-        const debtorNetWorth = calculateNetWorth(state, debtorIndex)
+        const debtorNetWorth = calculateNetWorth(state, debtorIndex);
         if (debtorNetWorth > rentAmount * 2 && actions.createRentIOU) {
-          actions.createRentIOU(Math.min(debtor.cash, rentAmount * 0.2))
+          actions.createRentIOU(Math.min(debtor.cash, rentAmount * 0.2));
         } else if (actions.demandImmediatePaymentOrProperty) {
-          actions.demandImmediatePaymentOrProperty()
+          actions.demandImmediatePaymentOrProperty();
         }
       }
-      break
+      break;
     }
 
     case "awaiting_bankruptcy_decision": {
-      if (!state.pendingBankruptcy) break
-      const { playerIndex: bankruptIndex, debtAmount } = state.pendingBankruptcy
-      if (bankruptIndex !== playerIndex) break
+      if (!state.pendingBankruptcy) break;
+      const { playerIndex: bankruptIndex, debtAmount } =
+        state.pendingBankruptcy;
+      if (bankruptIndex !== playerIndex) break;
 
       // AI as debtor: decide whether to enter Chapter 11 or decline
-      const netWorth = calculateNetWorth(state, playerIndex)
+      const netWorth = calculateNetWorth(state, playerIndex);
 
       // If net worth is significantly higher than debt, try to restructure
       if (netWorth > debtAmount * 1.5 && actions.enterChapter11) {
-        actions.enterChapter11()
+        actions.enterChapter11();
       } else if (actions.declineRestructuring) {
-        actions.declineRestructuring()
+        actions.declineRestructuring();
       }
-      break
+      break;
     }
 
     case "resolving_space": {
-      actions.endTurn()
-      break
+      actions.endTurn();
+      break;
     }
   }
-}
+};
 
 const calculateValuation = (
   state: GameState,
@@ -987,28 +1014,28 @@ const calculateValuation = (
   propertyIds: number[],
   jailCards: number,
 ) => {
-  let value = cash + jailCards * 50
+  let value = cash + jailCards * 50;
 
   propertyIds.forEach((id) => {
-    const p = state.spaces.find((s) => s.id === id)
+    const p = state.spaces.find((s) => s.id === id);
     if (p && isProperty(p)) {
-      let propValue = getCurrentPropertyPrice(state, p)
+      let propValue = getCurrentPropertyPrice(state, p);
 
       if (p.colorGroup) {
         const groupProps = state.spaces.filter(
           (s): s is Property => isProperty(s) && s.colorGroup === p.colorGroup,
-        )
+        );
         const ownedByAI = groupProps.filter(
           (s) => s.owner === ownerIndex && s.id !== id,
-        )
+        );
 
         // Monopoly completion is extremely valuable (4x)
         if (ownedByAI.length === groupProps.length - 1) {
-          propValue *= 4.0
+          propValue *= 4.0;
         }
         // Having more than half of a group is also good
         else if (ownedByAI.length > 0) {
-          propValue *= 1.5
+          propValue *= 1.5;
         }
 
         // Blocking logic: If another player owns most of this group,
@@ -1018,41 +1045,41 @@ const calculateValuation = (
           .filter(
             (owner): owner is number =>
               owner !== undefined && owner !== ownerIndex,
-          )
+          );
 
         if (otherOwners.length > 0) {
-          const counts = new Map<number, number>()
-          otherOwners.forEach((o) => counts.set(o, (counts.get(o) ?? 0) + 1))
-          const maxOwnedByOther = Math.max(...Array.from(counts.values()))
+          const counts = new Map<number, number>();
+          otherOwners.forEach((o) => counts.set(o, (counts.get(o) ?? 0) + 1));
+          const maxOwnedByOther = Math.max(...Array.from(counts.values()));
 
           if (maxOwnedByOther === groupProps.length - 1) {
             // This property is the last one an opponent needs!
-            propValue *= 2.5
+            propValue *= 2.5;
           }
         }
       }
-      value += propValue
+      value += propValue;
     }
-  })
-  return value
-}
+  });
+  return value;
+};
 
 export const executeAITradeResponse = (
   state: GameState,
   actions: GameActions,
 ) => {
-  const { trade } = state
-  if (!trade || trade.status !== "pending") return
+  const { trade } = state;
+  if (!trade || trade.status !== "pending") return;
 
-  const { offer } = trade
-  const aiPlayerIndex = offer.toPlayer
+  const { offer } = trade;
+  const aiPlayerIndex = offer.toPlayer;
 
-  const aiPlayer = state.players[aiPlayerIndex]
-  if (!aiPlayer || !aiPlayer.isAI) return
+  const aiPlayer = state.players[aiPlayerIndex];
+  if (!aiPlayer || !aiPlayer.isAI) return;
 
-  const aiDifficulty = aiPlayer.aiDifficulty || "medium"
-  const aiModifiers = getDifficultyModifiers(aiDifficulty)
-  const threshold = 1 / aiModifiers.tradeAcceptanceThreshold
+  const aiDifficulty = aiPlayer.aiDifficulty || "medium";
+  const aiModifiers = getDifficultyModifiers(aiDifficulty);
+  const threshold = 1 / aiModifiers.tradeAcceptanceThreshold;
 
   const valueReceived = calculateValuation(
     state,
@@ -1060,15 +1087,15 @@ export const executeAITradeResponse = (
     offer.cashOffered,
     offer.propertiesOffered,
     offer.jailCardsOffered,
-  )
+  );
   const valueGiven = calculateValuation(
     state,
     aiPlayerIndex,
     offer.cashRequested,
     offer.propertiesRequested,
     offer.jailCardsRequested,
-  )
+  );
 
-  if (valueReceived >= valueGiven * threshold) actions.acceptTrade()
-  else actions.rejectTrade()
-}
+  if (valueReceived >= valueGiven * threshold) actions.acceptTrade();
+  else actions.rejectTrade();
+};
