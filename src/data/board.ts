@@ -1,4 +1,4 @@
-import type { Space, Property, ColorGroup } from '../types/game'
+import type { Space, Property, ColorGroup } from "../types/game";
 
 const createProperty = (
   id: number,
@@ -14,7 +14,7 @@ const createProperty = (
   id,
   name,
   position,
-  type: 'property',
+  type: "property",
   colorGroup,
   price,
   baseRent,
@@ -29,7 +29,7 @@ const createProperty = (
   insurancePaidUntilRound: 0,
   // Phase 3: Property Value Fluctuation
   valueMultiplier: 1.0,
-})
+});
 
 const createRailroad = (
   id: number,
@@ -39,7 +39,7 @@ const createRailroad = (
   id,
   name,
   position,
-  type: 'railroad',
+  type: "railroad",
   colorGroup: null,
   price: 200,
   baseRent: 25,
@@ -54,7 +54,7 @@ const createRailroad = (
   insurancePaidUntilRound: 0,
   // Phase 3: Property Value Fluctuation
   valueMultiplier: 1.0,
-})
+});
 
 const createUtility = (
   id: number,
@@ -64,7 +64,7 @@ const createUtility = (
   id,
   name,
   position,
-  type: 'utility',
+  type: "utility",
   colorGroup: null,
   price: 150,
   baseRent: 0,
@@ -79,60 +79,60 @@ const createUtility = (
   insurancePaidUntilRound: 0,
   // Phase 3: Property Value Fluctuation
   valueMultiplier: 1.0,
-})
+});
 
 const createSpace = (
   id: number,
   name: string,
-  type: Space['type'],
+  type: Space["type"],
   position: number,
-): Space => ({ id, name, type, position })
+): Space => ({ id, name, type, position });
 
 export const boardSpaces: Space[] = [
   // Bottom row (left to right)
-  createSpace(0, 'GO', 'go', 0),
+  createSpace(0, "GO", "go", 0),
   createProperty(
     1,
-    'Astoria',
+    "Astoria",
     1,
-    'brown',
+    "brown",
     60,
     2,
     [2, 10, 30, 90, 160, 250],
     50,
     30,
   ),
-  createSpace(2, 'Community Chest', 'community_chest', 2),
+  createSpace(2, "Community Chest", "community_chest", 2),
   createProperty(
     3,
-    'Seaside',
+    "Seaside",
     3,
-    'brown',
+    "brown",
     60,
     4,
     [4, 20, 60, 180, 320, 450],
     50,
     30,
   ),
-  createSpace(4, 'Income Tax', 'tax', 4),
-  createRailroad(5, 'Union Pacific Railroad', 5),
+  createSpace(4, "Income Tax", "tax", 4),
+  createRailroad(5, "Union Pacific Railroad", 5),
   createProperty(
     6,
-    'Hood River',
+    "Hood River",
     6,
-    'light_blue',
+    "light_blue",
     100,
     6,
     [6, 30, 90, 270, 400, 550],
     50,
     50,
   ),
-  createSpace(7, 'Chance', 'chance', 7),
+  createSpace(7, "Chance", "chance", 7),
   createProperty(
     8,
-    'Bend',
+    "Bend",
     8,
-    'light_blue',
+    "light_blue",
     100,
     6,
     [6, 30, 90, 270, 400, 550],
@@ -141,9 +141,9 @@ export const boardSpaces: Space[] = [
   ),
   createProperty(
     9,
-    'Ashland',
+    "Ashland",
     9,
-    'light_blue',
+    "light_blue",
     120,
     8,
     [8, 40, 100, 300, 450, 600],
@@ -152,24 +152,24 @@ export const boardSpaces: Space[] = [
   ),
 
   // Left column (bottom to top)
-  createSpace(10, 'Jail / Just Visiting', 'jail', 10),
+  createSpace(10, "Jail / Just Visiting", "jail", 10),
   createProperty(
     11,
-    'Eugene',
+    "Eugene",
     11,
-    'pink',
+    "pink",
     140,
     10,
     [10, 50, 150, 450, 625, 750],
     100,
     70,
   ),
-  createUtility(12, 'Portland General Electric', 12),
+  createUtility(12, "Portland General Electric", 12),
   createProperty(
     13,
-    'Corvallis',
+    "Corvallis",
     13,
-    'pink',
+    "pink",
     140,
     10,
     [10, 50, 150, 450, 625, 750],
@@ -178,33 +178,33 @@ export const boardSpaces: Space[] = [
   ),
   createProperty(
     14,
-    'Salem',
+    "Salem",
     14,
-    'pink',
+    "pink",
     160,
     12,
     [12, 60, 180, 500, 700, 900],
     100,
     80,
   ),
-  createRailroad(15, 'Oregon Coast Railway', 15),
+  createRailroad(15, "Oregon Coast Railway", 15),
   createProperty(
     16,
-    'Pearl District',
+    "Pearl District",
     16,
-    'orange',
+    "orange",
     180,
     14,
     [14, 70, 200, 550, 750, 950],
     100,
     90,
   ),
-  createSpace(17, 'Community Chest', 'community_chest', 17),
+  createSpace(17, "Community Chest", "community_chest", 17),
   createProperty(
     18,
-    'Alberta Arts District',
+    "Alberta Arts District",
     18,
-    'orange',
+    "orange",
     180,
     14,
     [14, 70, 200, 550, 750, 950],
@@ -213,9 +213,9 @@ export const boardSpaces: Space[] = [
   ),
   createProperty(
     19,
-    'Hawthorne District',
+    "Hawthorne District",
     19,
-    'orange',
+    "orange",
     200,
     16,
     [16, 80, 220, 600, 800, 1000],
@@ -224,24 +224,24 @@ export const boardSpaces: Space[] = [
   ),
 
   // Top row (right to left)
-  createSpace(20, 'Free Parking', 'free_parking', 20),
+  createSpace(20, "Free Parking", "free_parking", 20),
   createProperty(
     21,
-    'Nob Hill',
+    "Nob Hill",
     21,
-    'red',
+    "red",
     220,
     18,
     [18, 90, 250, 700, 875, 1050],
     150,
     110,
   ),
-  createSpace(22, 'Chance', 'chance', 22),
+  createSpace(22, "Chance", "chance", 22),
   createProperty(
     23,
-    'Sellwood',
+    "Sellwood",
     23,
-    'red',
+    "red",
     220,
     18,
     [18, 90, 250, 700, 875, 1050],
@@ -250,21 +250,21 @@ export const boardSpaces: Space[] = [
   ),
   createProperty(
     24,
-    'Multnomah Falls',
+    "Multnomah Falls",
     24,
-    'red',
+    "red",
     240,
     20,
     [20, 100, 300, 750, 925, 1100],
     150,
     120,
   ),
-  createRailroad(25, 'Southern Pacific Railroad', 25),
+  createRailroad(25, "Southern Pacific Railroad", 25),
   createProperty(
     26,
-    'Downtown Portland',
+    "Downtown Portland",
     26,
-    'yellow',
+    "yellow",
     260,
     22,
     [22, 110, 330, 800, 975, 1150],
@@ -273,21 +273,21 @@ export const boardSpaces: Space[] = [
   ),
   createProperty(
     27,
-    'Lloyd District',
+    "Lloyd District",
     27,
-    'yellow',
+    "yellow",
     260,
     22,
     [22, 110, 330, 800, 975, 1150],
     150,
     130,
   ),
-  createUtility(28, 'Pacific Power', 28),
+  createUtility(28, "Pacific Power", 28),
   createProperty(
     29,
-    'Cannon Beach',
+    "Cannon Beach",
     29,
-    'yellow',
+    "yellow",
     280,
     24,
     [24, 120, 360, 850, 1025, 1200],
@@ -296,12 +296,12 @@ export const boardSpaces: Space[] = [
   ),
 
   // Right column (top to bottom)
-  createSpace(30, 'Go To Jail', 'go_to_jail', 30),
+  createSpace(30, "Go To Jail", "go_to_jail", 30),
   createProperty(
     31,
-    'West Hills',
+    "West Hills",
     31,
-    'green',
+    "green",
     300,
     26,
     [26, 130, 390, 900, 1100, 1275],
@@ -310,53 +310,53 @@ export const boardSpaces: Space[] = [
   ),
   createProperty(
     32,
-    'Lake Oswego',
+    "Lake Oswego",
     32,
-    'green',
+    "green",
     300,
     26,
     [26, 130, 390, 900, 1100, 1275],
     200,
     150,
   ),
-  createSpace(33, 'Community Chest', 'community_chest', 33),
+  createSpace(33, "Community Chest", "community_chest", 33),
   createProperty(
     34,
-    'Willamette Valley',
+    "Willamette Valley",
     34,
-    'green',
+    "green",
     320,
     28,
     [28, 150, 450, 1000, 1200, 1400],
     200,
     160,
   ),
-  createRailroad(35, 'Portland MAX', 35),
-  createSpace(36, 'Chance', 'chance', 36),
+  createRailroad(35, "Portland MAX", 35),
+  createSpace(36, "Chance", "chance", 36),
   createProperty(
     37,
-    'Crater Lake',
+    "Crater Lake",
     37,
-    'dark_blue',
+    "dark_blue",
     350,
     35,
     [35, 175, 500, 1100, 1300, 1500],
     200,
     175,
   ),
-  createSpace(38, 'Luxury Tax', 'tax', 38),
+  createSpace(38, "Luxury Tax", "tax", 38),
   createProperty(
     39,
-    'Mount Hood',
+    "Mount Hood",
     39,
-    'dark_blue',
+    "dark_blue",
     400,
     50,
     [50, 200, 600, 1400, 1700, 2000],
     200,
     200,
   ),
-]
+];
 
 export const colorGroupSizes: Record<Exclude<ColorGroup, null>, number> = {
   brown: 2,
@@ -367,13 +367,17 @@ export const colorGroupSizes: Record<Exclude<ColorGroup, null>, number> = {
   yellow: 3,
   green: 3,
   dark_blue: 2,
-}
+  pale_green: 0,
+  teal: 0,
+  lavender: 0,
+  gold: 0,
+};
 
 export const getPropertiesByColorGroup = (
   colorGroup: ColorGroup,
 ): Property[] => {
   return boardSpaces.filter(
     (space): space is Property =>
-      space.type === 'property' && space.colorGroup === colorGroup,
-  )
-}
+      space.type === "property" && space.colorGroup === colorGroup,
+  );
+};

@@ -179,32 +179,48 @@ export const calculate1906Rent = (
  * This maps position indices to the LAND_RENT_TIER constants.
  */
 export const get1906PropertyTier = (position: number): number => {
-  // Map positions to tiers based on board1906.ts definitions
-  // Tier 1 (index 0): positions 1, 3, 5 (Mother Earth adjacent)
-  // Tier 2 (index 1): positions 8, 10
-  // etc.
+  // Map positions to tiers based on board1906.ts definitions (1906 Oregon Edition)
+  // New layout: Position 40 = Mother Earth (START), Position 10 = Shelter/Jail
+  // Tier 0 (pale_green, tier 1): positions 0, 2
+  // Tier 1 (pale_green, tier 2): positions 5, 6
+  // Tier 2 (pale_green, tier 3): position 8
+  // Tier 3 (pale_green, tier 4): positions 12, 13
+  // Tier 4 (pale_green, tier 5): positions 16, 17, 19, 20, 22, 23
+  // Tier 5 (light_blue, tier 6): position 25
+  // Tier 6 (light_blue, tier 7): positions 28, 29
+  // Tier 7 (light_blue, tier 8): positions 32, 34, 35, 36
+  // Tier 8 (light_blue, tier 9): position 37
+  // Tier 9 (pink, tier 9): position 38
+  // Tier 10 (pink, tier 10): positions 40, 41
+  // Tier 11 (pink, tier 11): positions 43, 45
   const positionToTier: Record<number, number> = {
-    1: 0,
-    3: 0,
-    5: 0, // Tier 1: pale_green
-    8: 1,
-    10: 1, // Tier 2: teal
-    13: 2,
-    15: 2,
-    17: 2, // Tier 3: lavender
-    19: 3,
-    21: 3, // Tier 4: gold
-    24: 4,
-    26: 4,
-    28: 4, // Tier 5: brown
-    31: 5,
-    33: 5, // Tier 6: pale_green (reused)
-    36: 6,
-    38: 6,
-    40: 6, // Tier 7: teal (reused)
-    42: 7,
-    44: 7,
-    46: 7, // Tier 8: lavender (reused)
+    0: 0, // Tillamook - Tier 1
+    2: 0, // Newport - Tier 1
+    5: 1, // Seaside - Tier 2
+    6: 1, // Cannon Beach - Tier 2
+    8: 2, // Manzanita - Tier 3
+    9: 1, // Astoria - Tier 2
+    12: 2, // Hood River - Tier 3
+    13: 3, // White Salmon - Tier 4
+    16: 3, // The Dalles - Tier 4
+    17: 4, // Milton - Tier 5
+    19: 4, // Wishram - Tier 5
+    20: 4, // Parkdale - Tier 5
+    22: 4, // Wishram Valley - Tier 5
+    23: 4, // Rainier - Tier 5
+    25: 5, // Baker City - Tier 6
+    28: 6, // Pendleton - Tier 7
+    29: 6, // Umatilla - Tier 7
+    32: 7, // John Day - Tier 8
+    34: 7, // Ontario - Tier 8
+    35: 7, // Lakeview - Tier 8
+    36: 7, // Klamath Falls - Tier 8
+    37: 8, // Crater Lake - Tier 9
+    38: 9, // Portland - Tier 9
+    40: 10, // Salem - Tier 10
+    41: 10, // Milwaukie - Tier 10
+    43: 11, // Eugene - Tier 11
+    45: 11, // Albany - Tier 11
   };
 
   return positionToTier[position] ?? 0;
@@ -217,14 +233,9 @@ export const get1906PropertyTier = (position: number): number => {
  */
 export const countCompletedSections = (state: GameState): number => {
   const railroadSections = [
-    [1, 3, 5], // Section 1: Mother Earth → 1st Railroad
-    [8, 10], // Section 2: 1st → 2nd Railroad
-    [13, 15, 17], // Section 3: Jail → 2nd Railroad
-    [19, 21], // Section 4: 2nd Railroad → Public Treasury
-    [24, 26, 28], // Section 5: Public Treasury → 3rd Railroad
-    [31, 33], // Section 6: 3rd Railroad → Lord Blueblood's
-    [36, 38, 40], // Section 7: Lord Blueblood's → 4th Railroad
-    [42, 44, 46], // Section 8: 4th Railroad → Mother Earth
+    [0, 2, 5, 6, 8, 9], // Section 1: Tillamook → Astoria & Columbia River RR (pos 4)
+    [12, 13, 16, 17, 19, 20, 22, 23], // Section 2: Shelter → Oregon Trunk Railway (pos 15)
+    [25, 28, 29, 32, 34, 35, 36, 37], // Section 3: Pendleton → Gee Whiz R.R. (pos 31)
   ];
 
   let completedSections = 0;

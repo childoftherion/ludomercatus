@@ -1,17 +1,18 @@
-import type { Card, CardEffect, GameState } from "../types/game"
+import type { Card, CardEffect, GameState } from "../types/game";
 
 /**
- * 1906 Landlord's Game card decks – Pacific Northwest edition
+ * 1906 Landlord's Game card decks – Economic Game Company (EGC) Edition
  *
- * The 1906 game uses "Chance" cards (green) and a different set of
+ * The 1906 game uses "Chance" cards and a different set of
  * community-style cards. The original game also has Education and
  * Professor cards used only under Single Tax Rules (not implemented here).
  *
  * Key differences from classic:
- * - Cards reference 1906 board locations (Mother Earth, railroads, etc.)
+ * - Cards reference 1906 EGC board locations (Mother Earth, railroads, etc.)
  * - No "Advance to nearest Utility" (1906 has no utilities)
  * - Speculation-related cards
  * - Broker's License card
+ * - 40-space board layout
  */
 
 export const createChanceDeck1906 = (): Card[] => {
@@ -28,29 +29,29 @@ export const createChanceDeck1906 = (): Card[] => {
     {
       id: 2,
       type: "chance",
-      text: "Advance to Crater Lake",
+      text: "Advance to Timberland – Margin of Cultivation",
       getEffect: (state, playerIndex) => {
-        const currentPos = state.players[playerIndex]?.position ?? 0
-        const newPos = 44
+        const currentPos = state.players[playerIndex]?.position ?? 0;
+        const newPos = 35; // Timberland position on 1906 EGC board
         return {
           positionChange: newPos,
           passGoBonus: newPos < currentPos,
           triggerSpaceResolution: true,
-        }
+        };
       },
     },
     {
       id: 3,
       type: "chance",
-      text: "Advance to Hood River",
+      text: "Advance to Boomtown",
       getEffect: (state, playerIndex) => {
-        const currentPos = state.players[playerIndex]?.position ?? 0
-        const newPos = 12
+        const currentPos = state.players[playerIndex]?.position ?? 0;
+        const newPos = 11; // Boomtown position
         return {
           positionChange: newPos,
           passGoBonus: newPos < currentPos,
           triggerSpaceResolution: true,
-        }
+        };
       },
     },
     {
@@ -58,20 +59,20 @@ export const createChanceDeck1906 = (): Card[] => {
       type: "chance",
       text: "Advance to nearest Railroad – If owned, pay owner twice the fare",
       getEffect: (state, playerIndex) => {
-        const pos = state.players[playerIndex]?.position ?? 0
-        // Railroads at positions 6, 17, 28, 39
-        const railroads = [6, 17, 28, 39]
-        let nearest = railroads[0]!
+        const pos = state.players[playerIndex]?.position ?? 0;
+        // Railroads at positions 6, 15, 30 (1906 EGC board)
+        const railroads = [6, 15, 30];
+        let nearest = railroads[0]!;
         for (const rr of railroads) {
-          if (rr > pos && (rr - pos) < (nearest - pos)) {
-            nearest = rr
+          if (rr > pos && rr - pos < nearest - pos) {
+            nearest = rr;
           }
         }
         return {
           positionChange: nearest,
           passGoBonus: nearest < pos,
           triggerSpaceResolution: true,
-        }
+        };
       },
     },
     {
@@ -95,13 +96,13 @@ export const createChanceDeck1906 = (): Card[] => {
       type: "chance",
       text: "Go Back 3 Spaces",
       getEffect: (state, playerIndex) => {
-        const pos = state.players[playerIndex]?.position ?? 0
-        const totalSpaces = 45 // 1906 board has 46 spaces (0-45)
-        const newPos = (pos - 3 + totalSpaces) % totalSpaces
+        const pos = state.players[playerIndex]?.position ?? 0;
+        const totalSpaces = 40; // 1906 EGC board has 40 spaces
+        const newPos = (pos - 3 + totalSpaces) % totalSpaces;
         return {
           positionChange: newPos,
           triggerSpaceResolution: true,
-        }
+        };
       },
     },
     {
@@ -132,15 +133,15 @@ export const createChanceDeck1906 = (): Card[] => {
     {
       id: 11,
       type: "chance",
-      text: "Take a trip on the Astoria & Columbia River Railroad",
+      text: "Take a trip on the Royal Rusher R.R.",
       getEffect: (state, playerIndex) => {
-        const currentPos = state.players[playerIndex]?.position ?? 0
-        const newPos = 6
+        const currentPos = state.players[playerIndex]?.position ?? 0;
+        const newPos = 6; // Royal Rusher R.R. position
         return {
           positionChange: newPos,
           passGoBonus: newPos < currentPos,
           triggerSpaceResolution: true,
-        }
+        };
       },
     },
     {
@@ -164,13 +165,13 @@ export const createChanceDeck1906 = (): Card[] => {
       type: "chance",
       text: "Advance to Public Treasury",
       getEffect: (state, playerIndex) => {
-        const currentPos = state.players[playerIndex]?.position ?? 0
-        const newPos = 22
+        const currentPos = state.players[playerIndex]?.position ?? 0;
+        const newPos = 36; // Public Treasury position
         return {
           positionChange: newPos,
           passGoBonus: newPos < currentPos,
           triggerSpaceResolution: true,
-        }
+        };
       },
     },
     {
@@ -181,8 +182,8 @@ export const createChanceDeck1906 = (): Card[] => {
         cashChange: 0,
       }),
     },
-  ]
-}
+  ];
+};
 
 export const createCommunityChestDeck1906 = (): Card[] => {
   return [
@@ -300,5 +301,5 @@ export const createCommunityChestDeck1906 = (): Card[] => {
         cashChange: 50,
       }),
     },
-  ]
-}
+  ];
+};

@@ -8,7 +8,10 @@ import { PropertyTooltip } from "./PropertyTooltip";
 
 // Responsive space size based on viewport - maximize board size for readability
 const getSpaceSize = (spacesCount: number) => {
-  if (typeof window === "undefined") return spacesCount === 48 ? 60 : 80;
+  if (typeof window === "undefined") {
+    if (spacesCount === 48) return 60;
+    return 80;
+  }
   const vh = window.innerHeight;
   const vw = window.innerWidth;
   const isMobile = vw <= 768;
@@ -32,7 +35,9 @@ const getSpaceSize = (spacesCount: number) => {
   const minAvailable = Math.min(availableWidth, availableHeight);
 
   // Calculate size: use ~99.8% of available space for maximum board size
-  // 1906 board: 13 spaces per side (48 spaces), Classic: 11 spaces per side (40 spaces)
+  // 1906 EGC board: 40 spaces → 11×11 grid
+  // 1906 Landlord's Game (48 spaces): 13×13 grid
+  // Classic: 40 spaces → 11×11 grid
   const spacesPerSide = spacesCount === 48 ? 13 : 11;
   const calculatedSize = Math.floor((minAvailable * 0.998) / spacesPerSide);
 
@@ -44,14 +49,12 @@ const getSpaceSize = (spacesCount: number) => {
 
 /**
  * Get the effective board size (spaces per side) based on total space count.
- * Classic: 40 spaces → 11×11 grid. 1906: 48 spaces → 13×13 grid.
- */
-/**
- * Get the effective board size (spaces per side) based on total space count.
- * Classic: 40 spaces → 11×11 grid. 1906: 48 spaces → 13×13 grid.
+ * Classic 40-space: 11×11 grid. 1906 EGC 40-space: 11×11 grid.
+ * 1906 Landlord's Game (48 spaces): 13×13 grid.
  */
 const getBoardSize = (spacesCount: number): number => {
-  return spacesCount === 48 ? 13 : 11;
+  if (spacesCount === 48) return 13; // 1906 Landlord's Game (48 spaces)
+  return 11; // Classic 40-space or 1906 EGC 40-space
 };
 
 const BOARD_PADDING = 4;
@@ -59,54 +62,58 @@ const SPACE_GAP = 0; // Minimal gap for maximum space utilization
 
 /**
  * Calculate position on the grid for a given space index.
- * Handles both 40-space (11×11) and 48-space (13×13) boards.
+ * Handles:
+ * - 40-space boards (classic, 1906 EGC): 11×11 grid
+ * - 48-space 1906 Landlord's Game board: 13×13 grid
  */
 const getSpacePosition = (
   index: number,
   spaceSize: number,
   totalSpaces: number,
 ) => {
-  const is1906 = totalSpaces === 48;
-  const offset = is1906 ? 12 : 10; // Grid offset (13×13 vs 11×11)
+  const is1906Landlord = totalSpaces === 48; // 1906 Landlord's Game (48 spaces)
+  const offset = is1906Landlord ? 12 : 10; // Grid offset (13×13 vs 11×11)
 
-  if (is1906) {
+  if (is1906Landlord) {
     // 48-space board: 13×13 grid layout
-    // Layout: Mother Earth(0) → ... → Railroad(7) → ... → Railroad(18) → ... → Railroad(30) → ... → Railroad(41) → ... → Miscellaneous(47-center)
-    if (index === 0) return { row: offset - 1, col: offset - 1 }; // Mother Earth - bottom row, near right
-    if (index <= 6) return { row: offset - 1, col: offset - 1 - index }; // Bottom row (right to left)
-    if (index === 7) return { row: offset - 1, col: 0 }; // 1st Railroad - bottom-left corner
-    if (index <= 11) return { row: offset - 1 - (index - 7), col: 0 }; // Left side going up
-    if (index === 11) return { row: offset - 5, col: 0 }; // Jail area
-    if (index <= 17) return { row: offset - 5 - (index - 11), col: 0 }; // Continue up left side
-    if (index === 18) return { row: 0, col: 0 }; // 2nd Railroad - top-left corner
-    if (index <= 22) return { row: 0, col: index - 18 }; // Top row (left to right)
-    if (index === 22) return { row: 0, col: offset - 1 }; // Public Treasury - top row, near right
-    if (index <= 29) return { row: 0, col: offset - 1 + (index - 22) }; // Continue right on top
-    if (index === 30) return { row: 0, col: offset - 1 }; // 3rd Railroad - top-right corner
-    if (index <= 33) return { row: index - 30, col: offset - 1 }; // Right side going down
-    if (index === 33) return { row: offset - 5, col: offset - 1 }; // Go To Jail area
-    if (index <= 41) return { row: offset - 5 + (index - 33), col: offset - 1 }; // Continue down right side
-    if (index === 41) return { row: offset - 1, col: offset - 1 }; // 4th Railroad - bottom-right corner
-    if (index <= 46) return { row: offset - 1 + (index - 41), col: 0 }; // Bottom of right column
-    if (index === 47)
-      return {
-        row: Math.floor(offset / 2),
-        col: Math.floor(offset / 2),
-      }; // Miscellaneous - center
-    return {
-      row: Math.floor(offset / 2),
-      col: Math.floor(offset / 2),
-    }; // Fallback: center
+    // BOTTOM ROW (right to left): positions 0-10
+    if (index === 0) return { row: 12, col: 12 }; // Mother Earth - bottom-right corner
+    if (index >= 1 && index <= 9) {
+      return { row: 12, col: 12 - index };
+    }
+    if (index === 10) return { row: 12, col: 0 }; // Shelter - bottom-left corner
+
+    // LEFT COLUMN (bottom to top): positions 11-21
+    if (index >= 11 && index <= 21) {
+      return { row: 22 - index, col: 0 };
+    }
+
+    // TOP ROW (left to right): positions 22-32
+    if (index === 22) return { row: 0, col: 0 }; // Top-left corner
+    if (index >= 23 && index <= 32) {
+      return { row: 0, col: index - 22 };
+    }
+
+    // RIGHT COLUMN (top to bottom): positions 33-47
+    if (index >= 33 && index <= 44) {
+      return { row: index - 32, col: 12 };
+    }
+    if (index === 47) return { row: 0, col: 12 }; // Top-right corner
+    if (index === 45) return { row: 12, col: 11 };
+    if (index === 46) return { row: 12, col: 10 };
+
+    return { row: Math.floor(offset / 2), col: Math.floor(offset / 2) };
   }
 
-  // Classic 40-space board: 11×11 grid
-  if (index === 0) return { row: 10, col: 10 }; // GO - bottom right
+  // 40-space boards (Classic & 1906 EGC): 11×11 grid
+  // Both use the same counter-clockwise numbering pattern
+  if (index === 0) return { row: 10, col: 10 }; // Mother Earth/GO - bottom right
   if (index <= 9) return { row: 10, col: 10 - index }; // Bottom row (right to left)
-  if (index === 10) return { row: 10, col: 0 }; // Jail - bottom left
+  if (index === 10) return { row: 10, col: 0 }; // Shelter/Jail - bottom left
   if (index <= 19) return { row: 10 - (index - 10), col: 0 }; // Left column (bottom to top)
-  if (index === 20) return { row: 0, col: 0 }; // Free Parking - top left
+  if (index === 20) return { row: 0, col: 0 }; // Chance - top left corner
   if (index <= 29) return { row: 0, col: index - 20 }; // Top row (left to right)
-  if (index === 30) return { row: 0, col: 10 }; // Go To Jail - top right
+  if (index === 30) return { row: 0, col: 10 }; // No Trespassing/Go To Jail - top right
   return { row: index - 30, col: 10 }; // Right column (top to bottom)
 };
 
