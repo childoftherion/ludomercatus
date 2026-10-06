@@ -6,11 +6,32 @@ import { BoardMarketStatus } from "./BoardMarketStatus";
 import { getCurrentPropertyPrice } from "../logic/rules/economics";
 import { PropertyTooltip } from "./PropertyTooltip";
 
+/**
+ * Grid dimensions (columns x rows of cells) needed to hold every tile.
+ *
+ * A W x H grid has a border of 2W + 2H - 4 cells, which is always even, so an
+ * odd tile count can never fill it exactly - one cell is always left blank.
+ * When the tiles do fit exactly we keep the grid square; otherwise the surplus
+ * is spread into the height, which spaces the ring out instead of squashing it.
+ *
+ *   40 tiles -> 11x11, exactly full (classic, unchanged)
+ *   48 tiles -> 13x13, exactly full
+ *   51 tiles -> 13x15, one blank cell closing the ring at Mother Earth
+ */
+const getGrid = (spacesCount: number): { w: number; h: number } => {
+  const side = Math.ceil(spacesCount / 4) + 1;
+  if (4 * (side - 1) === spacesCount) return { w: side, h: side };
+  return { w: side - 1, h: side + 1 };
+};
+
+/** Largest grid edge, used to size tiles so the whole board fits the viewport. */
+const getGridSpan = (spacesCount: number): number =>
+  Math.max(getGrid(spacesCount).w, getGrid(spacesCount).h);
+
 // Responsive space size based on viewport - maximize board size for readability
 const getSpaceSize = (spacesCount: number) => {
   if (typeof window === "undefined") {
-    if (spacesCount === 48) return 60;
-    return 80;
+    return Math.floor(880 / getGridSpan(spacesCount));
   }
   const vh = window.innerHeight;
   const vw = window.innerWidth;
@@ -36,10 +57,8 @@ const getSpaceSize = (spacesCount: number) => {
 
   // Calculate size: use ~99.8% of available space for maximum board size
   // 1906 EGC board: 40 spaces → 11×11 grid
-  // 1906 Landlord's Game (48 spaces): 13×13 grid
   // Classic: 40 spaces → 11×11 grid
-  const spacesPerSide = spacesCount === 48 ? 13 : 11;
-  const calculatedSize = Math.floor((minAvailable * 0.998) / spacesPerSide);
+  const calculatedSize = Math.floor((minAvailable * 0.998) / getGridSpan(spacesCount));
 
   // Clamp between 35 and 600 for better fit
   const result = Math.max(35, Math.min(600, calculatedSize));
@@ -47,74 +66,38 @@ const getSpaceSize = (spacesCount: number) => {
   return result;
 };
 
-/**
- * Get the effective board size (spaces per side) based on total space count.
- * Classic 40-space: 11×11 grid. 1906 EGC 40-space: 11×11 grid.
- * 1906 Landlord's Game (48 spaces): 13×13 grid.
- */
-const getBoardSize = (spacesCount: number): number => {
-  if (spacesCount === 48) return 13; // 1906 Landlord's Game (48 spaces)
-  return 11; // Classic 40-space or 1906 EGC 40-space
-};
+/** Grid edges (columns, rows) for a board of the given size. */
+const getBoardSize = (spacesCount: number): { w: number; h: number } =>
+  getGrid(spacesCount);
 
 const BOARD_PADDING = 4;
 const SPACE_GAP = 0; // Minimal gap for maximum space utilization
 
 /**
- * Calculate position on the grid for a given space index.
- * Handles:
- * - 40-space boards (classic, 1906 EGC): 11×11 grid
- * - 48-space 1906 Landlord's Game board: 13×13 grid
+ * Calculate the grid cell for a tile, walking the ring counter-clockwise from
+ * the bottom-right corner: bottom row (right to left), left column (bottom to
+ * top), top row (left to right), right column (top to bottom).
+ *
+ * The walk is derived from the grid edges, so it needs no per-board special
+ * cases and cannot produce collisions or skipped cells. Boards whose tile count
+ * does not exactly fill the border simply leave the final surplus cell blank.
  */
 const getSpacePosition = (
   index: number,
   spaceSize: number,
   totalSpaces: number,
 ) => {
-  const is1906Landlord = totalSpaces === 48; // 1906 Landlord's Game (48 spaces)
-  const offset = is1906Landlord ? 12 : 10; // Grid offset (13×13 vs 11×11)
+  const { w, h } = getGrid(totalSpaces);
+  const edgeW = w - 1;
+  const edgeH = h - 1;
+  const perimeter = 2 * edgeW + 2 * edgeH;
+  // Wrap defensively so a stale token index can never walk off the grid.
+  const i = ((index % perimeter) + perimeter) % perimeter;
 
-  if (is1906Landlord) {
-    // 48-space board: 13×13 grid layout
-    // BOTTOM ROW (right to left): positions 0-10
-    if (index === 0) return { row: 12, col: 12 }; // Mother Earth - bottom-right corner
-    if (index >= 1 && index <= 9) {
-      return { row: 12, col: 12 - index };
-    }
-    if (index === 10) return { row: 12, col: 0 }; // Shelter - bottom-left corner
-
-    // LEFT COLUMN (bottom to top): positions 11-21
-    if (index >= 11 && index <= 21) {
-      return { row: 22 - index, col: 0 };
-    }
-
-    // TOP ROW (left to right): positions 22-32
-    if (index === 22) return { row: 0, col: 0 }; // Top-left corner
-    if (index >= 23 && index <= 32) {
-      return { row: 0, col: index - 22 };
-    }
-
-    // RIGHT COLUMN (top to bottom): positions 33-47
-    if (index >= 33 && index <= 44) {
-      return { row: index - 32, col: 12 };
-    }
-    if (index === 47) return { row: 0, col: 12 }; // Top-right corner
-    if (index === 45) return { row: 12, col: 11 };
-    if (index === 46) return { row: 12, col: 10 };
-
-    return { row: Math.floor(offset / 2), col: Math.floor(offset / 2) };
-  }
-
-  // 40-space boards (Classic & 1906 EGC): 11×11 grid
-  // Both use the same counter-clockwise numbering pattern
-  if (index === 0) return { row: 10, col: 10 }; // Mother Earth/GO - bottom right
-  if (index <= 9) return { row: 10, col: 10 - index }; // Bottom row (right to left)
-  if (index === 10) return { row: 10, col: 0 }; // Shelter/Jail - bottom left
-  if (index <= 19) return { row: 10 - (index - 10), col: 0 }; // Left column (bottom to top)
-  if (index === 20) return { row: 0, col: 0 }; // Chance - top left corner
-  if (index <= 29) return { row: 0, col: index - 20 }; // Top row (left to right)
-  if (index === 30) return { row: 0, col: 10 }; // No Trespassing/Go To Jail - top right
-  return { row: index - 30, col: 10 }; // Right column (top to bottom)
+  if (i <= edgeW) return { row: edgeH, col: edgeW - i };
+  if (i <= edgeW + edgeH) return { row: edgeW + edgeH - i, col: 0 };
+  if (i <= 2 * edgeW + edgeH) return { row: 0, col: i - edgeW - edgeH };
+  return { row: i - (2 * edgeW + edgeH), col: edgeW };
 };
 
 // Store for board dimensions and position (for token positioning)
@@ -223,7 +206,6 @@ const Space = ({
   const totalSpaces = useGameStore((s) => s.spaces.length);
   const pos = getSpacePosition(space.id, spaceSize, totalSpaces);
   const spaces = useGameStore((s) => s.spaces);
-  const activeEconomicEvents = useGameStore((s) => s.activeEconomicEvents);
   const property = spaces.find((s) => s.id === space.id) as
     | Property
     | undefined;
@@ -413,7 +395,7 @@ export const Board = ({
   const boardRef = React.useRef<HTMLDivElement>(null);
   const containerRef = React.useRef<HTMLDivElement>(null);
   const totalSpaces = spaces.length;
-  const boardSize = getBoardSize(totalSpaces); // 11 for classic, 13 for 1906
+  const { w: boardCols, h: boardRows } = getBoardSize(totalSpaces);
   const [spaceSize, setSpaceSize] = React.useState(getSpaceSize(totalSpaces));
 
   // Calculate space size based on actual container dimensions
@@ -424,7 +406,6 @@ export const Board = ({
       const container = containerRef.current;
       const containerWidth = container.clientWidth;
       const containerHeight = container.clientHeight;
-      const isMobile = window.innerWidth <= 768;
 
       // Account for board border (6px on each side = 12px total)
       const borderWidth = 12;
@@ -435,8 +416,8 @@ export const Board = ({
       // Board expands to fill available space proportionally, positioned at top-left
       // Use maximum available space (99.8%) to ensure board fills screen
       // 1906: 13 spaces per side, Classic: 11 spaces per side
-      const widthBasedSize = Math.floor((availableWidth * 0.998) / boardSize);
-      const heightBasedSize = Math.floor((availableHeight * 0.998) / boardSize);
+      const widthBasedSize = Math.floor((availableWidth * 0.998) / boardCols);
+      const heightBasedSize = Math.floor((availableHeight * 0.998) / boardRows);
 
       // Use the smaller dimension to maintain square board, ensuring maximum expansion
       // This allows the board to expand down and to the right as much as possible
@@ -453,9 +434,9 @@ export const Board = ({
       // Board is positioned at top-left (0, 0) within the container
       // Note: boardWidth/Height in the style includes the border (12px total), so we match that here
       const actualBoardWidth =
-        boardSize * (result + SPACE_GAP) + BOARD_PADDING * 2 + 12; // +12 for border (6px each side)
+        boardCols * (result + SPACE_GAP) + BOARD_PADDING * 2 + 12; // +12 for border (6px each side)
       const actualBoardHeight =
-        boardSize * (result + SPACE_GAP) + BOARD_PADDING * 2 + 12;
+        boardRows * (result + SPACE_GAP) + BOARD_PADDING * 2 + 12;
 
       // Board is positioned at top-left (butting up against game log)
       const boardLeft = 0;
@@ -480,11 +461,15 @@ export const Board = ({
     // Listen for resize
     window.addEventListener("resize", updateSpaceSize);
     return () => window.removeEventListener("resize", updateSpaceSize);
-  }, [boardSize, totalSpaces]);
+  }, [boardCols, boardRows, totalSpaces]);
 
-  const boardWidth = boardSize * (spaceSize + SPACE_GAP) + BOARD_PADDING * 2;
-  const boardHeight = boardSize * (spaceSize + SPACE_GAP) + BOARD_PADDING * 2;
-  const centerSize = (boardSize - 2) * (spaceSize + SPACE_GAP);
+  const boardWidth = boardCols * (spaceSize + SPACE_GAP) + BOARD_PADDING * 2;
+  const boardHeight = boardRows * (spaceSize + SPACE_GAP) + BOARD_PADDING * 2;
+  // The centre panel is inset by one ring of tiles on every side.
+  const centerSize = Math.max(
+    0,
+    (Math.min(boardCols, boardRows) - 2) * (spaceSize + SPACE_GAP),
+  );
   const centerTop = spaceSize + BOARD_PADDING;
   const centerLeft = spaceSize + BOARD_PADDING;
 

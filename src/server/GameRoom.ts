@@ -5,12 +5,17 @@ import type {
   Space,
   TradeOffer,
   IOU,
-  DiceRoll,
-  GamePhase,
-  ActiveEconomicEvent,
+  
+  
+  
   EconomicEvent,
-  Auction,
+  EconomicEventType,
+  
   Card,
+  AIDifficulty,
+  GameSettings,
+  ColorGroup,
+  GameLogEntry,
 } from "../types/game";
 import {
   rollDice as rollDiceFn,
@@ -18,8 +23,8 @@ import {
   checkThreeDoubles,
   calculateJailOutcome,
   calculateDoublesRailroadPass,
-  calculateBackwardPosition,
-  findPreviousChancePosition,
+  
+  
 } from "./actions/core";
 import {
   calculateStartingBid,
@@ -47,13 +52,13 @@ import {
   calculateRemainingAmounts,
   calculateJackpotShare,
   validatePaymentAmount,
-  calculateChapter11DebtTarget,
+  
   shouldChapter11Succeed,
   shouldChapter11Fail,
 } from "./actions/debt";
 import {
-  canClaimAiSeat,
-  canClaimHumanSeat,
+  
+  
   canClaimPlayer,
   findPlayerIndexByClientId,
   createDisconnectedPlayer,
@@ -62,19 +67,12 @@ import {
   isSeatTakenByAnother,
 } from "./actions/multiplayer";
 import { DEFAULT_GAME_SETTINGS } from "../types/game";
-import { boardSpaces } from "../data/board";
-import { boardSpaces1906 } from "../data/board1906";
-import { createChanceDeck, createCommunityChestDeck } from "../data/cards";
-import {
-  createChanceDeck1906,
-  createCommunityChestDeck1906,
-} from "../data/cards1906";
 import { getRulesetConfig } from "../data/rulesets";
 import {
   calculateRent,
   calculateUnownedUtilityLandingFee,
 } from "../logic/rules/rent";
-import { hasMonopoly, getPlayerProperties } from "../logic/rules/monopoly";
+import { getPlayerProperties } from "../logic/rules/monopoly";
 import {
   calculateGoSalary,
   calculateTenPercentTax,
@@ -92,9 +90,9 @@ import {
 import {
   validatePlayerTurn,
   validateCash,
-  validatePropertyOwnership,
+  
   validateBuilding,
-  validateTradeOffer,
+  
   validateMortgage,
 } from "../utils/validation";
 
@@ -116,6 +114,19 @@ const isProperty = (space: Space): space is Property => {
     space.type === "utility"
   );
 };
+
+/**
+ * Deep-copy the ruleset's board spaces so each room owns its own board state.
+ * Without this, every room sharing a ruleset would mutate the same module-level
+ * Space objects (ownership, houses, mortgages leaking across rooms/tests).
+ */
+const cloneSpaces = (spaces: readonly Space[]): Space[] =>
+  spaces.map((space) => {
+    if (isProperty(space)) {
+      return { ...space, rents: [...space.rents] };
+    }
+    return { ...space };
+  });
 
 const shuffleDeck = <T extends { id: number }>(deck: readonly T[]): T[] => {
   const shuffled = [...deck];
@@ -168,6 +179,12 @@ const createPlayer = (
 
 export class GameRoom implements GameActions {
   public state: GameState;
+  /**
+   * Identity of this room instance, mirrored onto `state.epoch`. A new value is
+   * generated for every GameRoom, so clients can detect that the server (or the
+   * room) was recreated and that their version baseline no longer applies.
+   */
+  public readonly epoch: string = crypto.randomUUID();
   private logIdCounter = 0;
   private listeners = new Set<(state: GameState) => void>();
 
@@ -180,7 +197,7 @@ export class GameRoom implements GameActions {
     this.state = {
       players: [],
       currentPlayerIndex: 0,
-      spaces: rulesetConfig.boardSpaces as Space[],
+      spaces: cloneSpaces(rulesetConfig.boardSpaces),
       chanceDeck: shuffleDeck(rulesetConfig.chanceDeck),
       communityChestDeck: shuffleDeck(rulesetConfig.communityChestDeck),
       diceRoll: null,
@@ -223,6 +240,10 @@ export class GameRoom implements GameActions {
       marketHistory: [],
       // Multiplayer stability
       turnStartTime: Date.now(),
+      // Monotonic state revision for client-side staleness checks
+      version: 0,
+      // Identifies this room instance across server restarts
+      epoch: this.epoch,
     };
 
     // Bind all public methods to `this`
@@ -283,7 +304,12 @@ export class GameRoom implements GameActions {
     const prevPhase = this.state.phase;
     const prevPlayer = this.state.currentPlayerIndex;
 
-    this.state = { ...this.state, ...partial };
+    // Bump the authoritative state revision so clients can drop stale updates.
+    this.state = {
+      ...this.state,
+      ...partial,
+      version: this.state.version + 1,
+    };
 
     // If turn or phase changed, reset timer
     if (
@@ -320,7 +346,7 @@ export class GameRoom implements GameActions {
 
     if (action === "addPlayer") {
       if (!resolvedClientId) return deny("Missing clientId");
-      const [name, token, _clientId, isMobile] = payloadArray;
+      const [name, token, isMobile] = payloadArray;
       return allow([name, token, resolvedClientId, isMobile]);
     }
 
@@ -386,8 +412,14 @@ export class GameRoom implements GameActions {
       return firstHumanIndex !== -1 && actorIndex === firstHumanIndex;
     })();
 
+    // If all players are AI, allow any connected client to execute AI turns (spectator mode)
+    const allPlayersAreAI = this.state.players.length > 0 &&
+      this.state.players.every((p) => p.isAI);
+    const isAnyConnectedClient = actorIndex !== -1;
+
     if (action === "executeAITurn" || action === "executeAITradeResponse") {
-      if (!isHostClient) return deny("Only host can run AI");
+      if (!isHostClient && !(allPlayersAreAI && isAnyConnectedClient))
+        return deny("Only host can run AI");
 
       // If it's an AI turn and they have already rolled but haven't moved,
       // block the executeAITurn action to prevent re-rolling
@@ -616,7 +648,7 @@ export class GameRoom implements GameActions {
     }
 
     if (action === "enterChapter11" || action === "declineRestructuring") {
-      const pending = (this.state as any).pendingBankruptcy;
+      const pending = this.state.pendingBankruptcy;
       if (!pending || this.state.phase !== "awaiting_bankruptcy_decision")
         return deny("Not allowed");
       if (actorIndex !== pending.playerIndex) return deny("Not allowed");
@@ -684,12 +716,18 @@ export class GameRoom implements GameActions {
     const index = this.state.players.length;
     if (index >= 8) return;
 
-    // Ensure unique name
-    let uniqueName = name;
-    let counter = 2;
-    while (this.state.players.some((p) => p.name === uniqueName)) {
-      uniqueName = `${name} (${counter})`;
-      counter++;
+    // Easter egg: "ZELDA" becomes a highly advanced AI bot called "Player Bot" (strictly case-sensitive)
+    const isZeldaEasterEgg = name === "ZELDA";
+    const displayName = isZeldaEasterEgg ? "Player Bot" : name;
+
+    // Ensure unique display name (for non-ZELDA names)
+    let uniqueName = displayName;
+    if (!isZeldaEasterEgg) {
+      let counter = 2;
+      while (this.state.players.some((p) => p.name === uniqueName)) {
+        uniqueName = `${displayName} (${counter})`;
+        counter++;
+      }
     }
 
     const newPlayer = createPlayer(
@@ -697,16 +735,21 @@ export class GameRoom implements GameActions {
       uniqueName,
       token,
       PLAYER_COLORS[index] ?? "#999999",
-      false,
+      isZeldaEasterEgg, // isAI: true for ZELDA easter egg
+      isZeldaEasterEgg ? ("hard" as AIDifficulty) : undefined,
     );
+    if (isZeldaEasterEgg) {
+      newPlayer.originalName = name; // Preserve original name for client-side detection
+    }
     newPlayer.clientId = clientId;
     newPlayer.isMobile = !!isMobile;
 
     this.setState({
       players: [...this.state.players, newPlayer],
     });
+    const zeldaNote = isZeldaEasterEgg ? " (✨ Player Bot activated!)" : "";
     this.addLogEntry(
-      `${uniqueName} joined the lobby!${isMobile ? " (Mobile)" : ""}`,
+      `${uniqueName} joined the lobby!${isMobile ? " (Mobile)" : ""}${zeldaNote}`,
       "system",
     );
   }
@@ -782,14 +825,40 @@ export class GameRoom implements GameActions {
     const player = this.state.players[index];
     if (!player) return;
 
+    // Easter egg: changing name to "ZELDA" converts player to AI bot (strictly case-sensitive)
+    const isZeldaEasterEgg = name === "ZELDA";
+    const displayName = isZeldaEasterEgg ? "Player Bot" : name;
+
     const updatedPlayers = [...this.state.players];
-    updatedPlayers[index] = { ...player, name, token };
+    updatedPlayers[index] = {
+      ...player,
+      name: displayName,
+      token,
+      isAI: isZeldaEasterEgg || player.isAI,
+      aiDifficulty: isZeldaEasterEgg ? ("hard" as AIDifficulty) : player.aiDifficulty,
+      originalName: isZeldaEasterEgg ? name : player.originalName,
+    };
     this.setState({ players: updatedPlayers });
+
+    if (isZeldaEasterEgg && !player.isAI) {
+      console.log(
+        `[🎮 Easter Egg] Player ${index} activated ZELDA easter egg! Now a Player Bot.`,
+      );
+      this.addLogEntry(`✨ The Triforce of Power has been invoked by ${displayName}!`, "system");
+    }
   }
 
   public assignPlayer(index: number, clientId: string, isMobile?: boolean) {
     const player = this.state.players[index];
     if (!player) return;
+
+    // Easter egg: ZELDA players cannot be reclaimed by humans - they are always AI (strictly case-sensitive)
+    if (player.originalName && player.originalName === "ZELDA") {
+      console.log(
+        `[GameRoom] Blocked assignPlayer for ZELDA easter egg player ${index} (${player.name})`,
+      );
+      return;
+    }
 
     if (!canClaimPlayer(player, clientId)) {
       console.warn(`[GameRoom] Cannot claim active player ${index}`, {
@@ -832,7 +901,10 @@ export class GameRoom implements GameActions {
     );
 
     // Ensure all players have proper starting state
-    const players: Player[] = this.state.players.map((player, index) => {
+    const players: Player[] = this.state.players.map((player) => {
+      // Easter egg safety: ensure ZELDA players are always AI (strictly case-sensitive)
+      const isZeldaPlayer = player.originalName === "ZELDA";
+
       const newPlayer: Player = {
         ...player,
         position: 0,
@@ -842,37 +914,32 @@ export class GameRoom implements GameActions {
         jailTurns: 0,
         bankrupt: false,
         isConnected: player.clientId ? true : false,
+        // Force ZELDA easter egg players to be AI with hard difficulty
+        isAI: isZeldaPlayer || player.isAI,
+        aiDifficulty: isZeldaPlayer ? ("hard" as AIDifficulty) : player.aiDifficulty,
       };
       return newPlayer;
     });
 
-    // For 1906 ruleset: deal 24 property cards at start if enabled
+    // For 1906 ruleset: deal property cards at start if enabled
     if (
       rulesetConfig.dealPropertiesAtStart &&
       rulesetConfig.propertiesDealtCount > 0
     ) {
-      const shuffledIndices = Array.from(
-        { length: rulesetConfig.boardSpaces.length },
-        (_, i) => i,
-      ).sort(() => Math.random() - 0.5);
-
       const propertySpaces = rulesetConfig.boardSpaces.filter(
         (space): space is Property => space.type === "property",
       );
+      const shuffledProperties = [...propertySpaces].sort(() => Math.random() - 0.5);
 
       let dealIndex = 0;
-      for (let playerIndex = 0; playerIndex < players.length; playerIndex++) {
-        const player = players[playerIndex]!;
-
-        for (let i = 0; i < rulesetConfig.propertiesDealtCount; i++) {
-          if (dealIndex >= propertySpaces.length) break;
-
-          const idx = shuffledIndices[dealIndex % propertySpaces.length]!;
-          const propertySpace = propertySpaces[idx];
+      // Deal properties round-robin to all players
+      while (dealIndex < shuffledProperties.length) {
+        for (let playerIndex = 0; playerIndex < players.length && dealIndex < shuffledProperties.length; playerIndex++) {
+          const player = players[playerIndex]!;
+          const propertySpace = shuffledProperties[dealIndex++];
           if (propertySpace) {
             player.properties = [...player.properties, propertySpace.id];
           }
-          dealIndex++;
         }
       }
     }
@@ -880,7 +947,7 @@ export class GameRoom implements GameActions {
     this.setState({
       players,
       currentPlayerIndex: 0,
-      spaces: rulesetConfig.boardSpaces,
+      spaces: cloneSpaces(rulesetConfig.boardSpaces),
       chanceDeck: shuffleDeck(rulesetConfig.chanceDeck),
       communityChestDeck: shuffleDeck(rulesetConfig.communityChestDeck),
       phase: "rolling",
@@ -938,14 +1005,25 @@ export class GameRoom implements GameActions {
     );
 
     const players = playerNames.map((name, index) => {
+      // Easter egg: "ZELDA" becomes a highly advanced AI bot called "Player Bot" (strictly case-sensitive)
+      const isZeldaEasterEgg = name === "ZELDA";
+      const displayName = isZeldaEasterEgg ? "Player Bot" : name;
+      const isAI = isZeldaEasterEgg || (isAIFlags[index] ?? false);
+      const aiDifficulty = isZeldaEasterEgg
+        ? ("hard" as AIDifficulty)
+        : aiDifficulties[index];
+
       const player = createPlayer(
         index,
-        name,
+        displayName,
         tokens[index] ?? name,
         PLAYER_COLORS[index] ?? "#999999",
-        isAIFlags[index] ?? false,
-        aiDifficulties[index],
+        isAI,
+        aiDifficulty,
       );
+      if (isZeldaEasterEgg) {
+        player.originalName = name; // Preserve original name for client-side detection
+      }
       if (clientIds[index]) {
         player.clientId = clientIds[index];
       }
@@ -957,32 +1035,18 @@ export class GameRoom implements GameActions {
       rulesetConfig.dealPropertiesAtStart &&
       rulesetConfig.propertiesDealtCount > 0
     ) {
-      const shuffledIndices = Array.from(
-        { length: rulesetConfig.boardSpaces.length },
-        (_, i) => i,
-      ).sort(() => Math.random() - 0.5);
-
-      // Deal properties to players (skip non-property spaces)
       const propertySpaces = rulesetConfig.boardSpaces.filter(
         (space): space is Property => space.type === "property",
       );
-
+      const shuffledProperties = [...propertySpaces].sort(() => Math.random() - 0.5);
       let dealIndex = 0;
-      for (let playerIndex = 0; playerIndex < players.length; playerIndex++) {
-        const player = players[playerIndex]!;
-
-        // Deal specified number of properties to each player
-        for (let i = 0; i < rulesetConfig.propertiesDealtCount; i++) {
-          if (dealIndex >= propertySpaces.length) break;
-
-          const propertySpace =
-            propertySpaces[shuffledIndices[dealIndex % propertySpaces.length]];
+      while (dealIndex < shuffledProperties.length) {
+        for (let playerIndex = 0; playerIndex < players.length && dealIndex < shuffledProperties.length; playerIndex++) {
+          const player = players[playerIndex]!;
+          const propertySpace = shuffledProperties[dealIndex++];
           if (propertySpace) {
             player.properties.push(propertySpace.id);
-            // 1906: Properties are dealt for free (no cash deduction)
-            // The original code incorrectly subtracted startingCash here
           }
-          dealIndex++;
         }
       }
     }
@@ -990,7 +1054,7 @@ export class GameRoom implements GameActions {
     this.setState({
       players,
       currentPlayerIndex: 0,
-      spaces: rulesetConfig.boardSpaces,
+      spaces: cloneSpaces(rulesetConfig.boardSpaces),
       chanceDeck: shuffleDeck(rulesetConfig.chanceDeck),
       communityChestDeck: shuffleDeck(rulesetConfig.communityChestDeck),
       phase: "rolling",
@@ -1026,10 +1090,22 @@ export class GameRoom implements GameActions {
       jackpot: 0,
     });
 
+    // Log ZELDA easter egg activations (strictly case-sensitive)
+    const zeldaCount = players.filter(
+      (p) => p.originalName === "ZELDA",
+    ).length;
+    if (zeldaCount > 0) {
+      console.log(
+        `[🎮 Easter Egg] ZELDA activated! ${zeldaCount} Player Bot(s) will play with hard AI.`,
+      );
+      this.addLogEntry(
+        `✨ The Triforce of Power has been invoked... ${zeldaCount} Player Bot(s) join the game!`,
+        "system",
+      );
+    }
+
     this.addLogEntry(`Game started with ${players.length} players!`, "system");
   }
-
-  // Update game settings
   public updateSettings(settings: Partial<GameSettings>) {
     this.setState({
       settings: { ...this.state.settings, ...settings },
@@ -1089,30 +1165,12 @@ export class GameRoom implements GameActions {
     const player = this.state.players[playerIndex];
     if (!player || player.inJail || player.bankrupt) return;
 
-    const boardSize = this.state.spaces.length; // 40 or 48
+    const boardSize = this.state.spaces.length; // 40
     const rulesetConfig = getRulesetConfig(
       this.state.settings.rulesetId ?? "classic",
     );
 
-    // 1906: Doubles railroad pass - move to next railroad when rolling doubles
     let actualSteps = steps;
-    if (
-      rulesetConfig.doublesRailroadPass &&
-      this.state.diceRoll?.isDoubles &&
-      boardSize === 48
-    ) {
-      const nextRailroad = calculateDoublesRailroadPass(
-        player.position,
-        boardSize,
-      );
-      actualSteps = nextRailroad - player.position;
-      if (actualSteps < 0) {
-        actualSteps += boardSize; // wrap around
-      }
-      if (actualSteps <= 0) {
-        actualSteps = steps; // fallback to normal movement
-      }
-    }
 
     const { newPosition, passedGo } = calculateNewPosition(
       player.position,
@@ -1475,17 +1533,8 @@ export class GameRoom implements GameActions {
 
   // ============ ECONOMIC EVENTS SYSTEM (Phase 2) ============
 
-  private getRandomEconomicEvent(): {
-    type: EconomicEventType;
-    description: string;
-    duration: number;
-  } {
-    const events: Array<{
-      type: EconomicEventType;
-      description: string;
-      duration: number;
-      weight: number;
-    }> = [
+  private getRandomEconomicEvent(): EconomicEvent {
+    const events: EconomicEvent[] = [
       {
         type: "recession",
         description: "📉 Recession! All rents reduced by 25%",
@@ -1550,11 +1599,7 @@ export class GameRoom implements GameActions {
     for (const event of events) {
       random -= event.weight;
       if (random <= 0) {
-        return {
-          type: event.type,
-          description: event.description,
-          duration: event.duration,
-        };
+        return event;
       }
     }
 
@@ -2433,13 +2478,13 @@ export class GameRoom implements GameActions {
   }
 
   // Apply interest to all IOUs at end of turn
-  public applyIOUInterest(playerIndex: number) {
+  public applyIOUInterest(_playerIndex: number) {
     const activePlayers = this.state.players.filter((p) => !p.bankrupt);
     const activeCount = activePlayers.length;
     if (activeCount === 0) return;
 
     let anyUpdated = false;
-    const updatedPlayers = this.state.players.map((p, idx) => {
+    const updatedPlayers = this.state.players.map((p) => {
       if (p.bankrupt || p.iousPayable.length === 0) return p;
 
       let totalInterestThisTurn = 0;
@@ -2475,7 +2520,7 @@ export class GameRoom implements GameActions {
 
     if (anyUpdated) {
       // Now sync iousReceivable for all creditors
-      const finalPlayers = updatedPlayers.map((p, idx) => {
+      const finalPlayers = updatedPlayers.map((p) => {
         if (p.bankrupt) return p;
 
         // Find any IOUs where this player is the creditor
@@ -2580,7 +2625,7 @@ export class GameRoom implements GameActions {
     const negotiation = this.state.pendingRentNegotiation;
     if (!negotiation) return;
 
-    const { debtorIndex, creditorIndex, propertyId, rentAmount } = negotiation;
+    const { debtorIndex, creditorIndex, rentAmount } = negotiation;
     const debtor = this.state.players[debtorIndex];
     const creditor = this.state.players[creditorIndex];
 
@@ -2746,25 +2791,18 @@ export class GameRoom implements GameActions {
     }
 
     let nextPlayerIndex = this.state.currentPlayerIndex;
-    let newConsecutiveDoubles = 0;
-
-    if (isDoubles) {
-      // This part should theoretically not be reached due to the return above,
-      // but keeping it consistent with the logic for safety or future refactors.
-      newConsecutiveDoubles = this.state.consecutiveDoubles;
-    } else {
-      // Normal end of turn - move to next player
-      nextPlayerIndex =
-        (this.state.currentPlayerIndex + 1) % this.state.players.length;
-      let loopCount = 0;
-      while (
-        this.state.players[nextPlayerIndex]?.bankrupt &&
-        loopCount < this.state.players.length
-      ) {
-        nextPlayerIndex = (nextPlayerIndex + 1) % this.state.players.length;
-        loopCount++;
-      }
-      newConsecutiveDoubles = 0;
+  
+    // Normal end of turn - move to the next player.
+    // (The doubles branch above always returns first.)
+    nextPlayerIndex =
+      (this.state.currentPlayerIndex + 1) % this.state.players.length;
+    let loopCount = 0;
+    while (
+      this.state.players[nextPlayerIndex]?.bankrupt &&
+      loopCount < this.state.players.length
+    ) {
+      nextPlayerIndex = (nextPlayerIndex + 1) % this.state.players.length;
+      loopCount++;
     }
 
     // Check if we completed a full round (back to player 0 or first non-bankrupt player)
@@ -2857,6 +2895,16 @@ export class GameRoom implements GameActions {
     });
   }
 
+  /**
+   * Position of the JAIL tile. The 1906 board has a real jail space, so read
+   * it from the board rather than hardcoding an index; classic Monopoly has no
+   * jail tile and simply parks the player on its jail space (position 10).
+   */
+  private getJailPosition(): number {
+    const jail = this.state.spaces.find((s) => s.type === "jail");
+    return jail ? jail.position : 10;
+  }
+
   public goToJail(playerIndex: number) {
     const player = this.state.players[playerIndex];
     const wasThreeDoubles = this.state.consecutiveDoubles >= 2; // Check before reset
@@ -2864,7 +2912,12 @@ export class GameRoom implements GameActions {
     this.setState({
       players: this.state.players.map((p, i) =>
         i === playerIndex
-          ? { ...p, position: 10, inJail: true, jailTurns: 0 }
+          ? {
+              ...p,
+              position: this.getJailPosition(),
+              inJail: true,
+              jailTurns: 0,
+            }
           : p,
       ),
       consecutiveDoubles: 0, // Reset doubles counter when going to jail
@@ -4464,17 +4517,28 @@ export class GameRoom implements GameActions {
 
     if (auction.highestBidder !== null && auction.currentBid > 0) {
       const winner = this.state.players[auction.highestBidder]!;
+      const propertySpace = property as Property;
+      const originalBasePrice = propertySpace.price;
+      const auctionBid = auction.currentBid;
+      let updatedSpace = { ...propertySpace, owner: auction.highestBidder } as Property;
+
+      // If auction bid is above original base value, update base value to purchase price
+      if (auctionBid > originalBasePrice) {
+        updatedSpace = {
+          ...updatedSpace,
+          valueMultiplier: Math.max(0.5, Math.min(2.0, auctionBid / originalBasePrice)),
+        };
+      }
+
       this.setState({
         spaces: this.state.spaces.map((s) =>
-          s.id === auction.propertyId
-            ? { ...s, owner: auction.highestBidder }
-            : s,
+          s.id === auction.propertyId ? updatedSpace : s,
         ),
         players: this.state.players.map((p, i) =>
           i === auction.highestBidder
             ? {
                 ...p,
-                cash: p.cash - auction.currentBid,
+                cash: p.cash - auctionBid,
                 properties: [...p.properties, auction.propertyId],
               }
             : p,

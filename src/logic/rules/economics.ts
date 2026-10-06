@@ -1,6 +1,6 @@
 import type {
   GameState,
-  Player,
+  
   Property,
   MarketHistoryEntry,
 } from "../../types/game"
@@ -338,14 +338,6 @@ export const calculateGiniCoefficient = (state: GameState): number => {
   const totalWealth = netWorths.reduce((sum, w) => sum + w, 0)
 
   if (totalWealth === 0) return 0
-
-  let cumulativeSum = 0
-  let weightedSum = 0
-
-  for (let i = 0; i < n; i++) {
-    cumulativeSum += netWorths[i]!
-    weightedSum += cumulativeSum
-  }
 
   // Gini = (n + 1)/n - (2 * sum((n - i) * y_i)) / (n * sum(y_i))
   // Where y_i is sorted in ascending order

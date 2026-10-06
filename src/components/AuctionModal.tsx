@@ -3,17 +3,21 @@ import { motion, AnimatePresence } from "framer-motion"
 import { useGameStore } from "../store/gameStore"
 import { getCurrentPropertyPrice } from "../logic/rules/economics"
 import { audioManager } from "../utils/audio"
-import type { AuctionState, Property, Player } from "../types/game"
+import type { Property } from "../types/game"
 
 export const AuctionModal: React.FC = () => {
   const auction = useGameStore((s) => s.auction)
-  const activeEconomicEvents = useGameStore((s) => s.activeEconomicEvents)
   const players = useGameStore((s) => s.players)
   const spaces = useGameStore((s) => s.spaces)
   const clientId = useGameStore((s) => s.clientId)
 
   const myPlayerIndex = React.useMemo(() => {
-    return players.findIndex((p) => p.clientId === clientId)
+    const index = players.findIndex((p) => p.clientId === clientId)
+    // Easter egg: ZELDA players are always AI bots, so the client is a spectator (strictly case-sensitive)
+    if (index !== -1 && players[index]?.originalName === "ZELDA") {
+      return -1
+    }
+    return index
   }, [players, clientId])
 
   const [bidAmount, setBidAmount] = React.useState(0)

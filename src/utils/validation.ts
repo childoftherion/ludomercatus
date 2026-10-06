@@ -107,7 +107,7 @@ export function validatePlayerTurn(
 export function validateCash(
   player: Player | undefined,
   amount: number,
-  action: string,
+  _action: string,
 ): ValidationResult {
   if (!player) {
     return { valid: false, error: "Player does not exist" }
@@ -130,7 +130,7 @@ export function validatePropertyOwnership(
   state: GameState,
   propertyId: number,
   playerIndex: number,
-  action: string,
+  _action: string,
 ): ValidationResult {
   const property = state.spaces.find((s) => s.id === propertyId) as
     | Property

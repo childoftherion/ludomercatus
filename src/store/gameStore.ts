@@ -3,12 +3,13 @@ import type {
   GameState,
   Property,
   ColorGroup,
-  GameLogEntry,
+  
   TradeOffer,
   GameSettings,
   AIDifficulty,
 } from "../types/game";
 import { DEFAULT_GAME_SETTINGS } from "../types/game";
+import { decideSyncAction } from "../types/sync";
 import { boardSpaces } from "../data/board";
 import { getPlayerProperties, hasMonopoly } from "../logic/rules/monopoly";
 import { useLocalStore } from "./localStore";
@@ -142,6 +143,72 @@ type GameStore = GameState & {
 
 let socket: WebSocket | null = null;
 
+/** Guards against a resync storm when several gaps arrive in the same tick. */
+let resyncPending = false;
+
+/**
+ * Ask the server for an authoritative snapshot because broadcasts were missed.
+ *
+ * Debounced to at most one in-flight request: the reply is a snapshot that
+ * supersedes everything, so any further gaps seen before it arrives are moot.
+ */
+const requestStateResync = (): void => {
+  if (resyncPending || !socket || socket.readyState !== WebSocket.OPEN) return;
+  resyncPending = true;
+  console.log("[SYNC] Requesting authoritative state snapshot");
+  socket.send(
+    JSON.stringify({ type: "REQUEST_STATE", sinceVersion: useGameStore.getState().version }),
+  );
+  // Release the guard once the reply is expected to have arrived. Snapshots are
+  // sent synchronously by the server, so a short window is sufficient; the
+  // timeout also recovers if the socket dies mid-request.
+  setTimeout(() => {
+    resyncPending = false;
+  }, 1000);
+};
+
+/** Reset sync bookkeeping, e.g. when leaving a room. */
+const resetSyncBaseline = (): void => {
+  resyncPending = false;
+};
+
+/** Backend origin used when no browser location is available (tests/SSR). */
+export const DEFAULT_GAME_SERVER_HOST = "localhost:7070";
+
+/**
+ * Resolve the host:port the game WebSocket should connect to.
+ *
+ * Defaults to same-origin, which is correct for the single-port deployment
+ * (backend serves the built client). A separately hosted frontend on :7071 can
+ * redirect the socket either by injecting a global before the bundle loads:
+ *
+ *   <script>window.__GAME_SERVER_URL__ = "http://localhost:7070";</script>
+ *
+ * or per-visit with a query parameter: `?server=localhost:7070`.
+ *
+ * Note: `process.env` is deliberately avoided here - the client bundle runs in
+ * the browser, where `process` is undefined and reading it throws.
+ */
+export const resolveGameServerHost = (): string => {
+  const injected = (globalThis as { __GAME_SERVER_URL__?: string })
+    .__GAME_SERVER_URL__;
+  if (typeof injected === "string") {
+    const authority = injected
+      .trim()
+      .replace(/^https?:\/\//, "")
+      .replace(/\/+$/, "");
+    if (authority) return authority;
+  }
+
+  const location = (globalThis as { location?: Location }).location;
+  if (!location) return DEFAULT_GAME_SERVER_HOST;
+
+  const fromQuery = new URLSearchParams(location.search).get("server");
+  if (fromQuery) return fromQuery;
+
+  return location.host;
+};
+
 export const useGameStore = create<GameStore>((set, get) => ({
   // Initial state
   clientId: useLocalStore.getState().clientId,
@@ -166,6 +233,10 @@ export const useGameStore = create<GameStore>((set, get) => ({
   inRoom: false,
   roomId: null,
   rooms: [],
+  // State sync baseline. `epoch: ""` means "not synced to any room yet", which
+  // makes the first incoming payload authoritative.
+  version: 0,
+  epoch: "",
   // Game settings
   settings: DEFAULT_GAME_SETTINGS,
   // Phase 1: Economic Realism
@@ -196,14 +267,26 @@ export const useGameStore = create<GameStore>((set, get) => ({
 
     const clientId = useLocalStore.getState().clientId;
     const protocol = window.location.protocol === "https:" ? "wss:" : "ws:";
-    const host = window.location.host;
-    socket = new WebSocket(`${protocol}//${host}/ws?clientId=${clientId}`);
+    socket = new WebSocket(
+      `${protocol}//${resolveGameServerHost()}/ws?clientId=${clientId}`,
+    );
 
     socket.onopen = () => {
       console.log("Connected to game server");
       set({ connected: true });
       (get() as any).reconnectAttempts = 0;
-      socket?.send(JSON.stringify({ type: "LIST_ROOMS" }));
+
+      // A reconnect creates a brand-new socket that is not subscribed to any
+      // room, so the room subscription must be re-established explicitly.
+      // Without this the client silently stops receiving updates after any
+      // dropped connection.
+      const { roomId, inRoom } = get();
+      if (inRoom && roomId) {
+        console.log("Re-subscribing to room after connect:", roomId);
+        get().joinRoom(roomId);
+      } else {
+        socket?.send(JSON.stringify({ type: "LIST_ROOMS" }));
+      }
 
       // Start PING heartbeat every 15 seconds
       if ((get() as any)._pingInterval)
@@ -222,14 +305,43 @@ export const useGameStore = create<GameStore>((set, get) => ({
           // Heartbeat acknowledged
           return;
         }
-        if (data.type === "STATE_UPDATE") {
-          console.log(
-            "[STORE] Received state update, phase:",
-            data.state.phase,
-            "inRoom:",
-            true,
+        if (data.type === "STATE_UPDATE" || data.type === "STATE_SNAPSHOT") {
+          const isSnapshot = data.type === "STATE_SNAPSHOT";
+          const incoming = data.state as GameState;
+
+          const decision = decideSyncAction(
+            { epoch: incoming.epoch, version: incoming.version },
+            {
+              currentEpoch: get().epoch || null,
+              currentVersion: get().version,
+            },
+            isSnapshot,
           );
-          set({ ...data.state, inRoom: true });
+
+          if (decision === "ignore-stale") {
+            console.log(
+              "[SYNC] Ignoring stale update v" +
+                incoming.version +
+                " (have v" +
+                get().version +
+                ")",
+            );
+            return;
+          }
+
+          if (decision === "apply-and-resync") {
+            console.warn(
+              `[SYNC] Gap detected: jumped from v${get().version} to v${incoming.version}. Requesting snapshot.`,
+            );
+            requestStateResync();
+          } else {
+            console.log(
+              `[SYNC] ${isSnapshot ? "Snapshot" : "Update"} applied: v${incoming.version}` +
+                (data.reason ? ` (reason: ${data.reason})` : ""),
+            );
+          }
+
+          set({ ...incoming, inRoom: true });
         } else if (data.type === "ERROR") {
           const message = data.message ?? "Action failed";
           console.error("Server error:", message);
@@ -316,9 +428,20 @@ export const useGameStore = create<GameStore>((set, get) => ({
     );
   },
   joinRoom: (roomId: string) => {
-    socket?.send(JSON.stringify({ type: "JOIN_ROOM", roomId }));
+    // Report our baseline only when re-joining the room we are already synced
+    // to; for a different room the version counter is not comparable.
+    const state = get();
+    socket?.send(
+      JSON.stringify({
+        type: "JOIN_ROOM",
+        roomId,
+        sinceVersion:
+          state.roomId === roomId && state.epoch ? state.version : undefined,
+      }),
+    );
   },
   leaveRoom: () => {
+    resetSyncBaseline();
     set({ inRoom: false });
   },
   listRooms: () => {
@@ -433,7 +556,7 @@ export const useGameStore = create<GameStore>((set, get) => ({
           };
 
           // Clean each argument
-          const cleanedPayload = args.map((arg, idx) => {
+          const cleanedPayload = args.map((arg) => {
             if (typeof arg === "object" && arg !== null) {
               try {
                 // Use the replacer to clean the object

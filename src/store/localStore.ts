@@ -7,7 +7,7 @@ interface LocalState {
 
 export const useLocalStore = create<LocalState>()(
   persist(
-    set => ({
+    () => ({
       clientId:
         typeof crypto !== 'undefined' && crypto.randomUUID
           ? crypto.randomUUID()

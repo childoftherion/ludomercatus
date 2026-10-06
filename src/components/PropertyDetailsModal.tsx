@@ -21,7 +21,6 @@ export const PropertyDetailsModal: React.FC<PropertyDetailsModalProps> = ({
   const enableHousingScarcity = useGameStore(
     (s) => s.settings.enableHousingScarcity,
   )
-  const activeEconomicEvents = useGameStore((s) => s.activeEconomicEvents)
   const utilitySpacesOnBoard = React.useMemo(
     () => spaces.filter((s) => s.type === "utility").length,
     [spaces],

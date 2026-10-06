@@ -2,7 +2,7 @@ services:
   ludomercatus:
     build: .
     ports:
-      - "3000:3000"
+      - "7070:7070"
     volumes:
       - ./src:/app/src
       - ./index.ts:/app/index.ts

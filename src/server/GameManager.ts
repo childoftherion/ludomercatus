@@ -1,4 +1,5 @@
 import { GameRoom } from "./GameRoom"
+import type { GameSettings } from "../types/game"
 
 const ROOM_IDLE_TIMEOUT_MS = 10 * 60 * 1000 // 10 minutes
 const CLEANUP_INTERVAL_MS = 60 * 1000 // check every minute

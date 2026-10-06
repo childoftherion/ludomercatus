@@ -10,9 +10,10 @@
     "lint": "eslint src --ext .ts,.tsx",
     "lint:fix": "eslint src --ext .ts,.tsx --fix",
     "typecheck": "tsc --noEmit",
-    "build": "tsc",
+    "build": "bun build index.ts --outdir dist --target bun --minify",
     "prettier": "prettier --write 'src/**/*.{ts,tsx}'",
-    "prettier:check": "prettier --check 'src/**/*.{ts,tsx}'"
+    "prettier:check": "prettier --check 'src/**/*.{ts,tsx}'",
+    "start": "bun --cwd dist index.js"
   },
   "devDependencies": {
     "@types/bun": "latest",
@@ -20,7 +21,7 @@
     "typescript-eslint": "^8.56.1"
   },
   "peerDependencies": {
-    "typescript": "^5"
+    "typescript": "^7.0.2"
   },
   "dependencies": {
     "@types/react": "^19.2.7",

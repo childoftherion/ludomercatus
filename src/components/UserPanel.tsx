@@ -2,7 +2,6 @@ import React, { useState } from "react"
 import { motion, AnimatePresence } from "framer-motion"
 import { PlayerPropertiesPanel } from "./PlayerProperties"
 import { useGameStore } from "../store/gameStore"
-import { useLocalStore } from "../store/localStore"
 import { calculateNetWorth } from "../logic/rules/economics"
 import { useIsMobile } from "../utils/useIsMobile"
 
@@ -28,10 +27,6 @@ export const UserPanel: React.FC<UserPanelProps> = ({ myPlayerIndex }) => {
     const state = useGameStore.getState()
     return players.map((_, index) => calculateNetWorth(state, index))
   }, [players])
-
-  // Filter out bankrupt players for layout calculation
-  const activePlayers = players.filter((p, i) => p && !p.bankrupt)
-  const playerCount = activePlayers.length
 
   if (!players || players.length === 0) return null
 

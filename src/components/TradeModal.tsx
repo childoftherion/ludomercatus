@@ -2,9 +2,9 @@ import React from "react"
 import { motion, AnimatePresence } from "framer-motion"
 import { useGameStore } from "../store/gameStore"
 import type {
-  TradeState,
-  Player,
-  Space,
+  
+  
+  
   Property,
   TradeOffer,
 } from "../types/game"
@@ -67,9 +67,6 @@ export const TradeModal: React.FC = () => {
     }
   }, [])
 
-  const myPlayerIndex = React.useMemo(() => {
-    return players.findIndex((p) => p.clientId === clientId)
-  }, [players, clientId])
 
   if (!trade) return null
 
@@ -79,7 +76,6 @@ export const TradeModal: React.FC = () => {
   const toPlayer = players.find((p) => p.id === offer.toPlayer)!
   const isInitiator = fromPlayer.clientId === clientId
   const isReceiver = toPlayer.clientId === clientId
-  const canMakeCounterOffer = isReceiver && status === "pending"
 
   const fromPlayerOwnedProps = getPlayerProperties(fromPlayer.id)
   const toPlayerOwnedProps = getPlayerProperties(toPlayer.id)

@@ -40,7 +40,7 @@ This runs the `dev` script in `package.json`, which executes `bun run index.ts`.
 
 ## Running the game
 
-The server listens on **port 3000** and serves the bundled UI at **`http://localhost:3000`**. WebSocket traffic uses **`/ws`** (the client appends your stable `clientId` query parameter).
+The server listens on **port 7070** and serves the bundled UI at **`http://localhost:7070`**. WebSocket traffic uses **`/ws`** (the client appends your stable `clientId` query parameter).
 
 ### Development with hot reload
 
@@ -62,7 +62,7 @@ Use this when you want a **fresh copy on your Desktop** with one command.
 
 **Bun** is detected automatically: if `bun` is missing, the scripts run the [official Bun installers](https://bun.sh/docs/installation) (`curl … | bash` on macOS/Linux, **`irm https://bun.sh/install.ps1 | iex`** on Windows—including when you use **Git Bash**, which invokes PowerShell for that step). On Unix, **`curl`** or **`wget`** is required for the Bun install script.
 
-The scripts live in this repository under [`scripts/quickstart.sh`](scripts/quickstart.sh) and [`scripts/quickstart.ps1`](scripts/quickstart.ps1). They detect the OS, resolve your **Desktop** folder, **`git clone`** [https://github.com/childoftherion/ludomercatus](https://github.com/childoftherion/ludomercatus) into `Desktop/ludomercatus` (or **`git pull`** if that folder already exists from a previous run), then run **`bun install`** and **`bun run dev`**. Open **http://localhost:3000** when the server starts.
+The scripts live in this repository under [`scripts/quickstart.sh`](scripts/quickstart.sh) and [`scripts/quickstart.ps1`](scripts/quickstart.ps1). They detect the OS, resolve your **Desktop** folder, **`git clone`** [https://github.com/childoftherion/ludomercatus](https://github.com/childoftherion/ludomercatus) into `Desktop/ludomercatus` (or **`git pull`** if that folder already exists from a previous run), then run **`bun install`** and **`bun run dev`**. Open **http://localhost:7070** when the server starts.
 
 ### macOS, Linux, or Windows (Git Bash)
 
@@ -173,14 +173,53 @@ ludomercatus/
 
 ## Scripts
 
-| Command             | Purpose                                                |
-| ------------------- | ------------------------------------------------------ |
-| `bun install`       | Install dependencies                                   |
-| `bun run dev`       | Run server + app on port 3000                          |
-| `bun --hot run dev` | Same as above with **hot reload** for faster iteration |
-| `bun test`          | Run all tests (`src/**/*.test.ts`, `tests/**`, etc.)   |
-| `bun run lint`      | ESLint on `src` (`*.ts`, `*.tsx`)                      |
-| `bunx tsc --noEmit` | Typecheck without emitting JS (strict project)         |
+| Command                | Purpose                                                       |
+| ---------------------- | ------------------------------------------------------------- |
+| `bun install`          | Install dependencies                                          |
+| `bun run dev`          | Run server + app on port **7070**                             |
+| `bun --hot run dev`    | Same as above with **hot reload** for faster iteration        |
+| `bun run build`        | Production bundle into `dist/` (server + client + assets)     |
+| `bun run start`        | Run the built bundle from `dist/`                             |
+| `bun test`             | Run all tests (`src/**/*.test.ts`, `tests/**`, etc.)          |
+| `bun run lint`         | ESLint on `src` (`*.ts`, `*.tsx`)                             |
+| `bun run typecheck`    | Typecheck without emitting JS (strict project)                |
+| `bun run prettier`     | Format `src/**/*.{ts,tsx}`                                    |
+
+### Ports
+
+| Port  | Purpose                                                             |
+| ----- | ------------------------------------------------------------------- |
+| `7070`| Game server: HTTP + WebSocket (`/ws`), and the bundled UI by default |
+| `7071`| Optional separate frontend origin for split client/server dev        |
+
+By default the client derives its WebSocket host from `window.location`, so the
+single-port setup needs no configuration.
+
+To point a separately hosted frontend (for example one served on `7071`) at a
+backend on a different origin, inject a global **before** the client bundle
+loads:
+
+```html
+<script>
+  window.__GAME_SERVER_URL__ = "http://localhost:7070";
+</script>
+```
+
+For a quick check without editing any file, use the `server` query parameter:
+
+```
+http://localhost:7071/?server=localhost:7070
+```
+
+Both accept a full origin (`http://localhost:7070`) or a bare `host:port`
+(`localhost:7070`); the scheme is derived from the page, so an `https` page
+always opens a `wss://` socket.
+
+> **Note:** build-time env vars such as `VITE_GAME_SERVER_URL` are **not**
+> usable here. Bun does not inline `process.env.*` or `import.meta.env.*` into
+> browser bundles, so reading them in client code throws
+> `ReferenceError: process is not defined`. Use the runtime global or the query
+> parameter instead.
 
 ---
 

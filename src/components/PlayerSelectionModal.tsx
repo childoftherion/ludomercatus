@@ -13,8 +13,24 @@ export const PlayerSelectionModal: React.FC<PlayerSelectionModalProps> = ({
   const phase = useGameStore(s => s.phase)
   const clientId = useGameStore(s => s.clientId)
 
+  // Helper: detect ZELDA easter egg players (always remain as AI/spectator) — strictly case-sensitive
+  const isZeldaPlayer = (p: { originalName?: string | undefined }) =>
+    p.originalName === 'ZELDA'
+
+  // ZELDA players are pure spectators — skip the "Who are you?" modal entirely
+  const currentClientPlayer = React.useMemo(
+    () => players.find(p => p.clientId === clientId),
+    [players, clientId],
+  )
+  if (currentClientPlayer && isZeldaPlayer(currentClientPlayer)) return null
+
   const myPlayerIndex = React.useMemo(() => {
-    return players.findIndex(p => p.clientId === clientId)
+    const index = players.findIndex(p => p.clientId === clientId)
+    // Easter egg: ZELDA players are always AI bots, so the client is a spectator
+    if (index !== -1 && players[index] && isZeldaPlayer(players[index])) {
+      return -1
+    }
+    return index
   }, [players, clientId])
 
   const mySeat = myPlayerIndex === -1 ? null : players[myPlayerIndex]
@@ -59,6 +75,7 @@ export const PlayerSelectionModal: React.FC<PlayerSelectionModalProps> = ({
         <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
           {players.map((player, index) => {
             const isMe = player.clientId === clientId
+            const isZeldaSeat = isZeldaPlayer(player)
             const isTakenByOtherHuman =
               player.clientId !== null &&
               !isMe &&
@@ -67,26 +84,31 @@ export const PlayerSelectionModal: React.FC<PlayerSelectionModalProps> = ({
             const isOwnAISeat = player.isAI && player.clientId === clientId
             const canTakeOverAI = player.isAI && !player.isConnected
             const canClaimUnownedAI = player.isAI && player.clientId === null
+            // ZELDA seats are always AI and cannot be claimed by humans
             const disabled = player.bankrupt
               ? true
+              : isZeldaSeat
+                ? true
+                : player.isAI
+                  ? player.isConnected && !isOwnAISeat && !canClaimUnownedAI
+                  : isTakenByOtherHuman
+            const subtitle = isZeldaSeat
+              ? '🤖 AI Bot (Spectator Only)'
               : player.isAI
-                ? player.isConnected && !isOwnAISeat && !canClaimUnownedAI
+                ? canTakeOverAI
+                  ? 'AI Player (Disconnected)'
+                  : isOwnAISeat
+                    ? 'AI Player (Rejoin)'
+                    : canClaimUnownedAI
+                      ? 'AI Seat'
+                      : 'AI Player'
                 : isTakenByOtherHuman
-            const subtitle = player.isAI
-              ? canTakeOverAI
-                ? 'AI Player (Disconnected)'
-                : isOwnAISeat
-                  ? 'AI Player (Rejoin)'
-                  : canClaimUnownedAI
-                    ? 'AI Seat'
-                    : 'AI Player'
-              : isTakenByOtherHuman
-                ? 'Taken'
-                : isMe
-                  ? 'You (Rejoin)'
-                  : player.clientId && !player.isConnected
-                    ? 'Disconnected'
-                    : 'Human Player'
+                  ? 'Taken'
+                  : isMe
+                    ? 'You (Rejoin)'
+                    : player.clientId && !player.isConnected
+                      ? 'Disconnected'
+                      : 'Human Player'
 
             return (
               <motion.button

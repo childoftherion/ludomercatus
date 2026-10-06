@@ -93,11 +93,22 @@ export default function App() {
 
   const myPlayerIndex = React.useMemo(() => {
     const index = players.findIndex((p) => p.clientId === clientId)
+    // Easter egg: ZELDA players are always AI bots, so the client is a spectator
+    if (index !== -1 && players[index]?.originalName === "ZELDA") {
+      console.log(
+        `[Identity] ZELDA easter egg detected - acting as spectator for client ID ${clientId}`,
+      )
+      return -1
+    }
     console.log(
       `[Identity] My player index is ${index} for client ID ${clientId}`,
     )
     return index
   }, [players, clientId])
+
+  // Helper: detect ZELDA easter egg players (always remain as AI) — strictly case-sensitive
+  const isZeldaPlayer = (p: { originalName?: string | undefined }) =>
+    p.originalName === "ZELDA"
 
   // Auto-claim if exactly one reclaimable player (unclaimed human or disconnected AI)
   React.useEffect(() => {
@@ -107,6 +118,8 @@ export default function App() {
         .filter(
           (p) =>
             !p.bankrupt &&
+            // Easter egg: ZELDA players cannot be reclaimed - they are always AI
+            !isZeldaPlayer(p) &&
             ((p.isAI && !p.isConnected) ||
               (!p.isAI && (p.clientId === null || !p.isConnected))),
         )
@@ -129,6 +142,14 @@ export default function App() {
 
     const matchedSeat = players[myPlayerIndex]
     if (!matchedSeat || !matchedSeat.isAI) return
+
+    // Easter egg: ZELDA players cannot be reclaimed by humans - they are always AI
+    if (isZeldaPlayer(matchedSeat)) {
+      console.log(
+        `[Identity] Skipping reclaim for ZELDA easter egg player ${myPlayerIndex} (${matchedSeat.name})`,
+      )
+      return
+    }
 
     if (!matchedSeat.clientId || matchedSeat.clientId !== clientId) return
     console.log(
@@ -384,10 +405,17 @@ export default function App() {
     if (myPlayerIndex === -1) return
 
     // Only one client should trigger AI turns to avoid duplicates on the server.
-    // We'll pick the first human player in the game.
+    // Prefer the first human player; fall back to any connected client when all
+    // players are AI (e.g. ZELDA easter egg where every seat is a bot).
     const firstHumanIndex = players.findIndex((p) => !p.isAI)
-    if (firstHumanIndex === -1) return
-    if (myPlayerIndex !== firstHumanIndex) return
+    if (firstHumanIndex !== -1) {
+      // Normal case: only the first human triggers AI turns
+      if (myPlayerIndex !== firstHumanIndex) return
+    } else {
+      // All-AI scenario: any connected client can trigger AI turns.
+      // Use myPlayerIndex as the designated trigger to avoid duplicates.
+      // (In single-player mode with only bots, this is the watching client.)
+    }
 
     // Add delay for AI actions to be visible
     const aiDelay = setTimeout(() => {
@@ -423,8 +451,9 @@ export default function App() {
         const receiver = players[trade.offer.toPlayer]
         if (receiver?.isAI) {
           const firstHumanIndex = players.findIndex((p) => !p.isAI)
-          if (firstHumanIndex === -1) return
-          if (myPlayerIndex !== firstHumanIndex) return
+          // Allow any connected client to trigger AI trade responses when all
+          // players are AI (e.g. ZELDA easter egg). Otherwise only the first human.
+          if (firstHumanIndex !== -1 && myPlayerIndex !== firstHumanIndex) return
           const aiDelay = setTimeout(() => {
             useGameStore.getState().executeAITradeResponse()
           }, 2000)

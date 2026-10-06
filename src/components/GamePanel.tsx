@@ -63,7 +63,6 @@ export const GamePanel: React.FC<GamePanelProps> = ({
   const pendingBankruptcy = useGameStore((s) => s.pendingBankruptcy)
   const pendingForeclosure = useGameStore((s) => s.pendingForeclosure)
   const pendingDebtService = useGameStore((s) => s.pendingDebtService)
-  const auction = useGameStore((s) => s.auction)
   const forgiveRent = useGameStore((s) => s.forgiveRent)
   const createRentIOU = useGameStore((s) => s.createRentIOU)
   const demandImmediatePaymentOrProperty = useGameStore(

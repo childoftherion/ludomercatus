@@ -40,7 +40,7 @@ export const DraggableModal: React.FC<DraggableModalProps> = ({
   const containerRef = useRef<HTMLDivElement>(null)
 
   // Extract positioning from style - remove top/left/transform as we use x/y
-  const { top, left, transform, ...restStyle } = style
+  const { top, left, ...restStyle } = style
   const shouldCenter = top === '50%' || left === '50%'
 
   // Start with initial position, will be updated if centering is needed

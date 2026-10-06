@@ -1,4 +1,4 @@
-import type { Card, CardEffect, GameState } from "../types/game"
+import type { Card } from "../types/game"
 
 export const createChanceDeck = (): Card[] => {
   return [

@@ -77,6 +77,7 @@ const getTokenPixelPosition = (
 
 export const PlayerToken = ({ playerIndex }: { playerIndex: number }) => {
   const players = useGameStore((s: any) => s.players)
+  const boardSize = useGameStore((s: any) => s.spaces?.length ?? 40)
   const player = players[playerIndex]
   const [position, setPosition] = React.useState<{
     x: number | number[]
@@ -123,11 +124,11 @@ export const PlayerToken = ({ playerIndex }: { playerIndex: number }) => {
             // Calculate intermediate spaces
             const path = []
             let temp = prevPos
-            const maxSteps = 40 // Safety break
+            const maxSteps = boardSize // Safety break
             let steps = 0
 
             while (temp !== currentPos && steps < maxSteps) {
-              temp = (temp + 1) % 40
+              temp = (temp + 1) % boardSize
               path.push(temp)
               steps++
             }

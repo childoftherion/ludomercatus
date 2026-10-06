@@ -1,11 +1,34 @@
 import indexHtml from "./index.html";
 import { GameManager } from "./src/server/GameManager";
+import type { GameRoom } from "./src/server/GameRoom";
+import type { GameState } from "./src/types/game";
+import type {
+  SnapshotReason,
+  StateSnapshotMessage,
+} from "./src/types/sync";
 
 const gameManager = GameManager.getInstance();
 const defaultRoom = gameManager.createRoom("default");
 
+const PORT = Number(process.env.PORT ?? 7070);
+
+/** Build the authoritative snapshot payload sent on join and on resync. */
+const snapshotMessage = (
+  state: GameState,
+  reason: SnapshotReason,
+  sinceVersion: unknown,
+): StateSnapshotMessage => ({
+  type: "STATE_SNAPSHOT",
+  state,
+  reason,
+  sinceVersion:
+    typeof sinceVersion === "number" && Number.isFinite(sinceVersion)
+      ? sinceVersion
+      : null,
+});
+
 const server = Bun.serve<{ roomId: string; clientId: string | null }>({
-  port: 3000,
+  port: PORT,
   routes: {
     "/": indexHtml,
   },
@@ -125,6 +148,8 @@ const server = Bun.serve<{ roomId: string; clientId: string | null }>({
           if (room) {
             ws.unsubscribe(ws.data.roomId);
             ws.data.roomId = roomId;
+            // Subscribe before snapshotting so no mutation can slip through
+            // between the snapshot and the start of broadcasts.
             ws.subscribe(roomId);
 
             // Notify room of reconnection if clientId matches a player
@@ -132,8 +157,30 @@ const server = Bun.serve<{ roomId: string; clientId: string | null }>({
               (room as any).handlePlayerReconnect(ws.data.clientId);
             }
 
+            // Always answer a join with a full snapshot: a reconnecting client
+            // may have missed any number of broadcasts while offline.
             ws.send(
-              JSON.stringify({ type: "STATE_UPDATE", state: room.state }),
+              JSON.stringify(
+                snapshotMessage(room.state, "join", data.sinceVersion),
+              ),
+            );
+          }
+          return;
+        }
+
+        // Client detected a gap in the broadcast sequence (typically after a
+        // reconnect) and wants the authoritative state.
+        if (data.type === "REQUEST_STATE") {
+          const room: GameRoom | undefined = gameManager.getRoom(
+            ws.data.roomId,
+          );
+          // No room means the client's subscription is stale; it needs to
+          // re-join, and a silent reply keeps that decision on the client.
+          if (room) {
+            ws.send(
+              JSON.stringify(
+                snapshotMessage(room.state, "resync", data.sinceVersion),
+              ),
             );
           }
           return;
@@ -190,4 +237,4 @@ defaultRoom.subscribe((state) => {
   server.publish("default", JSON.stringify({ type: "STATE_UPDATE", state }));
 });
 
-console.log("Server running on http://localhost:3000");
+console.log(`Server running on http://localhost:${server.port}`);

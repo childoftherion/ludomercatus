@@ -11,13 +11,20 @@ export const MultiplayerLobby = () => {
   const leaveRoom = useGameStore(s => s.leaveRoom)
   const clientId = useGameStore(s => s.clientId)
 
+  // Helper: detect ZELDA easter egg players (always remain as AI/spectator) — strictly case-sensitive
+  const isZeldaPlayer = (p: { originalName?: string | undefined }) =>
+    p.originalName === 'ZELDA'
+
   const myPlayer = React.useMemo(
-    () => players.find(p => p.clientId === clientId),
+    () => players.find(p => p.clientId === clientId && !isZeldaPlayer(p)),
     [players, clientId],
   )
 
   const [name, setName] = React.useState('')
   const [token, setToken] = React.useState('')
+
+  // Check if the entered name is exactly "ZELDA" (for visual feedback) — strictly case-sensitive
+  const isEnteringZelda = name.trim() === 'ZELDA'
 
   const handleJoin = () => {
     if (name && token) {
@@ -89,17 +96,21 @@ export const MultiplayerLobby = () => {
                   key={p.id}
                   style={{
                     padding: '12px',
-                    background: 'rgba(0,0,0,0.2)',
+                    background: isZeldaPlayer(p) ? 'rgba(78, 205, 196, 0.1)' : 'rgba(0,0,0,0.2)',
                     borderRadius: '8px',
                     display: 'flex',
                     alignItems: 'center',
                     gap: '12px',
+                    border: isZeldaPlayer(p) ? '1px solid rgba(78, 205, 196, 0.3)' : 'none',
                   }}
                 >
                   <span style={{ fontSize: '24px' }}>{p.token}</span>
                   <span style={{ fontWeight: 'bold' }}>{p.name}</span>
-                  {p.clientId === clientId && (
+                  {p.clientId === clientId && !isZeldaPlayer(p) && (
                     <span style={{ color: '#4ECDC4' }}>(You)</span>
+                  )}
+                  {isZeldaPlayer(p) && (
+                    <span style={{ color: '#FFD700', fontSize: '12px' }}>🤖 AI Bot</span>
                   )}
                   {p.id === 0 && (
                     <span style={{ color: '#FFD700' }}>👑 Host</span>
@@ -128,6 +139,21 @@ export const MultiplayerLobby = () => {
                 onChange={e => setName(e.target.value)}
                 style={{ padding: '12px', borderRadius: '8px', border: 'none' }}
               />
+
+              {isEnteringZelda && (
+                <div
+                  style={{
+                    padding: '10px 14px',
+                    backgroundColor: 'rgba(78, 205, 196, 0.15)',
+                    border: '1px solid rgba(78, 205, 196, 0.4)',
+                    borderRadius: '8px',
+                    fontSize: '13px',
+                    color: '#4ECDC4',
+                  }}
+                >
+                  🤖 <strong>Spectator Mode!</strong> Joining as "ZELDA" will create an AI bot named "Player Bot". You'll watch the bots play instead of playing yourself.
+                </div>
+              )}
 
               <div>
                 <label

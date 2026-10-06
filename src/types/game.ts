@@ -10,14 +10,14 @@ export type SpaceType =
   | "go_to_jail"
   | "free_parking"
   | "corner"
-  | "speculation" // 1906: Speculation space – wager on doubles for $100
-  | "mother_earth" // 1906: Starting point (equivalent to GO)
-  | "public_treasury" // 1906: Where taxes are paid
-  | "miscellaneous" // 1906: Central bank/pool space
-  | "luxury" // 1906: Luxury space – pay $75 and get card
-  | "timberland" // 1906: Timberland – No Man's Land
-  | "oil_fields" // 1906: Oil Fields – special space
-  | "natural_opportunity"; // 1906: Natural Opportunity to Labor
+  | "speculation"
+  | "mother_earth"
+  | "public_treasury"
+  | "miscellaneous"
+  | "luxury"
+  | "timberland"
+  | "oil_fields"
+  | "natural_opportunity";
 
 export type ColorGroup =
   | "brown"
@@ -28,7 +28,6 @@ export type ColorGroup =
   | "yellow"
   | "green"
   | "dark_blue"
-  // 1906 board section color groups
   | "pale_green"
   | "teal"
   | "lavender"
@@ -105,6 +104,7 @@ export interface Player {
   aiDifficulty: AIDifficulty | null; // Difficulty level for AI players
   clientId: string | null; // Unique ID for multiplayer identity
   previousClientId: string | null; // Stores the previous client ID when a player is converted to an AI
+  originalName?: string; // Original name before any transformation (e.g. easter eggs)
   lastTradeTurn: number | null; // Turn number when they last proposed a trade
   tradeHistory: Record<
     string,
@@ -155,6 +155,18 @@ export interface ActiveEconomicEvent {
   type: EconomicEventType;
   turnsRemaining: number;
   description: string;
+}
+
+/**
+ * EconomicEvent is the weighted *definition* of an economic event, used when
+ * rolling for a random event. It is converted to an ActiveEconomicEvent via
+ * createActiveEvent() once activated.
+ */
+export interface EconomicEvent {
+  type: EconomicEventType;
+  description: string;
+  duration: number;
+  weight: number;
 }
 
 // CardEffect describes what a card does (immutable approach)
@@ -248,11 +260,13 @@ export interface GameLogEntry {
     | "auction"
     | "trade"
     | "bankrupt"
-    | "system";
+    | "system"
+    | "mother_earth"
+    | "speculation";
 }
 
 // Ruleset identifiers – determines which board, cards, and rule variants are used
-export type RulesetId = "classic" | "1906_landlords" | "house_rules";
+export type RulesetId = "classic" | "house_rules";
 
 // Comprehensive ruleset configuration – controls board layout, card decks,
 // and rule variants that differ between game modes.
@@ -271,40 +285,40 @@ export interface RulesetConfig {
   goSalary: number; // Amount collected when passing GO / Mother Earth
 
   // Building rules
-  maxHousesPerProperty: number; // 5 in classic (hotel = 5th), 3 in 1906
-  enableHotels: boolean; // 1906 has no hotels
-  houseRent: number; // Fixed rent per house (1906 = $10, classic = variable by tier)
-  totalHouses: number; // 32 in classic, unlimited in 1906
-  totalHotels: number; // 12 in classic, 0 in 1906
+  maxHousesPerProperty: number;
+  enableHotels: boolean;
+  houseRent: number;
+  totalHouses: number;
+  totalHotels: number;
 
   // Movement rules
-  enableBackwardMovement: boolean; // 1906: can move backward between Chances
-  doublesRailroadPass: boolean; // 1906: doubles = jump 9 spaces between corners on railroad
-  doublesSpeculationWin: number; // 1906: amount won on doubles at speculation (0 = disabled)
+  enableBackwardMovement: boolean;
+  doublesRailroadPass: boolean;
+  doublesSpeculationWin: number;
 
   // Property dealing
-  dealPropertiesAtStart: boolean; // 1906: 24 cards dealt at game start
-  propertiesDealtCount: number; // How many cards to deal at start (0 = none)
-  enableAuctions: boolean; // Classic: unwanted properties go to auction; 1906: returned to pack
+  dealPropertiesAtStart: boolean;
+  propertiesDealtCount: number;
+  enableAuctions: boolean;
 
   // Tax rules
-  taxAmount: number; // Fixed tax per tax space (1906 = $10, classic = variable)
-  taxDoublingThresholds: { houses: number; taxAmount: number }[]; // 1906 advanced: tax doubles at 10/25 houses
+  taxAmount: number;
+  taxDoublingThresholds: { houses: number; taxAmount: number }[];
 
   // Rent rules
-  sectionRentDoubling: boolean; // 1906: all lots in a railroad section improved → rent doubles
-  rentTable: number[][]; // 1906: [tier][houses] rent table; empty = use classic formula
+  sectionRentDoubling: boolean;
+  rentTable: number[][];
 
   // End game
-  endAfterWagesCount: number; // 1906: game ends after N passes of GO (0 = last player standing)
-  cardsAndHousesValue: number; // 1906: each card/house counts this at game end (0 = not used)
+  endAfterWagesCount: number;
+  cardsAndHousesValue: number;
 
   // Jail
-  jailFine: number; // $50 in both rulesets
-  jailMaxTurns: number; // 3 in both rulesets
+  jailFine: number;
+  jailMaxTurns: number;
 
   // Borrowing
-  enablePlayerBorrowing: boolean; // 1906: players can borrow from each other with mortgages
+  enablePlayerBorrowing: boolean;
 }
 
 // Game settings that can be configured at game start
@@ -474,4 +488,22 @@ export interface GameState {
   marketHistory: MarketHistoryEntry[];
   // Multiplayer stability
   turnStartTime?: number;
+
+  /**
+   * Monotonically increasing revision of the authoritative server state,
+   * bumped on every mutation. Clients use it to discard stale or replayed
+   * updates and to detect that they missed one (gap) and need a resync.
+   */
+  version: number;
+
+  /**
+   * Identity of the room instance that produced this state.
+   *
+   * `version` restarts at 0 whenever a room is recreated (server restart, room
+   * deleted and re-created), so a client cannot tell "lower version because I am
+   * stale" from "lower version because the room restarted". `epoch` is a fresh
+   * value per GameRoom instance, so any change tells the client to discard its
+   * version baseline and accept the incoming state as authoritative.
+   */
+  epoch: string;
 }

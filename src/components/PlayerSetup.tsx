@@ -145,15 +145,6 @@ const PlayerSetup = () => {
     });
   };
 
-  const getAvailableTokens = (excludeIndex?: number) => {
-    const usedTokens = new Set<string>();
-    if (playerToken) usedTokens.add(playerToken);
-    aiTokens.forEach((t, i) => {
-      if (t && i !== excludeIndex) usedTokens.add(t);
-    });
-    return TOKENS.filter((t) => !usedTokens.has(t));
-  };
-
   const getMultiplayerAvailableTokens = (
     type: "human" | "ai",
     index: number,
@@ -304,7 +295,7 @@ const PlayerSetup = () => {
                   }}
                 >
                   <option value="classic">Classic Monopoly</option>
-                  <option value="1906_landlords">1906: Landlord's Rules</option>
+
                   <option value="house_rules">House Rules</option>
                 </select>
               </div>
@@ -318,8 +309,6 @@ const PlayerSetup = () => {
                 }}
               >
                 {gameSettings.rulesetId === "classic" && "🎯 Traditional rules"}
-                {gameSettings.rulesetId === "1906_landlords" &&
-                  "🏛️ Historic 1906 Landlord's Game: $100 wages, max 3 houses, no hotels, property dealing, backward movement"}
                 {gameSettings.rulesetId === "house_rules" &&
                   "🎨 Fully customizable ruleset (defaults to classic)"}
               </p>

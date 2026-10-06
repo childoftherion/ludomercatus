@@ -8,7 +8,6 @@
  */
 
 import type { GameState, Property, AIDifficulty } from "../../types/game";
-import { calculateNetWorth } from "../../logic/rules/economics";
 import { SeededRNG } from "../../utils/rng";
 
 // ============================================================================
@@ -42,7 +41,6 @@ export function decideAuctionAction(
     return { action: "pass", bidAmount: 0, reason: "Invalid player" };
   }
 
-  const netWorth = calculateNetWorth(state, playerIndex);
   const propertyValue = property.price || property.baseRent * 10;
 
   // Calculate maximum affordable bid
@@ -123,7 +121,6 @@ export function calculateMaxReasonableBid(
   if (!player) return 0;
 
   const propertyValue = property.price || property.baseRent * 10;
-  const netWorth = calculateNetWorth(state, playerIndex);
 
   // Base maximum on cash reserves
   const cashBasedMax = Math.floor(player.cash * 0.5);

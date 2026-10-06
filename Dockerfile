@@ -9,7 +9,7 @@ RUN bun install --frozen-lockfile
 COPY . .
 
 # Expose port
-EXPOSE 3000
+EXPOSE 7070
 
 # Run the server
 CMD ["bun", "run", "./index.ts"]

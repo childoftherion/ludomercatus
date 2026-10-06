@@ -1,4 +1,4 @@
-import React, { useState, useMemo, useEffect } from "react"
+import React, { useState, useMemo } from "react"
 import { motion, AnimatePresence } from "framer-motion"
 import { useGameStore } from "../store/gameStore"
 import {
@@ -6,7 +6,7 @@ import {
   getCurrentPropertyPrice,
 } from "../logic/rules/economics"
 import { audioManager } from "../utils/audio"
-import type { Player, Property, TradeOffer, BankLoan, IOU } from "../types/game"
+import type { Property, IOU } from "../types/game"
 
 const COLOR_MAP: Record<string, string> = {
   brown: "#8B4513",

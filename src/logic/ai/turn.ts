@@ -10,11 +10,11 @@
 import type { GameState, Property, AIDifficulty } from "../../types/game";
 import {
   calculateNetWorth,
-  getCurrentPropertyPrice,
+  
 } from "../../logic/rules/economics";
 import { hasMonopoly, getPlayerProperties } from "../../logic/rules/monopoly";
 import { calculateRent } from "../../logic/rules/rent";
-import { SeededRNG, random, randomInt } from "../../utils/rng";
+import { SeededRNG } from "../../utils/rng";
 
 // ============================================================================
 // AI Context - Shared state across all AI strategies
@@ -212,11 +212,6 @@ export function calculateMaxAuctionBid(
   const modifiers = getDifficultyModifiers(context.difficulty);
 
   const currentPrice = property.price || property.baseRent * 10;
-  const roi = calculatePropertyROI(
-    context.state ?? ({} as GameState),
-    property,
-    context.playerIndex,
-  );
 
   // Base max bid on cash reserve
   let maxBid = context.cashReserve;

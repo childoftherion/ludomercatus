@@ -5,6 +5,7 @@
 
 import type { DiceRoll } from "../../types/game";
 
+
 /**
  * Roll two dice and return the result
  */
@@ -19,10 +20,10 @@ export function rollDice(): DiceRoll {
 
 /**
  * Calculate new position after moving steps.
- * Supports both 40-space (classic) and 48-space (1906) boards.
+ * Supports both 40-space (classic / 1906 EGC) and 51-space (1906 Landlord's) boards.
  * @param currentPosition - Current position on board
  * @param steps - Number of steps to move
- * @param boardSize - Total number of spaces on the board (40 or 48)
+ * @param boardSize - Total number of spaces on the board (40 or 51)
  * @returns New position and whether GO/Mother Earth was passed
  */
 export function calculateNewPosition(
@@ -40,7 +41,7 @@ export function calculateNewPosition(
  * Used when a player lands on a Chance space that sends them backward.
  * @param currentPosition - Current position on board
  * @param steps - Number of steps to move backward (negative value)
- * @param boardSize - Total number of spaces on the board (40 or 48)
+ * @param boardSize - Total number of spaces on the board (40 or 51)
  * @returns New position and whether GO/Mother Earth was passed
  */
 export function calculateBackwardPosition(
@@ -59,24 +60,19 @@ export function calculateBackwardPosition(
  * Get the position of the "GO" / "Mother Earth" space for a given ruleset.
  * In classic and 1906 EGC: position 0 (GO/Mother Earth).
  */
-export function getGoPosition(ruleset?: string): number {
+export function getGoPosition(_ruleset?: string): number {
   return 0; // Both classic and 1906 EGC have GO at position 0
 }
 
 /**
  * Check if a space is a railroad.
  * For 1906 EGC (40 spaces): railroads are at positions 6, 15, 30.
- * For 1906 Landlord's Game (48 spaces): railroads are at positions 4, 15, 31, 42.
+ * For 1906 Landlord's Game (51 spaces): positions come from the board itself.
  * For classic: railroads are at positions 5, 15, 25, 35.
  */
 export function isRailroadSpace(position: number, boardSize: number): boolean {
   if (boardSize === 40) {
-    // 1906 EGC Edition railroads
-    return [6, 15, 30].includes(position);
-  }
-  if (boardSize === 48) {
-    // 1906 Landlord's Game railroads
-    return [4, 15, 31, 42].includes(position);
+    return [5, 15, 25, 35].includes(position);
   }
   // Classic railroads
   return [5, 15, 25, 35].includes(position);
@@ -91,9 +87,9 @@ export function isRailroadSpace(position: number, boardSize: number): boolean {
  */
 export function calculateDoublesRailroadPass(
   currentPosition: number,
-  boardSize: number = 40,
+  _boardSize: number = 40,
 ): number {
-  const railroads = [6, 15, 30];
+  const railroads = [5, 15, 25, 35];
 
   // Find the next railroad after current position
   for (const railroad of railroads) {
@@ -108,14 +104,15 @@ export function calculateDoublesRailroadPass(
 
 /**
  * Find the previous Chance space position for 1906 backward movement.
- * In 1906 EGC (40 spaces), Chance spaces are at positions 20, 33.
+ * In 1906 EGC (40 spaces), Chance spaces are at positions 20, 33. In 1906 Landlord's
+ * Game (51 spaces) the positions are read from the board itself.
  * When a card says "go backward to the next Chance", this finds it.
  */
 export function findPreviousChancePosition(
   currentPosition: number,
-  boardSize: number = 40,
+  _boardSize: number = 40,
 ): number {
-  const chancePositions = [20, 33];
+  const chancePositions = [7, 22, 36];
 
   // Find the previous chance (going backward from current position)
   for (let i = chancePositions.length - 1; i >= 0; i--) {

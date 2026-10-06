@@ -3,7 +3,7 @@
  * Pure functions for auction calculations and flow
  */
 
-import type { Auction, Player } from "../../types/game"
+import type { Player } from "../../types/game"
 
 /**
  * Calculate starting bid for an auction

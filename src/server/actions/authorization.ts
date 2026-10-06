@@ -7,7 +7,7 @@
  * @module server/authorization
  */
 
-import type { GameState, GamePhase } from "../../types/game";
+import type { GameState } from "../../types/game";
 
 // ============================================================================
 // Authorization Result Types
@@ -94,7 +94,7 @@ export class AuthorizationEngine {
 
     if (action === "addPlayer") {
       if (!clientId) return deny("Missing clientId");
-      const [name, token, _clientId, isMobile] = payloadArray;
+      const [name, token, isMobile] = payloadArray;
       if (state.phase !== "lobby")
         return deny("Cannot add players after game starts");
       return allow([name, token, clientId, isMobile]);
@@ -144,9 +144,9 @@ export class AuthorizationEngine {
 
     // Turn-based actions - must be current player's turn
     if (action === "rollDice") {
-      if (!isCurrentTurn) return deny("Not your turn");
       const player = state.players[state.currentPlayerIndex];
       if (!player || player.isAI) return deny("Not allowed - AI turn");
+      if (!isCurrentTurn) return deny("Not your turn");
       if (state.phase !== "rolling")
         return deny(`Not allowed - phase is ${state.phase}`);
       if (player.inJail) return deny("Not allowed - in jail");
@@ -378,7 +378,7 @@ export class AuthorizationEngine {
     state: GameState,
     actorIndex: number,
     isCurrentTurn: boolean,
-    isHostClient: boolean,
+    _isHostClient: boolean,
   ): AuthResult {
     const trade = state.trade;
 

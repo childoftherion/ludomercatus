@@ -1,4 +1,4 @@
-import type { GameState, GamePhase, Player, Property } from '../types/game';
+import type { GameState, GamePhase, Player } from '../types/game';
 import { calculateNetWorth, calculateMoneyInCirculation, calculateGiniCoefficient } from './rules/economics';
 
 export const getActivePlayer = (state: GameState): Player | null => {
@@ -46,7 +46,16 @@ export const getMoneyInCirculation = (state: GameState): number => {
 };
 
 export const getMyPlayerIndex = (players: Player[], clientId: string): number => {
-  return players.findIndex(p => p.clientId === clientId);
+  const index = players.findIndex(p => p.clientId === clientId);
+  if (index === -1) return -1;
+  
+  // Easter egg: ZELDA players are always AI bots, so the client is a spectator (strictly case-sensitive)
+  const matchedPlayer = players[index];
+  if (matchedPlayer && matchedPlayer.originalName === 'ZELDA') {
+    return -1;
+  }
+  
+  return index;
 };
 
 export const getPhaseMessage = (

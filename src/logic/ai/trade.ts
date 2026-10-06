@@ -195,7 +195,6 @@ export function generateTradeProposal(
   if (!aiPlayer || !targetPlayer) return null;
 
   const aiProperties = getPlayerOwnedProperties(state, aiIndex);
-  const targetProperties = getPlayerOwnedProperties(state, targetIndex);
 
   // Don't propose trades if AI has few properties
   if (aiProperties.length < 2) return null;

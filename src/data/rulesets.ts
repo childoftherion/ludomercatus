@@ -1,8 +1,6 @@
 import type { RulesetConfig, RulesetId } from '../types/game'
 import { boardSpaces } from './board'
-import { boardSpaces1906 } from './board1906'
 import { createChanceDeck, createCommunityChestDeck } from './cards'
-import { createChanceDeck1906, createCommunityChestDeck1906 } from './cards1906'
 
 /**
  * Registry of all available rulesets with their configurations
@@ -41,52 +39,7 @@ export const RULESET_CONFIGS: Record<RulesetId, RulesetConfig> = {
     enablePlayerBorrowing: false,
   },
   
-  '1906_landlords': {
-    id: '1906_landlords',
-    name: '1906: Landlord\'s Rules',
-    description: 'Original 1906 Landlord\'s Game with Pacific Northwest locations and historic rules',
-    boardSpaces: boardSpaces1906,
-    chanceDeck: createChanceDeck1906(),
-    communityChestDeck: createCommunityChestDeck1906(),
-    startingCash: 600, // 2 players: $600 each
-    goSalary: 100, // Wages per circuit
-    maxHousesPerProperty: 3,
-    enableHotels: false,
-    houseRent: 10, // Fixed $10 per house
-    totalHouses: Infinity, // Unlimited houses
-    totalHotels: 0,
-    enableBackwardMovement: true,
-    doublesRailroadPass: true,
-    doublesSpeculationWin: 100,
-    dealPropertiesAtStart: true,
-    propertiesDealtCount: 24,
-    enableAuctions: false,
-    taxAmount: 10, // Fixed $10 tax
-    taxDoublingThresholds: [
-      { houses: 10, taxAmount: 20 },
-      { houses: 25, taxAmount: 40 },
-    ],
-    sectionRentDoubling: true,
-    rentTable: [
-      // 1906 Land Rent Table: [tier][houses] where tier 0 = cheapest
-      [2, 4, 8, 16],    // Tier 1
-      [4, 8, 16, 32],    // Tier 2
-      [6, 12, 24, 48],   // Tier 3
-      [8, 16, 32, 64],   // Tier 4
-      [10, 20, 40, 80],  // Tier 5
-      [12, 24, 48, 96],  // Tier 6
-      [14, 28, 56, 112], // Tier 7
-      [16, 32, 64, 128], // Tier 8
-      [18, 36, 72, 144], // Tier 9
-      [20, 40, 80, 160], // Tier 10
-      [22, 44, 88, 176], // Tier 11
-    ],
-    endAfterWagesCount: 5,
-    cardsAndHousesValue: 100,
-    jailFine: 50,
-    jailMaxTurns: 3,
-    enablePlayerBorrowing: true,
-  },
+
 
   house_rules: {
     id: 'house_rules',
